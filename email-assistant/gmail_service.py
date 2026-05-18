@@ -138,6 +138,16 @@ def fetch_emails(max_results=50):
             from_name = name_match.group(1).strip() if name_match else from_raw
             from_email = name_match.group(2).strip() if name_match else from_raw
 
+            reply_to_raw = h('Reply-To')
+            if reply_to_raw and from_email.lower() in {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}:
+                rt_match = re.match(r'^"?([^"<]+)"?\s*<(.+)>$', reply_to_raw)
+                if rt_match:
+                    from_name = rt_match.group(1).strip()
+                    from_email = rt_match.group(2).strip()
+                elif '@' in reply_to_raw:
+                    from_email = reply_to_raw.strip()
+                    from_name = reply_to_raw.strip()
+
             body = _decode_body(m['payload'])
             has_unsub, unsub_link = _find_unsubscribe(headers, body)
 

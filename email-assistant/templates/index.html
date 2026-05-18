@@ -240,7 +240,7 @@ function renderDetail(e) {
         <div class="detail-from">De : ${esc(e.from_name || '')} &lt;${esc(e.from_email || '')}&gt; — ${esc(e.date || '')}</div>
         <div class="detail-actions" style="flex-wrap:wrap;gap:6px;">
           <button class="btn-primary" id="btnGenerate" onclick="generateResponse(${e.id})">✨ Générer avec IA</button>
-          <button class="btn-secondary" onclick="toggleRead(${e.id}, ${e.is_read})">${e.is_read ? '● Marquer non lu' : '○ Marquer lu'}</button>
+          <button class="btn-secondary" id="btnToggleRead" onclick="toggleRead(${e.id}, ${e.is_read})">${e.is_read ? '● Marquer non lu' : '○ Marquer lu'}</button>
           <button class="btn-secondary" onclick="toggleImportant(${e.id})">${e.is_important ? '⭐ Retirer important' : '☆ Important'}</button>
           <button class="btn-secondary" onclick="toggleClient(${e.id})">${clientLabel}</button>
           <button class="btn-danger" onclick="deleteEmail(${e.id})">🗑 Supprimer</button>
@@ -393,8 +393,9 @@ async function toggleRead(emailId, isRead) {
   const newRead = isRead ? 0 : 1;
   const found = emails.find(x => x.id === emailId);
   if (found) found.is_read = newRead;
+  if (currentEmail && currentEmail.id === emailId) currentEmail.is_read = newRead;
   renderList();
-  const btn = document.querySelector(`button[onclick="toggleRead(${emailId}, ${isRead})"]`);
+  const btn = document.getElementById('btnToggleRead');
   if (btn) {
     btn.setAttribute('onclick', `toggleRead(${emailId}, ${newRead})`);
     btn.textContent = newRead ? '● Marquer non lu' : '○ Marquer lu';

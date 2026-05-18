@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistant Email</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .email-row { border-left: 3px solid transparent; transition: background 0.1s; }
+    .email-row:hover { background: #f5f3ff; }
+    .email-row.active { background: #ede9fe; border-left-color: #7c3aed; }
+    .scroll::-webkit-scrollbar { width: 5px; }
+    .scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    .scroll { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.9s linear infinite; display: inline-block; }
+    @keyframes fadein { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+    .fadein { animation: fadein 0.2s ease-out; }
+    .prose { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="bg-violet-700 text-white px-4 py-2.5 flex items-center justify-between shadow-md flex-shrink-0">
+  <div class="flex items-center gap-3">
+    <span class="text-lg font-bold tracking-tight">📧 Assistant Email</span>
+    <span id="user-email" class="text-violet-300 text-xs hidden sm:inline"></span>
+  </div>
+  <div class="flex items-center gap-2">
+    <button onclick="syncEmails()" id="btn-sync"
+      class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1.5 transition-colors">
+      <span id="sync-icon">↻</span> Synchroniser
+    </button>
+    <button onclick="showSummary()"
+      class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors">
+      📊 Récap du jour
+    </button>
+    <div id="auth-area">
+      {% if authenticated %}
+        <span class="text-violet-300 text-sm">✓ Gmail connecté</span>
+      {% else %}
+        <a href="/auth/start"
+          class="bg-white text-violet-700 px-3 py-1.5 rounded text-sm font-semibold hover:bg-violet-50 transition-colors">
+          Connecter Gmail
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+<!-- ── Setup banner ────────────────────────────────────────────────────────── -->
+{% if setup_needed %}
+<div class="bg-amber-50 border-b border-amber-200 px-4 py-3 text-sm text-amber-800 flex-shrink-0">
+  <strong>Configuration requise :</strong>
+  Place ton fichier <code class="bg-amber-100 px-1 rounded">credentials.json</code> Google dans le dossier de l'app,
+  et crée un fichier <code class="bg-amber-100 px-1 rounded">.env</code> avec ta clé
+  <code class="bg-amber-100 px-1 rounded">ANTHROPIC_API_KEY</code>.
+  <a href="https://console.cloud.google.com" target="_blank" class="underline ml-1">Console Google →</a>
+</div>
+{% endif %}
+
+<!-- ── Main layout ─────────────────────────────────────────────────────────── -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- Email list sidebar -->
+  <aside class="w-72 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <!-- Filter tabs -->
+    <div class="flex p-2 gap-1.5 border-b border-gray-100 flex-shrink-0">
+      <button id="tab-all" onclick="setFilter('all')"
+        class="flex-1 py-1.5 text-xs font-semibold rounded bg-violet-600 text-white transition-colors">
+        Tous
+      </button>
+      <button id="tab-clients" onclick="setFilter('clients')"
+        class="flex-1 py-1.5 text-xs font-semibold rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+        Clients
+      </button>
+    </div>
+    <!-- Count -->
+    <div id="list-count" class="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-100 flex-shrink-0"></div>
+    <!-- Email items -->
+    <div id="email-list" class="flex-1 overflow-y-auto scroll">
+      <div class="flex items-center justify-center h-24 text-gray-400 text-sm">
+        Clique sur Synchroniser pour charger tes emails
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="flex-1 flex flex-col overflow-hidden bg-gray-50" id="main-area">
+    <div class="flex-1 flex items-center justify-center text-gray-400">
+      <div class="text-center">
+        <div class="text-5xl mb-3">📬</div>
+        <p class="text-sm">Sélectionne un email pour le lire</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Daily summary modal ─────────────────────────────────────────────────── -->
+<div id="summary-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col fadein">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <h2 class="font-bold text-gray-800">📊 Récapitulatif du jour</h2>
+      <button onclick="closeSummary()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="summary-body" class="flex-1 overflow-y-auto scroll px-5 py-4 text-sm text-gray-700 prose"></div>
+    <div class="flex gap-2 px-5 py-3 border-t border-gray-100">
+      <button onclick="regenerateSummary()" id="btn-regen"
+        class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
+        ↺ Regénérer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast container ─────────────────────────────────────────────────────── -->
+<div id="toasts" class="fixed bottom-4 right-4 flex flex-col gap-2 z-50"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let filter = 'all';
+let emails = [];
+let selectedId = null;
+let selectedResponseId = null;
+let draftTimer = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  const st = await fetch('/auth/status').then(r => r.json());
+  if (st.email) document.getElementById('user-email').textContent = st.email;
+  await loadEmails();
+});
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+function setFilter(f) {
+  filter = f;
+  const active = 'flex-1 py-1.5 text-xs font-semibold rounded bg-violet-600 text-white transition-colors';
+  const inactive = 'flex-1 py-1.5 text-xs font-semibold rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors';
+  document.getElementById('tab-all').className = f === 'all' ? active : inactive;
+  document.getElementById('tab-clients').className = f === 'clients' ? active : inactive;
+  loadEmails();
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function syncEmails() {
+  const icon = document.getElementById('sync-icon');
+  icon.className = 'spin';
+  try {
+    const r = await fetch('/api/emails/sync', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_results: 50})
+    }).then(r => r.json());
+    if (r.error) { toast('Erreur : ' + r.error, 'red'); return; }
+    toast(`${r.synced} nouveaux emails synchronisés`);
+    await loadEmails();
+  } finally {
+    icon.className = '';
+    icon.textContent = '↻';
+  }
+}
+
+// ── Load list ─────────────────────────────────────────────────────────────────
+async function loadEmails() {
+  const r = await fetch(`/api/emails?client_only=${filter === 'clients'}&limit=100`);
+  emails = await r.json();
+  renderList();
+}
+
+function renderList() {
+  const container = document.getElementById('email-list');
+  const count = document.getElementById('list-count');
+
+  if (!emails.length) {
+    container.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-400 text-sm">Aucun email</div>';
+    count.textContent = '';
+    return;
+  }
+
+  const clientCount = emails.filter(e => e.is_client).length;
+  count.textContent = `${emails.length} emails · ${clientCount} clients`;
+
+  const CAT_LABEL = {
+    order_inquiry:'Commande', support:'Support', complaint:'Réclamation',
+    return_request:'Retour', shipping:'Livraison', product_question:'Question',
+    newsletter:'Newsletter', spam:'Spam', other:'Autre'
+  };
+  const CAT_COLOR = {
+    order_inquiry:'bg-blue-100 text-blue-700', support:'bg-yellow-100 text-yellow-700',
+    complaint:'bg-red-100 text-red-700', return_request:'bg-orange-100 text-orange-700',
+    shipping:'bg-purple-100 text-purple-700', product_question:'bg-cyan-100 text-cyan-700',
+    newsletter:'bg-gray-100 text-gray-500', spam:'bg-gray-100 text-gray-400',
+    other:'bg-gray-100 text-gray-500'
+  };
+
+  container.innerHTML = emails.map(e => {
+    const active = e.id === selectedId ? 'active' : '';
+    const resp = e.response;
+    const statusBadge = resp?.status === 'sent'
+      ? '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">✓ Envoyé</span>'
+      : resp?.status === 'pending'
+      ? '<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">Brouillon</span>'
+      : '';
+    const urgentDot = e.priority === 'high' && (!resp || resp.status !== 'sent')
+      ? '<span class="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0 mt-1"></span>'
+      : '<span class="w-2 h-2 rounded-full inline-block flex-shrink-0"></span>';
+    let dateStr = '';
+    try {
+      const d = new Date(e.date);
+      dateStr = d.toLocaleDateString('fr-FR', {day:'numeric', month:'short'});
+    } catch(_) {}
+    return `
+      <div class="email-row ${active} px-3 py-2.5 cursor-pointer border-b border-gray-50"
+           onclick="selectEmail(${e.id})">
+        <div class="flex items-start gap-1.5">
+          ${urgentDot}
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-baseline gap-1">
+              <span class="text-xs font-semibold text-gray-800 truncate">
+                ${esc(e.from_name || e.from_email || '?')}
+                ${e.is_client ? '<span class="text-green-600 font-normal">· client</span>' : ''}
+              </span>
+              <span class="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">${dateStr}</span>
+            </div>
+            <div class="text-xs text-gray-500 truncate mt-0.5">${esc(e.subject || '(sans objet)')}</div>
+            <div class="flex items-center gap-1 mt-1 flex-wrap">
+              <span class="text-xs px-1.5 py-0.5 rounded ${CAT_COLOR[e.category] || CAT_COLOR.other}">
+                ${CAT_LABEL[e.category] || e.category}
+              </span>
+              ${statusBadge}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Select email ──────────────────────────────────────────────────────────────
+async function selectEmail(id) {
+  selectedId = id;
+  renderList();
+  const e = await fetch(`/api/emails/${id}`).then(r => r.json());
+  selectedResponseId = e.response?.id || null;
+  renderDetail(e);
+}
+
+function renderDetail(e) {
+  const main = document.getElementById('main-area');
+  let dateStr = '';
+  try { dateStr = new Date(e.date).toLocaleString('fr-FR'); } catch(_) {}
+
+  const CAT_LABEL = {
+    order_inquiry:'Demande commande', support:'Support', complaint:'Réclamation',
+    return_request:'Demande de retour', shipping:'Livraison', product_question:'Question produit',
+    newsletter:'Newsletter', spam:'Spam', other:'Autre'
+  };
+  const CAT_COLOR = {
+    order_inquiry:'bg-blue-100 text-blue-700', support:'bg-yellow-100 text-yellow-700',
+    complaint:'bg-red-100 text-red-700', return_request:'bg-orange-100 text-orange-700',
+    shipping:'bg-purple-100 text-purple-700', product_question:'bg-cyan-100 text-cyan-700',
+    newsletter:'bg-gray-100 text-gray-500', spam:'bg-gray-100 text-gray-400',
+    other:'bg-gray-100 text-gray-500'
+  };
+
+  const draft = e.response?.draft || '';
+  const status = e.response?.status || '';
+  const sentAt = e.response?.sent_at ? new Date(e.response.sent_at).toLocaleString('fr-FR') : '';
+
+  main.innerHTML = `
+    <div class="h-full flex flex-col fadein">
+      <!-- Header -->
+      <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+        <div class="flex items-start justify-between gap-3 mb-2">
+          <h2 class="font-semibold text-gray-900 text-base leading-snug flex-1">
+            ${esc(e.subject || '(sans objet)')}
+          </h2>
+          <div class="flex gap-1.5 flex-shrink-0 flex-wrap">
+            ${e.is_client ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Client</span>' : ''}
+            <span class="text-xs px-2 py-0.5 rounded-full ${CAT_COLOR[e.category] || CAT_COLOR.other}">
+              ${CAT_LABEL[e.category] || e.category}
+            </span>
+            ${e.priority === 'high' ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Urgent</span>' : ''}
+          </div>
+        </div>
+        <div class="text-xs text-gray-500 space-y-0.5">
+          <div><span class="text-gray-400">De :</span> <strong class="text-gray-700">${esc(e.from_name || '')}</strong> &lt;${esc(e.from_email || '')}&gt;</div>
+          <div><span class="text-gray-400">Date :</span> ${dateStr}</div>
+          ${e.summary ? `<div class="mt-1.5 bg-violet-50 text-violet-700 px-2.5 py-1.5 rounded text-xs"><strong>Résumé IA :</strong> ${esc(e.summary)}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Body + Response (flex split) -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <!-- Email body (scrollable, ~55%) -->
+        <div class="flex-1 overflow-y-auto scroll bg-white px-4 py-3 min-h-0">
+          <p class="text-sm text-gray-700 prose leading-relaxed">${esc(e.body || '(corps vide)')}</p>
+        </div>
+
+        <!-- Response section -->
+        <div class="border-t-2 border-violet-100 bg-gray-50 flex flex-col flex-shrink-0" style="height:280px;">
+          <!-- Response toolbar -->
+          <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 flex-shrink-0 bg-white">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-gray-700">Réponse</span>
+              ${status === 'sent'
+                ? `<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Envoyée ${sentAt}</span>`
+                : status === 'pending'
+                ? '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Brouillon</span>'
+                : ''}
+            </div>
+            <div class="flex gap-2">
+              <button onclick="generateAIResponse(${e.id})" id="btn-gen"
+                class="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1 transition-colors">
+                <span id="gen-icon">✨</span> Générer réponse IA
+              </button>
+              <button onclick="sendReply()" id="btn-send"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors ${!draft ? 'opacity-40 cursor-not-allowed' : ''}"
+                ${!draft ? 'disabled' : ''}>
+                ➤ Envoyer
+              </button>
+              ${e.has_unsubscribe
+                ? `<button onclick="doUnsubscribe(${e.id})" id="btn-unsub"
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded text-xs font-medium transition-colors ${e.unsubscribed ? 'opacity-40' : ''}"
+                    ${e.unsubscribed ? 'disabled title="Déjà désabonné"' : ''}>
+                    🚫 ${e.unsubscribed ? 'Désabonné' : 'Se désabonner'}
+                  </button>`
+                : ''}
+            </div>
+          </div>
+          <!-- Textarea -->
+          <textarea id="resp-textarea"
+            class="flex-1 w-full resize-none text-sm p-3 bg-white border-0 focus:outline-none focus:ring-0 scroll"
+            placeholder="Clique sur ✨ Générer pour créer une réponse IA, ou écris directement ici…"
+            oninput="onDraftChange()">${esc(draft)}</textarea>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Generate AI response ──────────────────────────────────────────────────────
+async function generateAIResponse(emailId) {
+  const btn = document.getElementById('btn-gen');
+  const icon = document.getElementById('gen-icon');
+  btn.disabled = true;
+  icon.className = 'spin';
+  icon.textContent = '⟳';
+  try {
+    const r = await fetch(`/api/emails/${emailId}/generate-response`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    }).then(r => r.json());
+    if (r.error) { toast('Erreur : ' + r.error, 'red'); return; }
+    selectedResponseId = r.response_id;
+    const ta = document.getElementById('resp-textarea');
+    if (ta) {
+      ta.value = r.draft;
+      const sendBtn = document.getElementById('btn-send');
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.classList.remove('opacity-40','cursor-not-allowed'); }
+    }
+    toast('Réponse générée ✓');
+  } finally {
+    if (btn) { btn.disabled = false; }
+    if (icon) { icon.className = ''; icon.textContent = '✨'; }
+  }
+}
+
+// ── Draft auto-save ───────────────────────────────────────────────────────────
+function onDraftChange() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(async () => {
+    if (!selectedResponseId) return;
+    const draft = document.getElementById('resp-textarea')?.value;
+    await fetch(`/api/responses/${selectedResponseId}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({draft})
+    });
+  }, 900);
+}
+
+// ── Send reply ────────────────────────────────────────────────────────────────
+async function sendReply() {
+  if (!confirm('Envoyer cette réponse par email ?')) return;
+  if (!selectedResponseId) { toast('Génère d\'abord une réponse', 'red'); return; }
+  const draft = document.getElementById('resp-textarea')?.value || '';
+  const r = await fetch(`/api/responses/${selectedResponseId}/send`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({draft})
+  }).then(r => r.json());
+  if (r.error) { toast('Erreur : ' + r.error, 'red'); return; }
+  toast('Email envoyé ✓');
+  await loadEmails();
+  await selectEmail(selectedId);
+}
+
+// ── Unsubscribe ───────────────────────────────────────────────────────────────
+async function doUnsubscribe(emailId) {
+  if (!confirm('Se désabonner de cet expéditeur ?')) return;
+  const r = await fetch(`/api/emails/${emailId}/unsubscribe`, {method: 'POST'}).then(r => r.json());
+  if (r.error) { toast('Erreur : ' + r.error, 'red'); return; }
+  if (r.method === 'link') window.open(r.url, '_blank');
+  toast(r.message || 'Désabonnement effectué');
+  await selectEmail(emailId);
+}
+
+// ── Daily summary ─────────────────────────────────────────────────────────────
+async function showSummary() {
+  document.getElementById('summary-modal').classList.remove('hidden');
+  const body = document.getElementById('summary-body');
+  body.textContent = 'Chargement…';
+  const r = await fetch('/api/summary/daily').then(r => r.json());
+  body.textContent = r.summary || 'Aucun récapitulatif aujourd\'hui. Clique sur Regénérer.';
+}
+
+async function regenerateSummary() {
+  const body = document.getElementById('summary-body');
+  const btn = document.getElementById('btn-regen');
+  btn.disabled = true;
+  body.textContent = 'Génération en cours…';
+  const r = await fetch('/api/summary/generate', {method:'POST'}).then(r => r.json());
+  body.textContent = r.summary || 'Erreur lors de la génération';
+  btn.disabled = false;
+}
+
+function closeSummary() {
+  document.getElementById('summary-modal').classList.add('hidden');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function toast(msg, color = 'gray') {
+  const colors = { gray:'bg-gray-900', red:'bg-red-600', green:'bg-emerald-600' };
+  const el = document.createElement('div');
+  el.className = `${colors[color] || colors.gray} text-white text-sm px-4 py-2.5 rounded-xl shadow-lg`;
+  el.style.animation = 'fadein 0.25s ease-out';
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+</script>
+</body>
+</html>

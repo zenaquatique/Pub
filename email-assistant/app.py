@@ -1,6 +1,10 @@
 import os
+import re
+import glob
 from datetime import date, datetime
 
+import requests as http_requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -221,6 +225,61 @@ def send_response(rid):
         database.update_response(rid, {'status': 'sent', 'sent_at': datetime.utcnow().isoformat()})
         return jsonify({'ok': True})
     return jsonify({'error': str(result)}), 500
+
+
+# ── Import ─────────────────────────────────────────────────────────────────────
+
+@app.route('/api/import/shopify', methods=['POST'])
+def import_shopify():
+    data = request.get_json(silent=True) or {}
+    url = data.get('url', '').rstrip('/')
+    if not url:
+        return jsonify({'error': 'URL manquante'}), 400
+    try:
+        resp = http_requests.get(f'{url}/products.json?limit=250', timeout=15)
+        products = resp.json().get('products', [])
+        lines = []
+        for p in products:
+            title = p.get('title', '')
+            body = BeautifulSoup(p.get('body_html', ''), 'html.parser').get_text(' ').strip()
+            body = re.sub(r'\s+', ' ', body)[:300]
+            variants = p.get('variants', [])
+            prices = sorted(set(v.get('price', '') for v in variants if v.get('price')))
+            price_str = f" — {prices[0]}€" if prices else ''
+            lines.append(f"- {title}{price_str}: {body}")
+        kb = '\n'.join(lines)
+        existing = database.get_setting('knowledge_base', '')
+        combined = (existing + '\n\n--- Produits Shopify ---\n' + kb).strip() if existing else kb
+        database.save_setting('knowledge_base', combined)
+        return jsonify({'ok': True, 'imported': len(products), 'preview': kb[:500]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/import/obsidian', methods=['POST'])
+def import_obsidian():
+    data = request.get_json(silent=True) or {}
+    vault_path = data.get('path', '').strip()
+    if not vault_path or not os.path.isdir(vault_path):
+        return jsonify({'error': 'Dossier introuvable : ' + vault_path}), 400
+    try:
+        md_files = glob.glob(os.path.join(vault_path, '**', '*.md'), recursive=True)
+        lines = []
+        for f in md_files[:100]:
+            try:
+                with open(f, encoding='utf-8') as fh:
+                    content = fh.read()[:1000]
+                name = os.path.splitext(os.path.basename(f))[0]
+                lines.append(f"### {name}\n{content}")
+            except Exception:
+                pass
+        kb = '\n\n'.join(lines)
+        existing = database.get_setting('knowledge_base', '')
+        combined = (existing + '\n\n--- Vault Obsidian ---\n' + kb).strip() if existing else kb
+        database.save_setting('knowledge_base', combined)
+        return jsonify({'ok': True, 'imported': len(md_files), 'preview': kb[:500]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ── Settings ───────────────────────────────────────────────────────────────────

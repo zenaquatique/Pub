@@ -178,7 +178,9 @@
 <script>
 let currentTab = 'tous';
 let currentEmailId = null;
+let currentEmail = null;
 let emails = [];
+let lastSyncTime = null;
 
 async function loadEmails() {
   let url = '/api/emails?limit=100';
@@ -217,6 +219,7 @@ async function openEmail(id) {
   renderList();
   const res = await fetch('/api/emails/' + id);
   const e = await res.json();
+  currentEmail = e;
   renderDetail(e);
   if (!e.is_read) {
     fetch('/api/emails/' + id + '/read', { method: 'POST' });
@@ -228,9 +231,6 @@ async function openEmail(id) {
 
 function renderDetail(e) {
   const detail = document.getElementById('detail');
-  const resp = e.response;
-  const sent = resp && resp.status === 'sent';
-  const draftText = resp ? (resp.draft || '') : '';
   const clientLabel = e.is_client ? 'Retirer des clients' : 'Marquer client';
 
   detail.innerHTML = `
@@ -239,7 +239,7 @@ function renderDetail(e) {
         <div class="detail-subject">${esc(e.subject || '(sans objet)')}</div>
         <div class="detail-from">De : ${esc(e.from_name || '')} &lt;${esc(e.from_email || '')}&gt; — ${esc(e.date || '')}</div>
         <div class="detail-actions" style="flex-wrap:wrap;gap:6px;">
-          ${!sent ? `<button class="btn-primary" id="btnGenerate" onclick="generateResponse(${e.id})">✨ Générer avec IA</button>` : ''}
+          <button class="btn-primary" id="btnGenerate" onclick="generateResponse(${e.id})">✨ Générer avec IA</button>
           <button class="btn-secondary" onclick="toggleRead(${e.id}, ${e.is_read})">${e.is_read ? '● Marquer non lu' : '○ Marquer lu'}</button>
           <button class="btn-secondary" onclick="toggleImportant(${e.id})">${e.is_important ? '⭐ Retirer important' : '☆ Important'}</button>
           <button class="btn-secondary" onclick="toggleClient(${e.id})">${clientLabel}</button>
@@ -249,17 +249,59 @@ function renderDetail(e) {
         </div>
       </div>
       ${e.summary ? `<div class="detail-summary">💡 ${esc(e.summary)}</div>` : ''}
-      <div class="detail-body">${esc(e.body || '')}</div>
+      <div class="thread-container" id="threadContainer">
+        <div style="color:#9ca3af;font-size:13px;padding:20px;text-align:center;">Chargement de la conversation…</div>
+      </div>
       <div class="response-area">
-        ${!sent ? `<textarea id="instructionsArea" placeholder="Instructions supplémentaires pour l'IA (ex: délai de livraison = 3-5 jours, racines Honey Comb S = 15cm...)..." style="width:100%;height:60px;border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;resize:vertical;font-family:inherit;margin-bottom:8px;"></textarea>` : ''}
-        <strong style="font-size:13px;color:#374151">${sent ? '✓ Réponse envoyée' : '📝 Réponse'}</strong>
-        <textarea id="draftArea" ${sent ? 'disabled' : ''} placeholder="Écris ta réponse ici ou génère-la avec l'IA…">${esc(draftText)}</textarea>
-        ${!sent ? `<div class="response-actions">
+        <textarea id="instructionsArea" placeholder="Instructions supplémentaires pour l'IA (ex: délai de livraison = 3-5 jours, racines Honey Comb S = 15cm...)..." style="width:100%;height:60px;border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;resize:vertical;font-family:inherit;margin-bottom:8px;"></textarea>
+        <strong style="font-size:13px;color:#374151">📝 Réponse</strong>
+        <textarea id="draftArea" placeholder="Écris ta réponse ici ou génère-la avec l'IA…"></textarea>
+        <div class="response-actions">
           <button class="btn-secondary" onclick="saveManualDraft(${e.id})">Enregistrer</button>
-          ${resp ? `<button class="btn-primary" onclick="sendResponse(${resp.id}, ${e.id})">📤 Envoyer</button>` : `<button class="btn-primary" onclick="saveAndSend(${e.id})">📤 Envoyer</button>`}
-        </div>` : ''}
+          <button class="btn-primary" onclick="saveAndSend(${e.id})">📤 Envoyer</button>
+        </div>
       </div>
     </div>`;
+
+  // Load thread asynchronously
+  if (e.thread_id) {
+    loadThread(e.thread_id);
+  } else {
+    // Fallback: show the single email body as a message
+    const container = document.getElementById('threadContainer');
+    if (container) {
+      container.innerHTML = `<div class="thread-msg incoming">
+        <div class="thread-msg-meta">${esc(e.from_name || e.from_email)} — ${esc(e.date || '')}</div>
+        <div class="thread-msg-body">${esc(e.body || '')}</div>
+      </div>`;
+    }
+  }
+}
+
+async function loadThread(threadId) {
+  const container = document.getElementById('threadContainer');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/threads/' + threadId);
+    if (!res.ok) throw new Error('fetch failed');
+    const messages = await res.json();
+    if (!messages.length) {
+      container.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:20px;text-align:center;">Aucun message dans ce fil.</div>';
+      return;
+    }
+    container.innerHTML = messages.map(m => {
+      const side = m.is_sent ? 'outgoing' : 'incoming';
+      const label = m.is_sent ? 'Vous' : esc(m.from_name || m.from_email);
+      return `<div class="thread-msg ${side}">
+        <div class="thread-msg-meta">${label} — ${esc(m.date || '')}</div>
+        <div class="thread-msg-body">${esc(m.body || '')}</div>
+      </div>`;
+    }).join('');
+    // Scroll to bottom so latest message is visible
+    container.scrollTop = container.scrollHeight;
+  } catch(err) {
+    if (container) container.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:20px;text-align:center;">Impossible de charger la conversation.</div>';
+  }
 }
 
 async function generateResponse(emailId) {
@@ -302,7 +344,6 @@ async function saveManualDraft(emailId) {
   const found = emails.find(x => x.id === emailId);
   if (found) found.response = { id: d.response_id, draft, status: 'pending' };
   showToast('Brouillon enregistré', 'success');
-  openEmail(emailId);
 }
 
 async function saveAndSend(emailId) {
@@ -326,8 +367,20 @@ async function sendResponse(rid, emailId) {
   });
   if (res.ok) {
     showToast('Email envoyé !', 'success');
-    openEmail(emailId);
+    // Clear textarea and reload thread instead of full email reload
+    const ta = document.getElementById('draftArea');
+    if (ta) ta.value = '';
+    const instrArea = document.getElementById('instructionsArea');
+    if (instrArea) instrArea.value = '';
     loadEmails();
+    // Reload thread to show the sent message
+    if (currentEmail && currentEmail.thread_id) {
+      loadThread(currentEmail.thread_id);
+    }
+    // Update local email list badge
+    const found = emails.find(x => x.id === emailId);
+    if (found) found.response = { id: rid, status: 'sent' };
+    renderList();
   } else {
     const d = await res.json();
     showToast(d.error || 'Erreur envoi', 'error');
@@ -397,8 +450,10 @@ async function syncEmails() {
   btn.innerHTML = '<span class="spinner"></span> Sync…';
   const res = await fetch('/api/emails/sync', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
   const d = await res.json();
+  lastSyncTime = Date.now();
   btn.disabled = false;
-  btn.innerHTML = '🔄 Synchroniser';
+  btn.innerHTML = '🔄 Synchroniser<span class="sync-label" id="syncLabel"></span>';
+  updateSyncLabel();
   if (res.ok) {
     showToast(`${d.synced} nouveaux emails sur ${d.total}`, 'success');
     loadEmails();
@@ -447,6 +502,43 @@ function showToast(msg, type) {
 }
 
 loadEmails();
+
+// ── Auto-sync every 5 minutes ──────────────────────────────────────────────────
+
+function updateSyncLabel() {
+  const label = document.getElementById('syncLabel');
+  if (!label) return;
+  if (!lastSyncTime) { label.textContent = ''; return; }
+  const diffMs = Date.now() - lastSyncTime;
+  const diffMin = Math.floor(diffMs / 60000);
+  label.textContent = diffMin < 1 ? ' · Synced just now' : ` · Synced ${diffMin} min ago`;
+}
+
+async function silentSync() {
+  try {
+    const res = await fetch('/api/emails/sync', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    });
+    if (res.ok) {
+      const d = await res.json();
+      lastSyncTime = Date.now();
+      updateSyncLabel();
+      if (d.synced > 0) {
+        loadEmails();
+      }
+    }
+  } catch(e) {
+    // Silent — no toast on auto-sync failure
+  }
+}
+
+// Update the label every minute so the "X min ago" stays current
+setInterval(updateSyncLabel, 60000);
+
+// Auto-sync every 5 minutes
+setInterval(silentSync, 5 * 60 * 1000);
 
 async function openKbModal() {
   document.getElementById('kbModal').classList.add('show');

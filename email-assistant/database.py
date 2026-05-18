@@ -119,6 +119,15 @@ def save_email(data):
     return email_id
 
 
+def delete_email(email_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM responses WHERE email_id = ?', (email_id,))
+    c.execute('DELETE FROM emails WHERE id = ?', (email_id,))
+    conn.commit()
+    conn.close()
+
+
 def update_email(email_id, updates):
     conn = get_db()
     c = conn.cursor()

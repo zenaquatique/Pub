@@ -121,6 +121,35 @@ def mark_read(eid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/emails/<int:eid>/unread', methods=['POST'])
+def mark_unread(eid):
+    database.update_email(eid, {'is_read': 0})
+    return jsonify({'ok': True})
+
+
+@app.route('/api/emails/<int:eid>/toggle-client', methods=['POST'])
+def toggle_client(eid):
+    e = database.get_email(eid)
+    if not e:
+        return jsonify({'error': 'Email introuvable'}), 404
+    database.update_email(eid, {'is_client': 0 if e['is_client'] else 1})
+    return jsonify({'is_client': not e['is_client']})
+
+
+@app.route('/api/emails/<int:eid>', methods=['DELETE'])
+def delete_email(eid):
+    database.delete_email(eid)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/emails/<int:eid>/draft', methods=['POST'])
+def save_draft(eid):
+    data = request.get_json(silent=True) or {}
+    draft = data.get('draft', '')
+    rid = database.save_response(eid, draft)
+    return jsonify({'response_id': rid})
+
+
 @app.route('/api/emails/<int:eid>/unsubscribe', methods=['POST'])
 def unsubscribe(eid):
     e = database.get_email(eid)

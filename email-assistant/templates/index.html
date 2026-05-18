@@ -188,56 +188,85 @@ async function openEmail(id) {
 function renderDetail(e) {
   const detail = document.getElementById('detail');
   const resp = e.response;
-  const sentAlready = resp && resp.status === 'sent';
+  const sent = resp && resp.status === 'sent';
+  const draftText = resp ? (resp.draft || '') : '';
+  const clientLabel = e.is_client ? 'Retirer des clients' : 'Marquer client';
+
   detail.innerHTML = `
     <div class="detail-content">
       <div class="detail-header">
         <div class="detail-subject">${esc(e.subject || '(sans objet)')}</div>
         <div class="detail-from">De : ${esc(e.from_name || '')} &lt;${esc(e.from_email || '')}&gt; — ${esc(e.date || '')}</div>
-        <div class="detail-actions">
-          ${e.is_client && !sentAlready ? `<button class="btn-primary" onclick="generateResponse(${e.id})">✨ Générer réponse</button>` : ''}
+        <div class="detail-actions" style="flex-wrap:wrap;gap:6px;">
+          ${!sent ? `<button class="btn-primary" id="btnGenerate" onclick="generateResponse(${e.id})">✨ Générer avec IA</button>` : ''}
+          <button class="btn-secondary" onclick="toggleRead(${e.id}, ${e.is_read})">${e.is_read ? '● Marquer non lu' : '○ Marquer lu'}</button>
+          <button class="btn-secondary" onclick="toggleClient(${e.id})">${clientLabel}</button>
+          <button class="btn-danger" onclick="deleteEmail(${e.id})">🗑 Supprimer</button>
           ${e.has_unsubscribe && !e.unsubscribed ? `<button class="btn-danger" onclick="unsubscribe(${e.id})">🚫 Se désabonner</button>` : ''}
           ${e.unsubscribed ? '<span style="font-size:12px;color:#6b7280">✓ Désabonné</span>' : ''}
         </div>
       </div>
       ${e.summary ? `<div class="detail-summary">💡 ${esc(e.summary)}</div>` : ''}
       <div class="detail-body">${esc(e.body || '')}</div>
-      ${resp ? renderResponse(e.id, resp) : ''}
+      <div class="response-area">
+        <strong style="font-size:13px;color:#374151">${sent ? '✓ Réponse envoyée' : '📝 Réponse'}</strong>
+        <textarea id="draftArea" ${sent ? 'disabled' : ''} placeholder="Écris ta réponse ici ou génère-la avec l'IA…">${esc(draftText)}</textarea>
+        ${!sent ? `<div class="response-actions">
+          <button class="btn-secondary" onclick="saveManualDraft(${e.id})">Enregistrer</button>
+          ${resp ? `<button class="btn-primary" onclick="sendResponse(${resp.id}, ${e.id})">📤 Envoyer</button>` : `<button class="btn-primary" onclick="saveAndSend(${e.id})">📤 Envoyer</button>`}
+        </div>` : ''}
+      </div>
     </div>`;
 }
 
-function renderResponse(emailId, resp) {
-  const sent = resp.status === 'sent';
-  return `<div class="response-area">
-    <strong style="font-size:13px;color:#374151">${sent ? '✓ Réponse envoyée' : '📝 Brouillon'}</strong>
-    <textarea id="draftArea" ${sent ? 'disabled' : ''}>${esc(resp.draft || '')}</textarea>
-    ${!sent ? `<div class="response-actions">
-      <button class="btn-secondary" onclick="saveDraft(${resp.id})">Enregistrer</button>
-      <button class="btn-primary" onclick="sendResponse(${resp.id}, ${emailId})">📤 Envoyer</button>
-    </div>` : ''}
-  </div>`;
-}
-
 async function generateResponse(emailId) {
-  showToast('Génération en cours…');
-  const res = await fetch('/api/emails/' + emailId + '/generate-response', { method: 'POST' });
-  if (res.ok) {
-    showToast('Réponse générée !', 'success');
-    openEmail(emailId);
-  } else {
-    const d = await res.json();
-    showToast(d.error || 'Erreur', 'error');
+  const btn = document.getElementById('btnGenerate');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Génération…'; }
+  try {
+    const res = await fetch('/api/emails/' + emailId + '/generate-response', { method: 'POST' });
+    if (res.ok) {
+      const d = await res.json();
+      const ta = document.getElementById('draftArea');
+      if (ta) ta.value = d.draft;
+      showToast('Réponse générée !', 'success');
+      const found = emails.find(x => x.id === emailId);
+      if (found) found.response = { id: d.response_id, draft: d.draft, status: 'pending' };
+      if (btn) { btn.disabled = false; btn.innerHTML = '✨ Générer avec IA'; }
+    } else {
+      const d = await res.json();
+      showToast(d.error || 'Erreur génération', 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '✨ Générer avec IA'; }
+    }
+  } catch(err) {
+    showToast('Erreur : ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '✨ Générer avec IA'; }
   }
 }
 
-async function saveDraft(rid) {
+async function saveManualDraft(emailId) {
   const draft = document.getElementById('draftArea').value;
-  await fetch('/api/responses/' + rid, {
-    method: 'PUT',
+  const res = await fetch('/api/emails/' + emailId + '/draft', {
+    method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ draft })
   });
+  const d = await res.json();
+  const found = emails.find(x => x.id === emailId);
+  if (found) found.response = { id: d.response_id, draft, status: 'pending' };
   showToast('Brouillon enregistré', 'success');
+  openEmail(emailId);
+}
+
+async function saveAndSend(emailId) {
+  const draft = document.getElementById('draftArea').value;
+  if (!draft.trim()) { showToast('La réponse est vide', 'error'); return; }
+  const saveRes = await fetch('/api/emails/' + emailId + '/draft', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ draft })
+  });
+  const saved = await saveRes.json();
+  await sendResponse(saved.response_id, emailId);
 }
 
 async function sendResponse(rid, emailId) {
@@ -255,6 +284,36 @@ async function sendResponse(rid, emailId) {
     const d = await res.json();
     showToast(d.error || 'Erreur envoi', 'error');
   }
+}
+
+async function toggleRead(emailId, isRead) {
+  const endpoint = isRead ? '/unread' : '/read';
+  await fetch('/api/emails/' + emailId + endpoint, { method: 'POST' });
+  const found = emails.find(x => x.id === emailId);
+  if (found) found.is_read = isRead ? 0 : 1;
+  renderList();
+  openEmail(emailId);
+}
+
+async function toggleClient(emailId) {
+  const res = await fetch('/api/emails/' + emailId + '/toggle-client', { method: 'POST' });
+  const d = await res.json();
+  const found = emails.find(x => x.id === emailId);
+  if (found) found.is_client = d.is_client ? 1 : 0;
+  showToast(d.is_client ? 'Marqué comme client' : 'Retiré des clients', 'success');
+  loadEmails();
+  openEmail(emailId);
+}
+
+async function deleteEmail(emailId) {
+  if (!confirm('Supprimer cet email ?')) return;
+  await fetch('/api/emails/' + emailId, { method: 'DELETE' });
+  emails = emails.filter(x => x.id !== emailId);
+  currentEmailId = null;
+  renderList();
+  document.getElementById('detail').innerHTML = `
+    <div class="detail-placeholder"><div class="icon">📬</div><div>Sélectionne un email pour le lire</div></div>`;
+  showToast('Email supprimé', 'success');
 }
 
 async function unsubscribe(emailId) {

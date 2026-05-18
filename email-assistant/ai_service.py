@@ -19,37 +19,53 @@ def _ask(prompt):
 
 SHOPIFY_SENDERS = {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}
 
+_DEFAULT = {'is_client': False, 'category': 'other', 'priority': 'normal', 'summary': ''}
+
 
 def classify_email(from_email, from_name, subject, body):
     if from_email and from_email.lower() in SHOPIFY_SENDERS:
         return {'is_client': True, 'category': 'order_inquiry', 'priority': 'normal', 'summary': subject or ''}
 
-    prompt = f"""Analyse cet email reçu par une boutique Shopify et réponds en JSON uniquement.
+    results = classify_emails_batch([{
+        'from_email': from_email, 'from_name': from_name,
+        'subject': subject, 'body': body
+    }])
+    return results[0] if results else dict(_DEFAULT)
 
-De: {from_name} <{from_email}>
-Objet: {subject}
-Corps (extrait): {body[:800]}
 
-Contexte: Les emails clients proviennent soit de notifications Shopify (shopify.com, etc.) \
-soit de clients qui écrivent directement avec leur email perso pour des demandes de renseignements, \
-problèmes de commande, livraison, retour, etc.
+def classify_emails_batch(emails):
+    if not emails:
+        return []
 
-Détermine:
-- is_client: true si c'est un client ou une notification Shopify liée à une commande/client
+    items = []
+    for i, e in enumerate(emails):
+        items.append(
+            f"[{i}] De: {e.get('from_name','')} <{e.get('from_email','')}> | "
+            f"Objet: {e.get('subject','')} | Corps: {e.get('body','')[:300]}"
+        )
+
+    prompt = f"""Analyse ces {len(emails)} emails reçus par une boutique Shopify.
+Pour chacun, détermine:
+- is_client: true si c'est un client ou notification Shopify liée à une commande/client
 - category: "order_inquiry"|"support"|"complaint"|"return_request"|"shipping"|"product_question"|"newsletter"|"spam"|"other"
-- priority: "high" si urgent/réclamation/problème, "normal" sinon, "low" pour newsletters/spam
-- summary: résumé en 1 phrase courte de ce que veut le client (vide si pas client)
+- priority: "high" si urgent/réclamation, "normal" sinon, "low" pour newsletters/spam
+- summary: résumé 1 phrase courte (vide si pas client)
 
-Réponds UNIQUEMENT avec du JSON valide sans aucun texte autour:
-{{"is_client": bool, "category": string, "priority": string, "summary": string}}"""
+EMAILS:
+{chr(10).join(items)}
+
+Réponds UNIQUEMENT avec un tableau JSON valide de {len(emails)} objets dans l'ordre:
+[{{"is_client": bool, "category": string, "priority": string, "summary": string}}, ...]"""
 
     try:
         text = _ask(prompt)
-        # Strip possible markdown code fences
         text = text.replace('```json', '').replace('```', '').strip()
-        return json.loads(text)
+        results = json.loads(text)
+        if isinstance(results, list) and len(results) == len(emails):
+            return results
     except Exception:
-        return {'is_client': False, 'category': 'other', 'priority': 'normal', 'summary': ''}
+        pass
+    return [dict(_DEFAULT) for _ in emails]
 
 
 def generate_response(email, business_context=''):

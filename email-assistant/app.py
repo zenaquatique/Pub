@@ -74,16 +74,13 @@ def sync_emails():
     if error:
         return jsonify({'error': error}), 400
 
-    business_context = os.environ.get('BUSINESS_CONTEXT', '')
-    new_count = 0
-    for e in emails:
-        if not database.get_email_by_gmail_id(e['gmail_id']):
-            classification = ai_service.classify_email(
-                e['from_email'], e['from_name'], e['subject'], e['body']
-            )
-            e.update(classification)
+    new_emails = [e for e in emails if not database.get_email_by_gmail_id(e['gmail_id'])]
+    if new_emails:
+        classifications = ai_service.classify_emails_batch(new_emails)
+        for e, c in zip(new_emails, classifications):
+            e.update(c)
             database.save_email(e)
-            new_count += 1
+    new_count = len(new_emails)
 
     return jsonify({'synced': new_count, 'total': len(emails)})
 

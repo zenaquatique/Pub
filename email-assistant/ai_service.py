@@ -1,15 +1,20 @@
 import os
 import json
-import anthropic
+import google.generativeai as genai
 
-_client = None
+_model = None
 
 
-def _get_client():
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY'))
-    return _client
+def _get_model():
+    global _model
+    if _model is None:
+        genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
+        _model = genai.GenerativeModel('gemini-1.5-flash')
+    return _model
+
+
+def _ask(prompt):
+    return _get_model().generate_content(prompt).text.strip()
 
 
 def classify_email(from_email, from_name, subject, body):
@@ -33,12 +38,10 @@ Réponds UNIQUEMENT avec du JSON valide sans aucun texte autour:
 {{"is_client": bool, "category": string, "priority": string, "summary": string}}"""
 
     try:
-        msg = _get_client().messages.create(
-            model='claude-sonnet-4-6',
-            max_tokens=200,
-            messages=[{'role': 'user', 'content': prompt}]
-        )
-        return json.loads(msg.content[0].text.strip())
+        text = _ask(prompt)
+        # Strip possible markdown code fences
+        text = text.replace('```json', '').replace('```', '').strip()
+        return json.loads(text)
     except Exception:
         return {'is_client': False, 'category': 'other', 'priority': 'normal', 'summary': ''}
 
@@ -65,17 +68,12 @@ Règles:
 
 Génère UNIQUEMENT le texte de la réponse, rien d'autre:"""
 
-    msg = _get_client().messages.create(
-        model='claude-sonnet-4-6',
-        max_tokens=700,
-        messages=[{'role': 'user', 'content': prompt}]
-    )
-    return msg.content[0].text.strip()
+    return _ask(prompt)
 
 
 def generate_daily_summary(emails):
     if not emails:
-        return 'Aucun email à résumer pour aujourd\'hui.'
+        return "Aucun email à résumer pour aujourd'hui."
 
     lines = []
     for e in emails[:60]:
@@ -109,9 +107,4 @@ Structure le récap ainsi:
 
 Réponds en français, sois concis et actionnable."""
 
-    msg = _get_client().messages.create(
-        model='claude-sonnet-4-6',
-        max_tokens=600,
-        messages=[{'role': 'user', 'content': prompt}]
-    )
-    return msg.content[0].text.strip()
+    return _ask(prompt)

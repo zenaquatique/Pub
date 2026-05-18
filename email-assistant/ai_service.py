@@ -14,7 +14,7 @@ def _get_client():
 
 def _ask(prompt):
     response = _get_client().models.generate_content(
-        model='gemini-2.0-flash-lite', contents=prompt
+        model='gemini-2.5-flash', contents=prompt
     )
     return response.text.strip()
 

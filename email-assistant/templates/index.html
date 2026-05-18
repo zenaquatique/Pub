@@ -219,14 +219,15 @@ async function openEmail(id) {
   renderList();
   const res = await fetch('/api/emails/' + id);
   const e = await res.json();
-  currentEmail = e;
-  renderDetail(e);
   if (!e.is_read) {
     fetch('/api/emails/' + id + '/read', { method: 'POST' });
+    e.is_read = 1;
     const found = emails.find(x => x.id === id);
     if (found) found.is_read = 1;
     renderList();
   }
+  currentEmail = e;
+  renderDetail(e);
 }
 
 function renderDetail(e) {

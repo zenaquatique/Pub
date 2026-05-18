@@ -8,16 +8,13 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
-        _client = genai.Client(
-            api_key=os.environ.get('GEMINI_API_KEY'),
-            http_options={'api_version': 'v1'}
-        )
+        _client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
     return _client
 
 
 def _ask(prompt):
     response = _get_client().models.generate_content(
-        model='gemini-1.5-flash', contents=prompt
+        model='gemini-2.0-flash-lite', contents=prompt
     )
     return response.text.strip()
 

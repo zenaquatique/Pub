@@ -110,9 +110,12 @@ def generate_response(eid):
     e = database.get_email(eid)
     if not e:
         return jsonify({'error': 'Email introuvable'}), 404
+    data = request.get_json(silent=True) or {}
     business_context = os.environ.get('BUSINESS_CONTEXT', '')
+    knowledge_base = database.get_setting('knowledge_base')
+    instructions = data.get('instructions', '')
     try:
-        draft = ai_service.generate_response(e, business_context)
+        draft = ai_service.generate_response(e, business_context, knowledge_base=knowledge_base, instructions=instructions)
     except Exception as ex:
         return jsonify({'error': str(ex)}), 500
     rid = database.save_response(eid, draft)
@@ -218,6 +221,22 @@ def send_response(rid):
         database.update_response(rid, {'status': 'sent', 'sent_at': datetime.utcnow().isoformat()})
         return jsonify({'ok': True})
     return jsonify({'error': str(result)}), 500
+
+
+# ── Settings ───────────────────────────────────────────────────────────────────
+
+@app.route('/api/settings/<key>')
+def get_setting(key):
+    value = database.get_setting(key)
+    return jsonify({'value': value})
+
+
+@app.route('/api/settings/<key>', methods=['POST'])
+def save_setting(key):
+    data = request.get_json(silent=True) or {}
+    value = data.get('value', '')
+    database.save_setting(key, value)
+    return jsonify({'ok': True})
 
 
 # ── Summary ────────────────────────────────────────────────────────────────────

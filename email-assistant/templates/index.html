@@ -85,6 +85,12 @@
 
     .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Knowledge base modal */
+    .kb-modal { width: 640px; }
+    .kb-modal textarea { width: 100%; height: 280px; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; font-size: 13px; resize: vertical; font-family: inherit; line-height: 1.6; }
+    .kb-modal textarea:focus { outline: none; border-color: #7c3aed; }
+    .kb-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -100,6 +106,7 @@
   <h1>📧 Assistant Email</h1>
   <button class="btn" id="btnSync" onclick="syncEmails()">🔄 Synchroniser</button>
   <button class="btn" id="btnRecap" onclick="generateRecap()">📋 Récap du jour</button>
+  <button class="btn" onclick="openKbModal()" title="Base de connaissances">⚙️ Base de connaissances</button>
   {% if authenticated %}
     <span class="auth-status connected">✓ Gmail connecté</span>
   {% else %}
@@ -132,6 +139,19 @@
     <button class="modal-close" onclick="closeRecap()">×</button>
     <h2>📋 Récap du jour</h2>
     <div class="modal-body" id="recapContent">Chargement…</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="kbModal">
+  <div class="modal kb-modal">
+    <button class="modal-close" onclick="closeKbModal()">×</button>
+    <h2>⚙️ Base de connaissances</h2>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:10px;">Ces informations sont injectées dans chaque prompt IA pour contextualiser les réponses.</p>
+    <textarea id="kbArea" placeholder="Exemples:&#10;- Délai de livraison standard : 3-5 jours ouvrés&#10;- Retours acceptés sous 14 jours&#10;- Pack plantes 450L : recommander le pack &quot;Forêt Amazonienne XL&quot;&#10;- Racines Honey Comb S : longueur 12-18cm&#10;..."></textarea>
+    <div class="kb-modal-footer">
+      <button class="btn-secondary" onclick="closeKbModal()">Annuler</button>
+      <button class="btn-primary" onclick="saveKb()">💾 Enregistrer</button>
+    </div>
   </div>
 </div>
 
@@ -213,6 +233,7 @@ function renderDetail(e) {
       ${e.summary ? `<div class="detail-summary">💡 ${esc(e.summary)}</div>` : ''}
       <div class="detail-body">${esc(e.body || '')}</div>
       <div class="response-area">
+        ${!sent ? `<textarea id="instructionsArea" placeholder="Instructions supplémentaires pour l'IA (ex: délai de livraison = 3-5 jours, racines Honey Comb S = 15cm...)..." style="width:100%;height:60px;border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;resize:vertical;font-family:inherit;margin-bottom:8px;"></textarea>` : ''}
         <strong style="font-size:13px;color:#374151">${sent ? '✓ Réponse envoyée' : '📝 Réponse'}</strong>
         <textarea id="draftArea" ${sent ? 'disabled' : ''} placeholder="Écris ta réponse ici ou génère-la avec l'IA…">${esc(draftText)}</textarea>
         ${!sent ? `<div class="response-actions">
@@ -226,8 +247,13 @@ function renderDetail(e) {
 async function generateResponse(emailId) {
   const btn = document.getElementById('btnGenerate');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Génération…'; }
+  const instructions = document.getElementById('instructionsArea')?.value || '';
   try {
-    const res = await fetch('/api/emails/' + emailId + '/generate-response', { method: 'POST' });
+    const res = await fetch('/api/emails/' + emailId + '/generate-response', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ instructions })
+    });
     if (res.ok) {
       const d = await res.json();
       const ta = document.getElementById('draftArea');
@@ -403,6 +429,32 @@ function showToast(msg, type) {
 }
 
 loadEmails();
+
+async function openKbModal() {
+  document.getElementById('kbModal').classList.add('show');
+  const res = await fetch('/api/settings/knowledge_base');
+  const d = await res.json();
+  document.getElementById('kbArea').value = d.value || '';
+}
+
+function closeKbModal() {
+  document.getElementById('kbModal').classList.remove('show');
+}
+
+async function saveKb() {
+  const value = document.getElementById('kbArea').value;
+  const res = await fetch('/api/settings/knowledge_base', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ value })
+  });
+  if (res.ok) {
+    showToast('Base de connaissances enregistrée', 'success');
+    closeKbModal();
+  } else {
+    showToast('Erreur lors de l\'enregistrement', 'error');
+  }
+}
 </script>
 </body>
 </html>

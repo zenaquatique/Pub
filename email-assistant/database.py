@@ -65,6 +65,12 @@ def init_db():
             generated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -205,5 +211,22 @@ def save_daily_summary(d, summary):
     conn = get_db()
     c = conn.cursor()
     c.execute('INSERT OR REPLACE INTO daily_summaries (date, summary) VALUES (?, ?)', (d, summary))
+    conn.commit()
+    conn.close()
+
+
+def get_setting(key, default=''):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT value FROM settings WHERE key = ?', (key,))
+    row = c.fetchone()
+    conn.close()
+    return row['value'] if row else default
+
+
+def save_setting(key, value):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value))
     conn.commit()
     conn.close()

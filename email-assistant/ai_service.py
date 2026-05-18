@@ -84,8 +84,12 @@ Réponds UNIQUEMENT avec un tableau JSON valide de {len(to_classify)} objets dan
     return results
 
 
-def generate_response(email, business_context=''):
+def generate_response(email, business_context='', knowledge_base='', instructions=''):
     context = business_context or 'une boutique Shopify'
+
+    kb_section = f"\nBASE DE CONNAISSANCES:\n{knowledge_base}\n" if knowledge_base else ''
+    instr_section = f"\nINSTRUCTIONS SUPPLÉMENTAIRES:\n{instructions}\n" if instructions else ''
+
     prompt = f"""Tu es un assistant SAV pour {context}. \
 Génère une réponse professionnelle et chaleureuse pour cet email.
 
@@ -94,7 +98,7 @@ OBJET: {email.get('subject', '')}
 MESSAGE: {email.get('body', '')[:2000]}
 RÉSUMÉ: {email.get('summary', '')}
 CATÉGORIE: {email.get('category', 'other')}
-
+{kb_section}{instr_section}
 Règles:
 - Réponds dans la langue du client
 - Sois professionnel mais humain et chaleureux

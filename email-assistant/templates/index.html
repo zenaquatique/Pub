@@ -177,12 +177,6 @@ async function openEmail(id) {
   const res = await fetch('/api/emails/' + id);
   const e = await res.json();
   renderDetail(e);
-  if (!e.is_read) {
-    fetch('/api/emails/' + id + '/read', { method: 'POST' });
-    const found = emails.find(x => x.id === id);
-    if (found) found.is_read = 1;
-    renderList();
-  }
 }
 
 function renderDetail(e) {
@@ -289,10 +283,15 @@ async function sendResponse(rid, emailId) {
 async function toggleRead(emailId, isRead) {
   const endpoint = isRead ? '/unread' : '/read';
   await fetch('/api/emails/' + emailId + endpoint, { method: 'POST' });
+  const newRead = isRead ? 0 : 1;
   const found = emails.find(x => x.id === emailId);
-  if (found) found.is_read = isRead ? 0 : 1;
+  if (found) found.is_read = newRead;
   renderList();
-  openEmail(emailId);
+  const btn = document.querySelector(`button[onclick="toggleRead(${emailId}, ${isRead})"]`);
+  if (btn) {
+    btn.setAttribute('onclick', `toggleRead(${emailId}, ${newRead})`);
+    btn.textContent = newRead ? '● Marquer non lu' : '○ Marquer lu';
+  }
 }
 
 async function toggleClient(emailId) {

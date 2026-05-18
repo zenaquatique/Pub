@@ -110,7 +110,10 @@ def generate_response(eid):
     if not e:
         return jsonify({'error': 'Email introuvable'}), 404
     business_context = os.environ.get('BUSINESS_CONTEXT', '')
-    draft = ai_service.generate_response(e, business_context)
+    try:
+        draft = ai_service.generate_response(e, business_context)
+    except Exception as ex:
+        return jsonify({'error': str(ex)}), 500
     rid = database.save_response(eid, draft)
     return jsonify({'response_id': rid, 'draft': draft})
 

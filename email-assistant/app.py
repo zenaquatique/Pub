@@ -222,8 +222,14 @@ def send_response(rid):
     if row['status'] == 'sent':
         return jsonify({'error': 'Déjà envoyé'}), 400
 
+    to_email = row['from_email']
+    if to_email.lower() in gmail_service.SHOPIFY_SENDERS and row.get('gmail_id'):
+        reply_to = gmail_service.get_reply_to(row['gmail_id'])
+        if reply_to:
+            to_email = reply_to
+
     ok, result = gmail_service.send_email(
-        to=row['from_email'],
+        to=to_email,
         subject=row['subject'],
         body=row['draft'],
         thread_id=row['thread_id'],

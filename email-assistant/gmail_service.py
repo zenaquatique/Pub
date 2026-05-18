@@ -111,6 +111,27 @@ def _parse_date(date_str):
         return date_str
 
 
+SHOPIFY_SENDERS = {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}
+
+
+def get_reply_to(gmail_id):
+    """Return the Reply-To email address for a Gmail message, or None."""
+    service = _get_service()
+    if not service:
+        return None
+    try:
+        m = service.users().messages().get(userId='me', id=gmail_id, format='metadata',
+                                           metadataHeaders=['Reply-To']).execute()
+        for h in m.get('payload', {}).get('headers', []):
+            if h['name'].lower() == 'reply-to':
+                val = h['value'].strip()
+                rt_match = re.match(r'^"?([^"<]+)"?\s*<(.+)>$', val)
+                return rt_match.group(2).strip() if rt_match else val
+    except Exception:
+        pass
+    return None
+
+
 def fetch_emails(max_results=50):
     service = _get_service()
     if not service:

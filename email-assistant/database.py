@@ -188,7 +188,7 @@ def get_response_by_id(response_id):
     conn = get_db()
     c = conn.cursor()
     c.execute('''
-        SELECT r.*, e.from_email, e.subject, e.thread_id, e.message_id_header
+        SELECT r.*, e.from_email, e.subject, e.thread_id, e.message_id_header, e.gmail_id
         FROM responses r JOIN emails e ON r.email_id = e.id
         WHERE r.id = ?
     ''', (response_id,))

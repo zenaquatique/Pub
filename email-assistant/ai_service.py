@@ -37,14 +37,22 @@ def classify_emails_batch(emails):
     if not emails:
         return []
 
-    items = []
-    for i, e in enumerate(emails):
-        items.append(
-            f"[{i}] De: {e.get('from_name','')} <{e.get('from_email','')}> | "
-            f"Objet: {e.get('subject','')} | Corps: {e.get('body','')[:300]}"
-        )
+    results = [None] * len(emails)
+    to_classify = []
 
-    prompt = f"""Analyse ces {len(emails)} emails reçus par une boutique Shopify.
+    for i, e in enumerate(emails):
+        if e.get('from_email', '').lower() in SHOPIFY_SENDERS:
+            results[i] = {'is_client': True, 'category': 'order_inquiry', 'priority': 'normal', 'summary': e.get('subject', '')}
+        else:
+            to_classify.append((i, e))
+
+    if to_classify:
+        items = [
+            f"[{idx}] De: {e.get('from_name','')} <{e.get('from_email','')}> | "
+            f"Objet: {e.get('subject','')} | Corps: {e.get('body','')[:300]}"
+            for idx, e in to_classify
+        ]
+        prompt = f"""Analyse ces {len(to_classify)} emails reçus par une boutique Shopify.
 Pour chacun, détermine:
 - is_client: true si c'est un client ou notification Shopify liée à une commande/client
 - category: "order_inquiry"|"support"|"complaint"|"return_request"|"shipping"|"product_question"|"newsletter"|"spam"|"other"
@@ -54,18 +62,24 @@ Pour chacun, détermine:
 EMAILS:
 {chr(10).join(items)}
 
-Réponds UNIQUEMENT avec un tableau JSON valide de {len(emails)} objets dans l'ordre:
+Réponds UNIQUEMENT avec un tableau JSON valide de {len(to_classify)} objets dans l'ordre:
 [{{"is_client": bool, "category": string, "priority": string, "summary": string}}, ...]"""
 
-    try:
-        text = _ask(prompt)
-        text = text.replace('```json', '').replace('```', '').strip()
-        results = json.loads(text)
-        if isinstance(results, list) and len(results) == len(emails):
-            return results
-    except Exception:
-        pass
-    return [dict(_DEFAULT) for _ in emails]
+        try:
+            text = _ask(prompt)
+            text = text.replace('```json', '').replace('```', '').strip()
+            batch_results = json.loads(text)
+            if isinstance(batch_results, list) and len(batch_results) == len(to_classify):
+                for (i, _), c in zip(to_classify, batch_results):
+                    results[i] = c
+        except Exception:
+            pass
+
+        for i, _ in to_classify:
+            if results[i] is None:
+                results[i] = dict(_DEFAULT)
+
+    return results
 
 
 def generate_response(email, business_context=''):

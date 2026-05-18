@@ -1,20 +1,22 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
 
-_model = None
+_client = None
 
 
-def _get_model():
-    global _model
-    if _model is None:
-        genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
-        _model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    return _model
+def _get_client():
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY'))
+    return _client
 
 
 def _ask(prompt):
-    return _get_model().generate_content(prompt).text.strip()
+    response = _get_client().models.generate_content(
+        model='gemini-2.0-flash', contents=prompt
+    )
+    return response.text.strip()
 
 
 SHOPIFY_SENDERS = {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}

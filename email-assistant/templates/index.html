@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistant Email</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+
+    /* Header */
+    .header { background: #7c3aed; color: white; padding: 0 20px; height: 50px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+    .header h1 { font-size: 16px; font-weight: 600; flex: 1; display: flex; align-items: center; gap: 8px; }
+    .btn { background: rgba(255,255,255,0.15); border: none; color: white; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: background .2s; }
+    .btn:hover { background: rgba(255,255,255,0.25); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-status { font-size: 13px; opacity: 0.9; }
+    .auth-status.connected { color: #86efac; }
+
+    /* Layout */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar { width: 220px; background: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; flex-shrink: 0; }
+    .tabs { display: flex; border-bottom: 1px solid #e5e7eb; }
+    .tab { flex: 1; padding: 10px; text-align: center; font-size: 13px; cursor: pointer; border: none; background: none; color: #6b7280; transition: all .2s; }
+    .tab.active { background: #7c3aed; color: white; font-weight: 500; }
+    .email-list { flex: 1; overflow-y: auto; }
+    .email-item { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; cursor: pointer; transition: background .15s; }
+    .email-item:hover { background: #f9fafb; }
+    .email-item.active { background: #ede9fe; border-left: 3px solid #7c3aed; }
+    .email-item.priority-high { border-left: 3px solid #ef4444; }
+    .email-sender { font-size: 12px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .email-subject { font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .email-meta { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+    .badge { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: #e5e7eb; color: #374151; }
+    .badge.client { background: #dbeafe; color: #1d4ed8; }
+    .badge.high { background: #fee2e2; color: #b91c1c; }
+    .badge.sent { background: #d1fae5; color: #065f46; }
+    .empty-state { padding: 20px; text-align: center; color: #9ca3af; font-size: 13px; }
+
+    /* Detail */
+    .detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .detail-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #9ca3af; gap: 12px; }
+    .detail-placeholder .icon { font-size: 48px; }
+    .detail-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .detail-header { padding: 16px 20px; background: white; border-bottom: 1px solid #e5e7eb; }
+    .detail-subject { font-size: 16px; font-weight: 600; color: #111827; margin-bottom: 6px; }
+    .detail-from { font-size: 13px; color: #6b7280; }
+    .detail-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .detail-body { flex: 1; overflow-y: auto; padding: 16px 20px; background: white; font-size: 13px; color: #374151; line-height: 1.6; white-space: pre-wrap; }
+    .detail-summary { background: #ede9fe; border-left: 3px solid #7c3aed; padding: 8px 12px; margin: 0 20px 12px; border-radius: 0 6px 6px 0; font-size: 12px; color: #5b21b6; }
+
+    /* Response area */
+    .response-area { border-top: 1px solid #e5e7eb; background: white; padding: 12px 20px; }
+    .response-area textarea { width: 100%; height: 120px; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px; font-size: 13px; resize: vertical; font-family: inherit; }
+    .response-area textarea:focus { outline: none; border-color: #7c3aed; }
+    .response-actions { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+    .btn-primary { background: #7c3aed; color: white; border: none; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background .2s; }
+    .btn-primary:hover { background: #6d28d9; }
+    .btn-secondary { background: white; color: #374151; border: 1px solid #d1d5db; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all .2s; }
+    .btn-secondary:hover { background: #f9fafb; }
+    .btn-danger { background: white; color: #ef4444; border: 1px solid #fca5a5; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .btn-danger:hover { background: #fef2f2; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: white; border-radius: 10px; padding: 24px; width: 600px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+    .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+    .modal-body { font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: #374151; }
+    .modal-close { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: #9ca3af; }
+
+    /* Setup banner */
+    .setup-banner { background: #fef3c7; border-bottom: 1px solid #fcd34d; padding: 10px 20px; font-size: 13px; color: #92400e; }
+    .setup-banner a { color: #7c3aed; font-weight: 500; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 200; opacity: 0; transition: opacity .3s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #dc2626; }
+    .toast.success { background: #059669; }
+
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+{% if setup_needed %}
+<div class="setup-banner">
+  ⚠️ <strong>Configuration manquante :</strong> le fichier <code>credentials.json</code> est introuvable.
+  <a href="https://console.cloud.google.com/" target="_blank">Créer les identifiants Google OAuth</a> et placer le fichier dans ce dossier.
+</div>
+{% endif %}
+
+<div class="header">
+  <h1>📧 Assistant Email</h1>
+  <button class="btn" id="btnSync" onclick="syncEmails()">🔄 Synchroniser</button>
+  <button class="btn" id="btnRecap" onclick="generateRecap()">📋 Récap du jour</button>
+  {% if authenticated %}
+    <span class="auth-status connected">✓ Gmail connecté</span>
+  {% else %}
+    <button class="btn" onclick="location.href='/auth/start'">🔗 Connecter Gmail</button>
+  {% endif %}
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="tabs">
+      <button class="tab active" id="tabTous" onclick="switchTab('tous')">Tous</button>
+      <button class="tab" id="tabClients" onclick="switchTab('clients')">Clients</button>
+    </div>
+    <div class="email-list" id="emailList">
+      <div class="empty-state">Aucun email</div>
+    </div>
+  </div>
+
+  <div class="detail" id="detail">
+    <div class="detail-placeholder">
+      <div class="icon">📬</div>
+      <div>Sélectionne un email pour le lire</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="recapModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeRecap()">×</button>
+    <h2>📋 Récap du jour</h2>
+    <div class="modal-body" id="recapContent">Chargement…</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentTab = 'tous';
+let currentEmailId = null;
+let emails = [];
+
+async function loadEmails() {
+  const clientOnly = currentTab === 'clients';
+  const res = await fetch('/api/emails?client_only=' + clientOnly + '&limit=100');
+  emails = await res.json();
+  renderList();
+}
+
+function renderList() {
+  const list = document.getElementById('emailList');
+  if (!emails.length) {
+    list.innerHTML = '<div class="empty-state">Aucun email</div>';
+    return;
+  }
+  list.innerHTML = emails.map(e => {
+    const active = e.id === currentEmailId ? ' active' : '';
+    const prio = e.priority === 'high' ? ' priority-high' : '';
+    const resp = e.response && e.response.status === 'sent';
+    return `<div class="email-item${active}${prio}" onclick="openEmail(${e.id})">
+      <div class="email-sender">${esc(e.from_name || e.from_email)}</div>
+      <div class="email-subject">${esc(e.subject || '(sans objet)')}</div>
+      <div class="email-meta">
+        ${e.is_client ? '<span class="badge client">client</span>' : ''}
+        ${e.priority === 'high' ? '<span class="badge high">urgent</span>' : ''}
+        ${resp ? '<span class="badge sent">répondu</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openEmail(id) {
+  currentEmailId = id;
+  renderList();
+  const res = await fetch('/api/emails/' + id);
+  const e = await res.json();
+  renderDetail(e);
+}
+
+function renderDetail(e) {
+  const detail = document.getElementById('detail');
+  const resp = e.response;
+  const sentAlready = resp && resp.status === 'sent';
+  detail.innerHTML = `
+    <div class="detail-content">
+      <div class="detail-header">
+        <div class="detail-subject">${esc(e.subject || '(sans objet)')}</div>
+        <div class="detail-from">De : ${esc(e.from_name || '')} &lt;${esc(e.from_email || '')}&gt; — ${esc(e.date || '')}</div>
+        <div class="detail-actions">
+          ${e.is_client && !sentAlready ? `<button class="btn-primary" onclick="generateResponse(${e.id})">✨ Générer réponse</button>` : ''}
+          ${e.has_unsubscribe && !e.unsubscribed ? `<button class="btn-danger" onclick="unsubscribe(${e.id})">🚫 Se désabonner</button>` : ''}
+          ${e.unsubscribed ? '<span style="font-size:12px;color:#6b7280">✓ Désabonné</span>' : ''}
+        </div>
+      </div>
+      ${e.summary ? `<div class="detail-summary">💡 ${esc(e.summary)}</div>` : ''}
+      <div class="detail-body">${esc(e.body || '')}</div>
+      ${resp ? renderResponse(e.id, resp) : ''}
+    </div>`;
+}
+
+function renderResponse(emailId, resp) {
+  const sent = resp.status === 'sent';
+  return `<div class="response-area">
+    <strong style="font-size:13px;color:#374151">${sent ? '✓ Réponse envoyée' : '📝 Brouillon'}</strong>
+    <textarea id="draftArea" ${sent ? 'disabled' : ''}>${esc(resp.draft || '')}</textarea>
+    ${!sent ? `<div class="response-actions">
+      <button class="btn-secondary" onclick="saveDraft(${resp.id})">Enregistrer</button>
+      <button class="btn-primary" onclick="sendResponse(${resp.id}, ${emailId})">📤 Envoyer</button>
+    </div>` : ''}
+  </div>`;
+}
+
+async function generateResponse(emailId) {
+  showToast('Génération en cours…');
+  const res = await fetch('/api/emails/' + emailId + '/generate-response', { method: 'POST' });
+  if (res.ok) {
+    showToast('Réponse générée !', 'success');
+    openEmail(emailId);
+  } else {
+    const d = await res.json();
+    showToast(d.error || 'Erreur', 'error');
+  }
+}
+
+async function saveDraft(rid) {
+  const draft = document.getElementById('draftArea').value;
+  await fetch('/api/responses/' + rid, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ draft })
+  });
+  showToast('Brouillon enregistré', 'success');
+}
+
+async function sendResponse(rid, emailId) {
+  const draft = document.getElementById('draftArea').value;
+  const res = await fetch('/api/responses/' + rid + '/send', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ draft })
+  });
+  if (res.ok) {
+    showToast('Email envoyé !', 'success');
+    openEmail(emailId);
+    loadEmails();
+  } else {
+    const d = await res.json();
+    showToast(d.error || 'Erreur envoi', 'error');
+  }
+}
+
+async function unsubscribe(emailId) {
+  const res = await fetch('/api/emails/' + emailId + '/unsubscribe', { method: 'POST' });
+  const d = await res.json();
+  if (res.ok) {
+    if (d.method === 'link') window.open(d.url, '_blank');
+    showToast('Désabonnement effectué', 'success');
+    openEmail(emailId);
+  } else {
+    showToast(d.error || 'Erreur', 'error');
+  }
+}
+
+async function syncEmails() {
+  const btn = document.getElementById('btnSync');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sync…';
+  const res = await fetch('/api/emails/sync', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+  const d = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '🔄 Synchroniser';
+  if (res.ok) {
+    showToast(`${d.synced} nouveaux emails sur ${d.total}`, 'success');
+    loadEmails();
+  } else {
+    showToast('Erreur : ' + (d.error || 'inconnue'), 'error');
+  }
+}
+
+async function generateRecap() {
+  document.getElementById('recapModal').classList.add('show');
+  document.getElementById('recapContent').textContent = 'Génération en cours…';
+  const res = await fetch('/api/summary/generate', { method: 'POST' });
+  const d = await res.json();
+  document.getElementById('recapContent').textContent = d.summary || 'Aucun résumé disponible.';
+}
+
+function closeRecap() {
+  document.getElementById('recapModal').classList.remove('show');
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabTous').classList.toggle('active', tab === 'tous');
+  document.getElementById('tabClients').classList.toggle('active', tab === 'clients');
+  currentEmailId = null;
+  document.getElementById('detail').innerHTML = `
+    <div class="detail-placeholder">
+      <div class="icon">📬</div>
+      <div>Sélectionne un email pour le lire</div>
+    </div>`;
+  loadEmails();
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = 'toast', 3000);
+}
+
+loadEmails();
+</script>
+</body>
+</html>

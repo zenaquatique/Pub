@@ -42,6 +42,11 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+    try:
+        c.execute('ALTER TABLE emails ADD COLUMN is_important INTEGER DEFAULT 0')
+        conn.commit()
+    except Exception:
+        pass
     c.execute('''
         CREATE TABLE IF NOT EXISTS responses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,10 +69,12 @@ def init_db():
     conn.close()
 
 
-def get_emails(client_only=False, limit=100):
+def get_emails(client_only=False, important_only=False, limit=100):
     conn = get_db()
     c = conn.cursor()
-    if client_only:
+    if important_only:
+        c.execute('SELECT * FROM emails WHERE is_important = 1 ORDER BY date DESC LIMIT ?', (limit,))
+    elif client_only:
         c.execute('SELECT * FROM emails WHERE is_client = 1 ORDER BY date DESC LIMIT ?', (limit,))
     else:
         c.execute('SELECT * FROM emails ORDER BY date DESC LIMIT ?', (limit,))

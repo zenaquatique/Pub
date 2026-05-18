@@ -112,6 +112,7 @@
     <div class="tabs">
       <button class="tab active" id="tabTous" onclick="switchTab('tous')">Tous</button>
       <button class="tab" id="tabClients" onclick="switchTab('clients')">Clients</button>
+      <button class="tab" id="tabImportant" onclick="switchTab('important')">⭐</button>
     </div>
     <div class="email-list" id="emailList">
       <div class="empty-state">Aucun email</div>
@@ -142,8 +143,10 @@ let currentEmailId = null;
 let emails = [];
 
 async function loadEmails() {
-  const clientOnly = currentTab === 'clients';
-  const res = await fetch('/api/emails?client_only=' + clientOnly + '&limit=100');
+  let url = '/api/emails?limit=100';
+  if (currentTab === 'clients') url += '&client_only=true';
+  if (currentTab === 'important') url += '&important_only=true';
+  const res = await fetch(url);
   emails = await res.json();
   renderList();
 }
@@ -160,7 +163,7 @@ function renderList() {
     const resp = e.response && e.response.status === 'sent';
     const read = (e.is_read || resp) ? ' read' : '';
     return `<div class="email-item${active}${prio}${read}" onclick="openEmail(${e.id})">
-      <div class="email-sender">${esc(e.from_name || e.from_email)}</div>
+      <div class="email-sender">${e.is_important ? '⭐ ' : ''}${esc(e.from_name || e.from_email)}</div>
       <div class="email-subject">${esc(e.subject || '(sans objet)')}</div>
       <div class="email-meta">
         ${e.is_client ? '<span class="badge client">client</span>' : ''}
@@ -200,6 +203,7 @@ function renderDetail(e) {
         <div class="detail-actions" style="flex-wrap:wrap;gap:6px;">
           ${!sent ? `<button class="btn-primary" id="btnGenerate" onclick="generateResponse(${e.id})">✨ Générer avec IA</button>` : ''}
           <button class="btn-secondary" onclick="toggleRead(${e.id}, ${e.is_read})">${e.is_read ? '● Marquer non lu' : '○ Marquer lu'}</button>
+          <button class="btn-secondary" onclick="toggleImportant(${e.id})">${e.is_important ? '⭐ Retirer important' : '☆ Important'}</button>
           <button class="btn-secondary" onclick="toggleClient(${e.id})">${clientLabel}</button>
           <button class="btn-danger" onclick="deleteEmail(${e.id})">🗑 Supprimer</button>
           ${e.has_unsubscribe && !e.unsubscribed ? `<button class="btn-danger" onclick="unsubscribe(${e.id})">🚫 Se désabonner</button>` : ''}
@@ -310,6 +314,16 @@ async function toggleClient(emailId) {
   openEmail(emailId);
 }
 
+async function toggleImportant(emailId) {
+  const res = await fetch('/api/emails/' + emailId + '/toggle-important', { method: 'POST' });
+  const d = await res.json();
+  const found = emails.find(x => x.id === emailId);
+  if (found) found.is_important = d.is_important ? 1 : 0;
+  showToast(d.is_important ? '⭐ Marqué important' : 'Retiré des importants', 'success');
+  loadEmails();
+  openEmail(emailId);
+}
+
 async function deleteEmail(emailId) {
   if (!confirm('Supprimer cet email ?')) return;
   await fetch('/api/emails/' + emailId, { method: 'DELETE' });
@@ -365,6 +379,7 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tabTous').classList.toggle('active', tab === 'tous');
   document.getElementById('tabClients').classList.toggle('active', tab === 'clients');
+  document.getElementById('tabImportant').classList.toggle('active', tab === 'important');
   currentEmailId = null;
   document.getElementById('detail').innerHTML = `
     <div class="detail-placeholder">

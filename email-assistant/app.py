@@ -88,8 +88,9 @@ def sync_emails():
 @app.route('/api/emails')
 def get_emails():
     client_only = request.args.get('client_only') == 'true'
+    important_only = request.args.get('important_only') == 'true'
     limit = int(request.args.get('limit', 100))
-    emails = database.get_emails(client_only=client_only, limit=limit)
+    emails = database.get_emails(client_only=client_only, important_only=important_only, limit=limit)
     for e in emails:
         e['response'] = database.get_response(e['id'])
     return jsonify(emails)
@@ -128,6 +129,15 @@ def mark_read(eid):
 def mark_unread(eid):
     database.update_email(eid, {'is_read': 0})
     return jsonify({'ok': True})
+
+
+@app.route('/api/emails/<int:eid>/toggle-important', methods=['POST'])
+def toggle_important(eid):
+    e = database.get_email(eid)
+    if not e:
+        return jsonify({'error': 'Email introuvable'}), 404
+    database.update_email(eid, {'is_important': 0 if e['is_important'] else 1})
+    return jsonify({'is_important': not e['is_important']})
 
 
 @app.route('/api/emails/<int:eid>/toggle-client', methods=['POST'])

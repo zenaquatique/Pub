@@ -177,6 +177,12 @@ async function openEmail(id) {
   const res = await fetch('/api/emails/' + id);
   const e = await res.json();
   renderDetail(e);
+  if (!e.is_read) {
+    fetch('/api/emails/' + id + '/read', { method: 'POST' });
+    const found = emails.find(x => x.id === id);
+    if (found) found.is_read = 1;
+    renderList();
+  }
 }
 
 function renderDetail(e) {

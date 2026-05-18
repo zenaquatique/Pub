@@ -114,6 +114,23 @@ def _parse_date(date_str):
 SHOPIFY_SENDERS = {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}
 
 
+def extract_shopify_customer_email(body):
+    """Extract customer email from Shopify contact form email body."""
+    # Shopify format: "E-mail:\nowengury24@gmail.com" or "E-mail: owengury24@gmail.com"
+    match = re.search(r'E-mail\s*:\s*[\r\n]+\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})', body)
+    if not match:
+        match = re.search(r'E-mail\s*:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})', body)
+    return match.group(1).strip() if match else None
+
+
+def extract_shopify_customer_name(body):
+    """Extract customer name from Shopify contact form email body."""
+    match = re.search(r'Nom\s*:\s*[\r\n]+\s*(.+)', body)
+    if not match:
+        match = re.search(r'Name\s*:\s*[\r\n]+\s*(.+)', body)
+    return match.group(1).strip() if match else None
+
+
 def get_reply_to(gmail_id):
     """Return the Reply-To email address for a Gmail message, or None."""
     service = _get_service()
@@ -159,17 +176,25 @@ def fetch_emails(max_results=50):
             from_name = name_match.group(1).strip() if name_match else from_raw
             from_email = name_match.group(2).strip() if name_match else from_raw
 
-            reply_to_raw = h('Reply-To')
-            if reply_to_raw and from_email.lower() in {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}:
-                rt_match = re.match(r'^"?([^"<]+)"?\s*<(.+)>$', reply_to_raw)
-                if rt_match:
-                    from_name = rt_match.group(1).strip()
-                    from_email = rt_match.group(2).strip()
-                elif '@' in reply_to_raw:
-                    from_email = reply_to_raw.strip()
-                    from_name = reply_to_raw.strip()
-
             body = _decode_body(m['payload'])
+
+            if from_email.lower() in SHOPIFY_SENDERS:
+                customer_email = extract_shopify_customer_email(body)
+                if customer_email:
+                    from_email = customer_email
+                    customer_name = extract_shopify_customer_name(body)
+                    if customer_name:
+                        from_name = customer_name
+                else:
+                    reply_to_raw = h('Reply-To')
+                    if reply_to_raw:
+                        rt_match = re.match(r'^"?([^"<]+)"?\s*<(.+)>$', reply_to_raw)
+                        if rt_match:
+                            from_name = rt_match.group(1).strip()
+                            from_email = rt_match.group(2).strip()
+                        elif '@' in reply_to_raw:
+                            from_email = reply_to_raw.strip()
+                            from_name = reply_to_raw.strip()
             has_unsub, unsub_link = _find_unsubscribe(headers, body)
 
             emails.append({

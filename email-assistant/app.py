@@ -223,10 +223,17 @@ def send_response(rid):
         return jsonify({'error': 'Déjà envoyé'}), 400
 
     to_email = row['from_email']
-    if to_email.lower() in gmail_service.SHOPIFY_SENDERS and row.get('gmail_id'):
-        reply_to = gmail_service.get_reply_to(row['gmail_id'])
-        if reply_to:
-            to_email = reply_to
+    if to_email.lower() in gmail_service.SHOPIFY_SENDERS:
+        # Try to extract real customer email from stored body first
+        body_text = row.get('body', '') or ''
+        customer_email = gmail_service.extract_shopify_customer_email(body_text)
+        if customer_email:
+            to_email = customer_email
+        elif row.get('gmail_id'):
+            # Fallback: re-fetch Reply-To from Gmail API
+            reply_to = gmail_service.get_reply_to(row['gmail_id'])
+            if reply_to:
+                to_email = reply_to
 
     ok, result = gmail_service.send_email(
         to=to_email,

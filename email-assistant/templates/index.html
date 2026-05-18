@@ -65,6 +65,17 @@
     .btn-danger { background: white; color: #ef4444; border: 1px solid #fca5a5; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
     .btn-danger:hover { background: #fef2f2; }
 
+    /* Thread / conversation view */
+    .thread-container { flex: 1; overflow-y: auto; padding: 16px 20px; background: #f9fafb; display: flex; flex-direction: column; gap: 12px; }
+    .thread-msg { max-width: 80%; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+    .thread-msg.incoming { align-self: flex-start; background: white; border: 1px solid #e5e7eb; }
+    .thread-msg.outgoing { align-self: flex-end; background: #ede9fe; border: 1px solid #c4b5fd; }
+    .thread-msg-meta { font-size: 11px; color: #9ca3af; margin-bottom: 4px; }
+    .thread-msg-body { color: #374151; }
+
+    /* Sync timestamp */
+    .sync-label { font-size: 11px; opacity: 0.75; margin-left: 6px; }
+
     /* Modal */
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
     .modal-overlay.show { display: flex; }
@@ -104,7 +115,7 @@
 
 <div class="header">
   <h1>📧 Assistant Email</h1>
-  <button class="btn" id="btnSync" onclick="syncEmails()">🔄 Synchroniser</button>
+  <button class="btn" id="btnSync" onclick="syncEmails()">🔄 Synchroniser<span class="sync-label" id="syncLabel"></span></button>
   <button class="btn" id="btnRecap" onclick="generateRecap()">📋 Récap du jour</button>
   <button class="btn" onclick="openKbModal()" title="Base de connaissances">⚙️ Base de connaissances</button>
   {% if authenticated %}

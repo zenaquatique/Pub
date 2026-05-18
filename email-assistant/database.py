@@ -153,18 +153,26 @@ def update_email(email_id, updates):
 def save_response(email_id, draft):
     conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT id FROM responses WHERE email_id = ?', (email_id,))
+    c.execute('SELECT id, status FROM responses WHERE email_id = ? ORDER BY id DESC LIMIT 1', (email_id,))
     row = c.fetchone()
-    if row:
-        c.execute('UPDATE responses SET draft = ?, status = ? WHERE id = ?',
-                  (draft, 'pending', row[0]))
-        rid = row[0]
+    if row and row['status'] != 'sent':
+        c.execute('UPDATE responses SET draft = ?, status = ? WHERE id = ?', (draft, 'pending', row['id']))
+        rid = row['id']
     else:
         c.execute('INSERT INTO responses (email_id, draft) VALUES (?, ?)', (email_id, draft))
         rid = c.lastrowid
     conn.commit()
     conn.close()
     return rid
+
+
+def get_responses(email_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM responses WHERE email_id = ? ORDER BY id ASC', (email_id,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
 
 
 def get_response(email_id):

@@ -190,6 +190,14 @@ def unsubscribe(eid):
     return jsonify({'ok': True, 'method': 'link', 'url': link})
 
 
+# ── Threads ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/threads/<thread_id>')
+def get_thread(thread_id):
+    messages = gmail_service.fetch_thread(thread_id)
+    return jsonify(messages)
+
+
 # ── Responses ──────────────────────────────────────────────────────────────────
 
 @app.route('/api/responses/<int:rid>', methods=['PUT'])

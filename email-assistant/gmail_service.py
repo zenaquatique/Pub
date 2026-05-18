@@ -159,6 +159,42 @@ def fetch_emails(max_results=50):
         return [], str(e)
 
 
+def fetch_thread(thread_id):
+    service = _get_service()
+    if not service:
+        return []
+    try:
+        thread = service.users().threads().get(userId='me', id=thread_id, format='full').execute()
+        result = []
+        for m in thread.get('messages', []):
+            headers = m['payload'].get('headers', [])
+
+            def h(name):
+                for hdr in headers:
+                    if hdr['name'].lower() == name.lower():
+                        return hdr['value']
+                return ''
+
+            from_raw = h('From')
+            name_match = re.match(r'^"?([^"<]+)"?\s*<(.+)>$', from_raw)
+            from_name = name_match.group(1).strip() if name_match else from_raw
+            from_email = name_match.group(2).strip() if name_match else from_raw
+            body = _decode_body(m['payload'])
+            is_sent = 'SENT' in m.get('labelIds', [])
+            result.append({
+                'gmail_id': m['id'],
+                'from_name': from_name,
+                'from_email': from_email,
+                'subject': h('Subject'),
+                'body': body,
+                'date': _parse_date(h('Date')),
+                'is_sent': is_sent,
+            })
+        return result
+    except Exception:
+        return []
+
+
 def send_email(to, subject, body, thread_id=None, in_reply_to=None):
     service = _get_service()
     if not service:

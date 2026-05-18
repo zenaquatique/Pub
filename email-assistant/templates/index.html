@@ -30,6 +30,8 @@
     .email-item:hover { background: #f9fafb; }
     .email-item.active { background: #ede9fe; border-left: 3px solid #7c3aed; }
     .email-item.priority-high { border-left: 3px solid #ef4444; }
+    .email-item.read { opacity: 0.5; }
+    .email-item.read .email-sender { font-weight: 400; }
     .email-sender { font-size: 12px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .email-subject { font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
     .email-meta { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
@@ -156,7 +158,8 @@ function renderList() {
     const active = e.id === currentEmailId ? ' active' : '';
     const prio = e.priority === 'high' ? ' priority-high' : '';
     const resp = e.response && e.response.status === 'sent';
-    return `<div class="email-item${active}${prio}" onclick="openEmail(${e.id})">
+    const read = (e.is_read || resp) ? ' read' : '';
+    return `<div class="email-item${active}${prio}${read}" onclick="openEmail(${e.id})">
       <div class="email-sender">${esc(e.from_name || e.from_email)}</div>
       <div class="email-subject">${esc(e.subject || '(sans objet)')}</div>
       <div class="email-meta">
@@ -174,6 +177,12 @@ async function openEmail(id) {
   const res = await fetch('/api/emails/' + id);
   const e = await res.json();
   renderDetail(e);
+  if (!e.is_read) {
+    fetch('/api/emails/' + id + '/read', { method: 'POST' });
+    const found = emails.find(x => x.id === id);
+    if (found) found.is_read = 1;
+    renderList();
+  }
 }
 
 function renderDetail(e) {

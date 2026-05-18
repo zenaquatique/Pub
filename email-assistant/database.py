@@ -33,9 +33,15 @@ def init_db():
             has_unsubscribe INTEGER DEFAULT 0,
             unsubscribe_link TEXT,
             unsubscribed INTEGER DEFAULT 0,
+            is_read INTEGER DEFAULT 0,
             synced_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    try:
+        c.execute('ALTER TABLE emails ADD COLUMN is_read INTEGER DEFAULT 0')
+        conn.commit()
+    except Exception:
+        pass
     c.execute('''
         CREATE TABLE IF NOT EXISTS responses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

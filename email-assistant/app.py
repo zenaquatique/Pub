@@ -115,6 +115,12 @@ def generate_response(eid):
     return jsonify({'response_id': rid, 'draft': draft})
 
 
+@app.route('/api/emails/<int:eid>/read', methods=['POST'])
+def mark_read(eid):
+    database.update_email(eid, {'is_read': 1})
+    return jsonify({'ok': True})
+
+
 @app.route('/api/emails/<int:eid>/unsubscribe', methods=['POST'])
 def unsubscribe(eid):
     e = database.get_email(eid)

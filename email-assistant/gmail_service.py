@@ -3,6 +3,7 @@ import os
 import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import parsedate_to_datetime
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -103,6 +104,13 @@ def _find_unsubscribe(headers, body):
     return False, None
 
 
+def _parse_date(date_str):
+    try:
+        return parsedate_to_datetime(date_str).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return date_str
+
+
 def fetch_emails(max_results=50):
     service = _get_service()
     if not service:
@@ -142,7 +150,7 @@ def fetch_emails(max_results=50):
                 'to_email': h('To'),
                 'subject': h('Subject'),
                 'body': body,
-                'date': h('Date'),
+                'date': _parse_date(h('Date')),
                 'has_unsubscribe': has_unsub,
                 'unsubscribe_link': unsub_link,
             })

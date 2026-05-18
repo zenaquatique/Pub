@@ -17,7 +17,13 @@ def _ask(prompt):
     return _get_model().generate_content(prompt).text.strip()
 
 
+SHOPIFY_SENDERS = {'mailer@shopify.com', 'no-reply@shopify.com', 'notifications@shopify.com'}
+
+
 def classify_email(from_email, from_name, subject, body):
+    if from_email and from_email.lower() in SHOPIFY_SENDERS:
+        return {'is_client': True, 'category': 'order_inquiry', 'priority': 'normal', 'summary': subject or ''}
+
     prompt = f"""Analyse cet email reçu par une boutique Shopify et réponds en JSON uniquement.
 
 De: {from_name} <{from_email}>

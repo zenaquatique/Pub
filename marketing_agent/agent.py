@@ -16,6 +16,7 @@ from config import (
 )
 from tools import shopify, social, email_campaigns, customer
 from tools.knowledge import read_obsidian_vault, list_video_assets
+from tools.remotion import render_video, list_rendered_videos
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,37 @@ TOOLS = [
                     properties={},
                 ),
             ),
+            types.FunctionDeclaration(
+                name="render_video",
+                description=(
+                    "Lance le rendu d'une vidéo Remotion. "
+                    "L'ID de composition suit le format YYYYMMDD (ex: '20260519' pour le 19 mai 2026). "
+                    "Tous les posts du mois sont déjà définis dans Root.tsx avec leur contenu. "
+                    "Cette commande génère le fichier MP4 directement dans le dossier out/ du projet."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "composition_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="ID Remotion de la composition (format YYYYMMDD, ex: '20260519')",
+                        ),
+                        "output_filename": types.Schema(
+                            type=types.Type.STRING,
+                            description="Nom du fichier MP4 de sortie (optionnel, défaut: <composition_id>.mp4)",
+                        ),
+                    },
+                    required=["composition_id"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="list_rendered_videos",
+                description="Liste les vidéos MP4 déjà rendues dans le dossier out/ du projet Remotion.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={},
+                ),
+            ),
         ]
     )
 ]
@@ -320,6 +352,16 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
             "assets_path": VIDEO_ASSETS_PATH,
         }
 
+    if name == "render_video":
+        return render_video(
+            inputs["composition_id"],
+            VIDEO_ASSETS_PATH,
+            inputs.get("output_filename", ""),
+        )
+
+    if name == "list_rendered_videos":
+        return list_rendered_videos(VIDEO_ASSETS_PATH)
+
     return {"error": f"Outil inconnu: {name}"}
 
 
@@ -373,6 +415,15 @@ Date d'aujourd'hui : {today}
 {vault_section}{assets_section}
 TON RÔLE : Gérer 99 % du marketing de façon autonome, sans intervention humaine.
 
+SYSTÈME VIDÉO REMOTION :
+- Le projet Remotion est dans : {VIDEO_ASSETS_PATH}
+- Chaque post a un ID au format YYYYMMDD (ex: "20260519" pour le 19 mai 2026)
+- Tous les posts du mois sont DÉJÀ définis dans Root.tsx avec leur contenu complet
+- Pour rendre une vidéo : appelle render_video(composition_id="20260519")
+- Le MP4 est généré dans le dossier out/ du projet
+- NE GÉNÈRE PAS de script texte si la vidéo existe dans Root.tsx — lance directement le rendu
+- Formats disponibles : VersusVideo, EducatifVideo, PromoVideo, ConceptVideo, TikTokOrganic
+
 PROCESSUS À SUIVRE À CHAQUE EXÉCUTION :
 1. Récupère les analytics et les produits de la boutique
 2. Analyse les données : qu'est-ce qui se vend bien ? Quoi mettre en avant ?
@@ -381,8 +432,7 @@ PROCESSUS À SUIVRE À CHAQUE EXÉCUTION :
 5. Si du stock est faible sur un produit populaire, crée un email de newsletter d'urgence
 6. Améliore les descriptions des produits qui n'en ont pas ou peu
 7. Propose un email newsletter hebdomadaire si c'est lundi
-8. Si tu dois créer du contenu vidéo, propose un script complet (accroche, développement, CTA, hashtags)
-   en t'appuyant sur les assets disponibles et les instructions de la vault
+8. Pour la vidéo du jour : appelle render_video avec l'ID YYYYMMDD correspondant à la date
 
 RÈGLES :
 - Respecte toutes les instructions présentes dans la vault Obsidian — elles ont priorité absolue
@@ -392,9 +442,9 @@ RÈGLES :
 - Ne publie JAMAIS de fausses informations sur les produits
 - Si tu ne trouves pas d'image pour un post, utilise l'image du produit Shopify
 - Fais toujours les actions dans l'ordre logique : données → contenu → publication
-- Pour les vidéos : rédige le script complet + sous-titres + description + hashtags
+- Pour les vidéos : utilise render_video — NE rédige PAS de script si le post existe dans Root.tsx
 
-IMPORTANT: Tes actions de publication (Instagram, Facebook, newsletter, descriptions, réponses) seront soumises à validation humaine avant d'être exécutées. Continue normalement — indique dans ton rapport ce que tu as mis en attente.
+IMPORTANT: Tes actions de publication (Instagram, Facebook, newsletter, descriptions, réponses) seront soumises à validation humaine avant d'être exécutées. Le rendu vidéo est local et immédiat, pas de validation requise.
 
 Commence maintenant par collecter les données de la boutique."""
 

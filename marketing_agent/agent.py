@@ -492,12 +492,23 @@ def build_system_prompt() -> str:
     if memory:
         memory_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MÉMOIRE PERSISTANTE — CE QUE TU AS APPRIS
+⚠️  MÉMOIRE PERSISTANTE — CONTRAINTES ABSOLUES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {memory}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Ces informations proviennent de tes sessions précédentes.
-RESPECTE-LES EN PRIORITÉ dans toutes tes actions.
+RÈGLE CRITIQUE : Avant de générer ou modifier TOUT contenu (script,
+post, vidéo, calendrier), relis chaque ligne ci-dessus et vérifie que
+ton contenu ne viole AUCUNE de ces contraintes. Si une note dit
+"ne jamais écrire X" → X est INTERDIT dans tout le contenu généré.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    else:
+        memory_section = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MÉMOIRE PERSISTANTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+(vide pour l'instant — les préférences de l'utilisateur seront
+ enregistrées ici via save_to_memory au fil des sessions)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -564,10 +575,14 @@ VIDÉO REMOTION
 • ID composition : YYYYMMDD (ex: "20260519" = 19 mai 2026)
 • Root.tsx contient les props de chaque post — TU PEUX ET TU DOIS le modifier avec update_post_props
 • Workflow OBLIGATOIRE quand l'utilisateur veut changer un post :
+  0. Relis la section MÉMOIRE ci-dessus — chaque contrainte s'applique au nouveau contenu
   1. get_post_props("20260519")           ← lire le contenu actuel
-  2. update_post_props("20260519", {...}) ← écrire les nouvelles valeurs dans Root.tsx
-  3. render_video("20260519")            ← regénérer la vidéo MP4
-  Fais les 3 étapes d'affilée SANS t'arrêter pour demander quoi que ce soit
+  2. Génère les nouvelles valeurs EN APPLIQUANT toutes les contraintes mémoire
+     Ex: si la mémoire dit "ne pas dire plante morte en 2 semaines" → INTERDIT dans les nouvelles valeurs
+     Ex: si la mémoire dit "pot = 5€ pas 10€" → utilise 5€ dans le nouveau contenu
+  3. update_post_props("20260519", {...}) ← écrire les nouvelles valeurs dans Root.tsx
+  4. render_video("20260519")            ← regénérer la vidéo MP4
+  Fais les étapes 1→4 d'affilée SANS t'arrêter
 • Ne génère JAMAIS un script texte dans le chat — modifie Root.tsx et rends la vidéo
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -580,8 +595,12 @@ CALENDRIER ÉDITORIAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MÉMOIRE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Feedback, correction, préférence → save_to_memory IMMÉDIATEMENT (avant de répondre)
-• Ne jamais répéter une erreur déjà mémorisée
+• Dès que l'utilisateur exprime une correction ou préférence → appelle save_to_memory EN PREMIER, avant toute autre action
+• Format de la note : commence par ce qui est interdit/obligatoire, puis le contexte
+  Exemples : "INTERDIT : dire que les plantes meurent en 2 semaines — c'est faux"
+             "PRIX : un pot en animalerie coûte 5€, pas 10€"
+             "TON : toujours utiliser 'tu' avec les clients"
+• La mémoire s'applique à TOUT le contenu généré dans toutes les sessions suivantes
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PUBLICATIONS

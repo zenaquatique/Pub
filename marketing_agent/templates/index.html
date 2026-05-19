@@ -687,7 +687,7 @@ Chargement…</pre>
               style="font-size:.9rem;line-height:1.7;font-family:monospace"
               placeholder="Le script apparaîtra ici…"></textarea>
             <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-primary" onclick="approveAndRender()">
+              <button class="btn btn-primary" onclick="approveAndRender(this)">
                 <i class="fa-solid fa-clapperboard me-1"></i>Valider + Rendre la vidéo
               </button>
               <button class="btn btn-outline-secondary" onclick="regenVoiceover()">
@@ -1381,8 +1381,9 @@ async function calendarRender(btn, compositionId) {
       body: JSON.stringify({composition_id: compositionId}),
     });
     const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || 'Erreur rendu');
     btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Rendu !';
-    btn.className = btn.className.replace('btn-primary','btn-success');
+    btn.className = btn.className.replace('btn-outline-primary','btn-success').replace('btn-primary','btn-success');
     showToast(`✅ ${compositionId}.mp4 généré !`, 'success');
   } catch(e) {
     btn.innerHTML = orig;
@@ -1453,10 +1454,9 @@ async function _fetchVoiceover(compositionId) {
   }
 }
 
-async function approveAndRender() {
+async function approveAndRender(btn) {
   const script = document.getElementById('voiceover-text').value.trim();
   if (!script || !_voCid) return;
-  const btn = event.currentTarget;
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>En cours…';
@@ -1466,9 +1466,11 @@ async function approveAndRender() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({composition_id: _voCid, script_text: script, template_type: _voTpl}),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur approve');
     showToast('Root.tsx mis à jour — rendu en cours…', 'info');
-    await calendarRender(document.createElement('button'), _voCid);
+    await calendarRender(btn, _voCid);
+    // Reload the saved script from Root.tsx into the textarea
+    await _fetchVoiceover(_voCid);
     btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Fait !';
     btn.className = btn.className.replace('btn-primary','btn-success');
   } catch(e) {

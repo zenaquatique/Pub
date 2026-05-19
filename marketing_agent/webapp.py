@@ -30,7 +30,7 @@ from tools.customer import (
 from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory
 from tools.remotion import (
     render_video, list_rendered_videos,
-    extract_post_props, generate_voiceover, date_to_composition_id,
+    extract_post_props, generate_voiceover, date_to_composition_id, update_post_props,
 )
 from tools.shopify import get_products, get_store_analytics
 
@@ -407,13 +407,74 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
+def _text_to_props_sync(script_text: str, composition_id: str, template_type: str) -> dict:
+    """Convertit un script texte libre en props structurés via Gemini."""
+    from google import genai
+    from google.genai import types as gtypes
+
+    schema = _VOICEOVER_SCHEMAS.get(template_type, "")
+    if not schema:
+        return {"status": "error", "error": f"Template '{template_type}' non supporté"}
+
+    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+    memory_block = f"\nCONTRAINTES MÉMOIRE (respecte-les) :\n{memory}\n" if memory else ""
+
+    prompt = f"""Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).
+{memory_block}
+Voici un script rédigé par l'utilisateur pour la vidéo {composition_id} (template : {template_type}) :
+
+---
+{script_text}
+---
+
+Convertis ce script en JSON valide correspondant exactement à ce schéma :
+{schema}
+
+Respecte l'intention et le contenu du script. Textes courts (hookText max 8 mots, items max 6 mots).
+Réponds UNIQUEMENT en JSON valide, sans markdown ni explication."""
+
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=gtypes.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.3,
+        ),
+    )
+    try:
+        props = json.loads(resp.text.strip())
+        props["template_type"] = template_type
+        props["composition_id"] = composition_id
+        return {"status": "success", "props": props}
+    except Exception:
+        return {"status": "error", "error": "Réponse Gemini invalide", "raw": resp.text[:500]}
+
+
 @app.post("/api/approve-voiceover")
 async def api_approve_voiceover(request: Request):
     body = await request.json()
     composition_id = body.get("composition_id", "").strip()
-    props = body.get("props", {})
-    if not composition_id or not props:
-        raise HTTPException(400, "composition_id et props requis")
+    script_text = body.get("script_text", "").strip()
+    template_type = body.get("template_type", "").strip()
+
+    if not composition_id:
+        raise HTTPException(400, "composition_id manquant")
+
+    if script_text and template_type:
+        # Convert free-text script to structured props via Gemini
+        loop = asyncio.get_event_loop()
+        conversion = await loop.run_in_executor(
+            _executor, _text_to_props_sync, script_text, composition_id, template_type
+        )
+        if conversion.get("status") == "error":
+            raise HTTPException(500, conversion.get("error", "Conversion échouée"))
+        props = conversion["props"]
+    else:
+        props = body.get("props", {})
+        if not props:
+            raise HTTPException(400, "script_text+template_type ou props requis")
+
     result = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
     return result
 

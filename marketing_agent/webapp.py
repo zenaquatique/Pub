@@ -11,7 +11,6 @@ from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from config import META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME
 from tools.customer import (
@@ -77,18 +76,17 @@ def _run_agent_sync(task: str) -> None:
 # ─── Application ──────────────────────────────────────────────────────────────
 
 app = FastAPI(title=f"{STORE_NAME} — Marketing Agent")
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+
+_HTML_FILE = Path(__file__).parent / "templates" / "index.html"
 
 
 # ─── Pages ────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "store_name": STORE_NAME,
-    })
+    html = _HTML_FILE.read_text(encoding="utf-8").replace("{{ store_name }}", STORE_NAME)
+    return HTMLResponse(content=html)
 
 
 # ─── API — Agent ──────────────────────────────────────────────────────────────

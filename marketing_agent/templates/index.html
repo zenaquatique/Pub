@@ -126,7 +126,9 @@
     .cal-table td { padding:.5rem .75rem; border-bottom:1px solid #eee; vertical-align:middle; }
     .cal-table tr:hover td { background:#fafafa; }
     .cal-table tr.today-row td { background:#fffbeb; }
-    .cal-table tr.done-row td { opacity:.55; }
+    .cal-table tr.done-row { display: none; }
+    .cal-table.show-done tr.done-row { display: table-row; }
+    .cal-table.show-done tr.done-row td { opacity: .5; }
     .btn-render { font-size:.78rem; padding:.25rem .6rem; white-space:nowrap; }
 
     /* ── Template cards vidéo ── */
@@ -1296,6 +1298,22 @@ async function calendarVoiceover(compositionId) {
 function renderMarkdown(raw) {
   const lines = raw.split('\n');
   let html = '', inList = false, inTable = false, headerCols = [];
+  let doneCount = 0, tableId = '';
+
+  const today = new Date();
+  const todayId = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+
+  function closeTable() {
+    let out = '</tbody></table></div>';
+    if (doneCount > 0) {
+      out += `<button class="btn btn-sm btn-outline-secondary mt-2"
+        onclick="toggleDoneRows('${tableId}',this)">
+        <i class="fa-solid fa-eye me-1"></i>Afficher les publiés (${doneCount})
+      </button>`;
+    }
+    doneCount = 0; tableId = '';
+    return out;
+  }
 
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
@@ -1309,37 +1327,32 @@ function renderMarkdown(raw) {
       const isSep = cells.every(c => /^[-:]+$/.test(c));
 
       if (isSep) {
-        // Separator row — close header, open body
         html += `</thead><tbody>`;
         inTable = true;
       } else if (!inTable && !isSep) {
         // Header row
         headerCols = cells;
-        html += `<div class="table-responsive"><table class="cal-table"><thead><tr>`;
+        tableId = 'cal-tbl-' + li;
+        html += `<div class="table-responsive"><table id="${tableId}" class="cal-table"><thead><tr>`;
         html += cells.map(c => `<th>${c}</th>`).join('');
         html += `<th>Actions</th></tr>`;
       } else {
-        // Data row — detect date cell for composition_id
-        const today = new Date();
-        const todayId = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
-
-        // Find date in cells (look for cell containing a digit + month word)
+        // Data row
         let compositionId = '';
         for (const cell of cells) {
           const cid = dateToCompositionId(cell);
           if (cid) { compositionId = cid; break; }
         }
 
-        // Detect if done (✓ or ✅ in last cell)
         const lastCell = cells[cells.length-1] || '';
         const isDone = /[✓✅]/.test(lastCell);
         const isToday = compositionId === todayId;
 
+        if (isDone) doneCount++;
         const rowClass = isToday ? 'today-row' : isDone ? 'done-row' : '';
         html += `<tr class="${rowClass}">`;
         html += cells.map(c => `<td>${c}</td>`).join('');
 
-        // Action buttons
         const cid = escHtml(compositionId);
         if (compositionId) {
           html += `<td style="white-space:nowrap">
@@ -1360,7 +1373,7 @@ function renderMarkdown(raw) {
       continue;
     }
 
-    if (inTable) { html += '</tbody></table></div>'; inTable = false; }
+    if (inTable) { html += closeTable(); inTable = false; }
 
     if (line.startsWith('### '))     html += `<h6 class="fw-bold mt-3 mb-1">${esc.slice(4)}</h6>`;
     else if (line.startsWith('## ')) html += `<h5 class="fw-bold mt-4 mb-2" style="color:var(--accent)">${esc.slice(3)}</h5>`;
@@ -1375,8 +1388,18 @@ function renderMarkdown(raw) {
   }
 
   if (inList) html += '</ul>';
-  if (inTable) html += '</tbody></table></div>';
+  if (inTable) html += closeTable();
   return html;
+}
+
+function toggleDoneRows(tableId, btn) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const showing = table.classList.toggle('show-done');
+  const count = table.querySelectorAll('tr.done-row').length;
+  btn.innerHTML = showing
+    ? `<i class="fa-solid fa-eye-slash me-1"></i>Masquer les publiés (${count})`
+    : `<i class="fa-solid fa-eye me-1"></i>Afficher les publiés (${count})`;
 }
 
 async function loadCalendar() {

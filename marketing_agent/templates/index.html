@@ -659,28 +659,53 @@ Chargement…</pre>
       <p class="text-muted">Chargement…</p>
     </div>
 
-    <!-- Panneau script voix off (caché par défaut) -->
+    <!-- Panneau voix off IA -->
     <div id="voiceover-panel" class="mt-4" style="display:none">
       <div class="card border-0 shadow-sm" style="border-left:4px solid var(--accent) !important">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="fw-bold mb-0">
               <i class="fa-solid fa-microphone me-2" style="color:var(--accent)"></i>
-              Script voix off — <span id="voiceover-id"></span>
+              Script voix off IA — <span id="voiceover-id"></span>
             </h6>
-            <div class="d-flex gap-2">
-              <button class="btn btn-sm btn-outline-secondary" onclick="copyText('voiceover-text')">
+            <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('voiceover-panel').style.display='none'">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <!-- Spinner génération -->
+          <div id="voiceover-spinner" class="text-center py-4" style="display:none">
+            <div class="spinner-border spinner-border-sm me-2" style="color:var(--accent)"></div>
+            <span class="text-muted">Gemini génère le script…</span>
+          </div>
+
+          <!-- Résultat -->
+          <div id="voiceover-result" style="display:none">
+            <pre id="voiceover-text" style="white-space:pre-wrap;font-size:.88rem;background:#f8f9fa;padding:1rem;border-radius:8px;margin:0 0 1rem"></pre>
+
+            <!-- Feedback pour regénérer -->
+            <div class="input-group mb-3">
+              <input type="text" id="voiceover-feedback" class="form-control form-control-sm"
+                placeholder="Correction optionnelle… (ex: enlève la partie sur le prix)"
+                onkeydown="if(event.key==='Enter') regenVoiceover()" />
+              <button class="btn btn-sm btn-outline-secondary" onclick="regenVoiceover()">
+                <i class="fa-solid fa-rotate-right me-1"></i>Regénérer
+              </button>
+            </div>
+
+            <!-- Actions -->
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-success btn-sm" onclick="approveVoiceover()">
+                <i class="fa-solid fa-check me-1"></i>Approuver + écrire dans Root.tsx
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="approveAndRender()">
+                <i class="fa-solid fa-clapperboard me-1"></i>Approuver + Rendre la vidéo
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="copyText('voiceover-text')">
                 <i class="fa-solid fa-copy me-1"></i>Copier
-              </button>
-              <button class="btn btn-sm btn-warning" id="voiceover-edit-btn" onclick="editVoiceover()">
-                <i class="fa-solid fa-pen me-1"></i>Modifier
-              </button>
-              <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('voiceover-panel').style.display='none'">
-                <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
           </div>
-          <pre id="voiceover-text" style="white-space:pre-wrap;font-size:.88rem;background:#f8f9fa;padding:1rem;border-radius:8px;margin:0"></pre>
         </div>
       </div>
     </div>
@@ -1371,20 +1396,79 @@ async function calendarRender(btn, compositionId) {
   }
 }
 
+// Stocke les props IA en attente d'approbation
+let _pendingProps = null;
+let _pendingCompositionId = null;
+
 async function calendarVoiceover(compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
+  _pendingCompositionId = compositionId;
+  _pendingProps = null;
+  document.getElementById('voiceover-id').textContent = compositionId;
+  document.getElementById('voiceover-spinner').style.display = 'block';
+  document.getElementById('voiceover-result').style.display = 'none';
+  document.getElementById('voiceover-feedback').value = '';
+  const panel = document.getElementById('voiceover-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  await _fetchVoiceover(compositionId, '');
+}
+
+async function regenVoiceover() {
+  const feedback = document.getElementById('voiceover-feedback').value.trim();
+  document.getElementById('voiceover-spinner').style.display = 'block';
+  document.getElementById('voiceover-result').style.display = 'none';
+  await _fetchVoiceover(_pendingCompositionId, feedback);
+}
+
+async function _fetchVoiceover(compositionId, feedback) {
   try {
-    const res = await fetch(`/api/post-script/${compositionId}`);
+    const res = await fetch('/api/generate-voiceover-ai', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: compositionId, feedback}),
+    });
     if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
     const d = await res.json();
-    document.getElementById('voiceover-id').textContent = compositionId;
+    _pendingProps = d.props;
     document.getElementById('voiceover-text').textContent = d.voiceover;
-    const panel = document.getElementById('voiceover-panel');
-    panel.style.display = 'block';
-    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+    document.getElementById('voiceover-spinner').style.display = 'none';
+    document.getElementById('voiceover-result').style.display = 'block';
   } catch(e) {
-    showToast('Script introuvable : ' + e.message, 'danger');
+    document.getElementById('voiceover-spinner').style.display = 'none';
+    showToast('Erreur génération : ' + e.message, 'danger');
   }
+}
+
+async function approveVoiceover() {
+  if (!_pendingProps || !_pendingCompositionId) return;
+  const res = await fetch('/api/approve-voiceover', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({composition_id: _pendingCompositionId, props: _pendingProps}),
+  });
+  if (res.ok) showToast('✅ Root.tsx mis à jour !', 'success');
+  else showToast('Erreur écriture', 'danger');
+}
+
+async function approveAndRender() {
+  if (!_pendingProps || !_pendingCompositionId) return;
+  const res = await fetch('/api/approve-voiceover', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({composition_id: _pendingCompositionId, props: _pendingProps}),
+  });
+  if (!res.ok) { showToast('Erreur écriture Root.tsx', 'danger'); return; }
+  // Find render button for this composition and trigger it
+  const renderBtns = document.querySelectorAll('[onclick*="calendarRender"]');
+  for (const btn of renderBtns) {
+    if (btn.getAttribute('onclick').includes(_pendingCompositionId)) {
+      calendarRender(btn, _pendingCompositionId);
+      return;
+    }
+  }
+  // Fallback: call render directly
+  await calendarRender(document.createElement('button'), _pendingCompositionId);
 }
 
 // ── Parsing markdown avec détection des lignes de dates ─────────────────────
@@ -1486,24 +1570,6 @@ function renderMarkdown(raw) {
   if (inList) html += '</ul>';
   if (inTable) html += closeTable();
   return html;
-}
-
-function editVoiceover() {
-  const compositionId = document.getElementById('voiceover-id').textContent.trim();
-  const script = document.getElementById('voiceover-text').textContent.trim();
-  if (!compositionId) return;
-
-  const task = `Le script du post ${compositionId} ne me convient pas. Voici le script actuel :\n\n${script}\n\n` +
-    `Ce que je veux changer : `;
-
-  const chatLink = document.querySelector('[onclick*="\'agent\'"]');
-  showSection('agent', chatLink);
-  const input = document.getElementById('chat-input');
-  input.value = task;
-  autoResize(input);
-  // Place cursor at end so user can type their feedback directly
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 function prepareNextMonth() {

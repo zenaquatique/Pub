@@ -298,6 +298,126 @@ async def api_calendar(file_index: int = 0):
     return {"raw": main["content"], "source": main["file"], "all_files": [f["file"] for f in files]}
 
 
+# ─── Génération IA de voix off ───────────────────────────────────────────────
+
+_VOICEOVER_SCHEMAS = {
+    "VersusVideoProps": """{
+  "hookText": "accroche courte (max 8 mots)",
+  "hookEmoji": "1 emoji",
+  "leftLabel": "label option gauche",
+  "leftItems": ["avantage 1", "avantage 2", "avantage 3"],
+  "rightLabel": "label option droite",
+  "rightItems": ["avantage 1", "avantage 2", "avantage 3"],
+  "verdict": "verdict final court",
+  "ctaText": "call-to-action"
+}""",
+    "EducatifVideoProps": """{
+  "hookText": "question ou affirmation courte",
+  "hookEmoji": "1 emoji",
+  "tips": [
+    {"num": "01", "title": "titre court", "desc": "description 1 phrase"},
+    {"num": "02", "title": "titre court", "desc": "description 1 phrase"},
+    {"num": "03", "title": "titre court", "desc": "description 1 phrase"}
+  ],
+  "ctaText": "call-to-action"
+}""",
+    "PromoVideoProps": """{
+  "hookText": "accroche promo courte",
+  "plants": [
+    {"emoji": "🌿", "name": "Nom plante", "description": "1 bénéfice", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom plante", "description": "1 bénéfice", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom plante", "description": "1 bénéfice", "price": "X,XX€"}
+  ],
+  "ctaText": "call-to-action urgence"
+}""",
+}
+
+
+def _generate_voiceover_ai_sync(composition_id: str, feedback: str = "") -> dict:
+    from google import genai
+    from google.genai import types as gtypes
+
+    props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+    if not props:
+        return {"status": "error", "error": f"Composition '{composition_id}' introuvable dans Root.tsx"}
+
+    template_type = props.get("template_type", "")
+    schema = _VOICEOVER_SCHEMAS.get(template_type, "")
+    if not schema:
+        return {"status": "error", "error": f"Template '{template_type}' non supporté pour la génération IA"}
+
+    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+    vault = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+
+    memory_block = f"\nCONTRAINTES MÉMOIRE (respecte-les à la lettre) :\n{memory}\n" if memory else ""
+    feedback_block = f"\nFEEDBACK UTILISATEUR (applique ces corrections) :\n{feedback}\n" if feedback else ""
+    current_block = f"\nSCRIPT ACTUEL (référence thématique, remplace-le entièrement) :\n{generate_voiceover(props)}\n"
+    vault_block = f"\nCONTEXTE MARQUE :\n{vault[:6000]}\n" if vault else ""
+
+    prompt = f"""Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).
+Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
+{vault_block}{memory_block}{current_block}{feedback_block}
+Génère un NOUVEAU script original pour la vidéo {composition_id} (template : {template_type}).
+Règles :
+- Textes COURTS : hookText max 8 mots, items max 6 mots chacun
+- Ton direct, dynamique, authentique — PAS de superlatifs vides
+- Respecte STRICTEMENT les contraintes mémoire
+- Si feedback fourni : applique chaque correction demandée
+
+Réponds UNIQUEMENT en JSON valide avec ce schéma exact :
+{schema}"""
+
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=gtypes.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.85,
+        ),
+    )
+    try:
+        new_props = json.loads(resp.text.strip())
+    except Exception:
+        return {"status": "error", "error": "Réponse Gemini invalide", "raw": resp.text[:500]}
+
+    new_props["template_type"] = template_type
+    new_props["composition_id"] = composition_id
+    return {
+        "status": "success",
+        "composition_id": composition_id,
+        "props": new_props,
+        "voiceover": generate_voiceover(new_props),
+    }
+
+
+@app.post("/api/generate-voiceover-ai")
+async def api_generate_voiceover_ai(request: Request):
+    body = await request.json()
+    composition_id = body.get("composition_id", "").strip()
+    feedback = body.get("feedback", "").strip()
+    if not composition_id:
+        raise HTTPException(400, "composition_id manquant")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, _generate_voiceover_ai_sync, composition_id, feedback
+    )
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
+@app.post("/api/approve-voiceover")
+async def api_approve_voiceover(request: Request):
+    body = await request.json()
+    composition_id = body.get("composition_id", "").strip()
+    props = body.get("props", {})
+    if not composition_id or not props:
+        raise HTTPException(400, "composition_id et props requis")
+    result = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
+    return result
+
+
 # ─── API — Rendu Remotion ────────────────────────────────────────────────────
 
 def _render_sync(composition_id: str) -> dict:

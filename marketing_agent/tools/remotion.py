@@ -188,21 +188,50 @@ def generate_voiceover(props: dict) -> str:
     return "\n".join(lines)
 
 
+def _escape_ts(s: str) -> str:
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _props_to_ts_block(composition_id: str, template_type: str, props: dict) -> str:
+    """Reconstruit le bloc TypeScript complet pour un post."""
+    lines: list[str] = []
+    for key, value in props.items():
+        if key in ("template_type", "composition_id"):
+            continue
+        if isinstance(value, str):
+            lines.append(f'  {key}: "{_escape_ts(value)}",')
+        elif isinstance(value, list):
+            if not value:
+                lines.append(f'  {key}: [],')
+            elif isinstance(value[0], str):
+                items = ", ".join(f'"{_escape_ts(x)}"' for x in value)
+                lines.append(f'  {key}: [{items}],')
+            elif isinstance(value[0], dict):
+                inner = []
+                for obj in value:
+                    fields = ", ".join(f'{k}: "{_escape_ts(str(v))}"' for k, v in obj.items())
+                    inner.append(f"    {{ {fields} }}")
+                lines.append(f'  {key}: [\n' + ",\n".join(inner) + "\n  ],")
+    return f"const post{composition_id}: {template_type} = {{\n" + "\n".join(lines) + "\n};"
+
+
 def update_post_props(composition_id: str, project_path: str, updates: dict) -> dict:
-    """Met à jour des champs du post dans Root.tsx (hookText, verdict, items, etc.)."""
+    """Remplace entièrement le bloc props d'un post dans Root.tsx."""
     tsx = Path(project_path) / "src" / "Root.tsx"
     if not tsx.exists():
         return {"status": "error", "error": "Root.tsx introuvable"}
 
     content = tsx.read_text(encoding="utf-8", errors="ignore")
 
-    m = re.search(rf"const post{composition_id}:\s*\w+Props\s*=\s*\{{", content)
+    m = re.search(rf"const post{composition_id}:\s*(\w+Props)\s*=\s*\{{", content)
     if not m:
         return {"status": "error", "error": f"Composition '{composition_id}' introuvable dans Root.tsx"}
 
-    block_start = m.end() - 1
-    depth, end = 0, block_start
-    for i, ch in enumerate(content[block_start:], block_start):
+    template_type = m.group(1)
+    block_start = m.start()
+    brace_start = m.end() - 1
+    depth, end = 0, brace_start
+    for i, ch in enumerate(content[brace_start:], brace_start):
         if ch == "{":
             depth += 1
         elif ch == "}":
@@ -210,32 +239,23 @@ def update_post_props(composition_id: str, project_path: str, updates: dict) -> 
             if depth == 0:
                 end = i + 1
                 break
+    # skip trailing semicolon
+    if content[end:end+1] == ";":
+        end += 1
 
-    block = content[block_start:end]
+    # Merge existing props with updates
+    current = extract_post_props(composition_id, project_path)
+    merged = {k: v for k, v in current.items() if k not in ("template_type", "composition_id")}
+    merged.update({k: v for k, v in updates.items() if k not in ("template_type", "composition_id")})
 
-    for key, value in updates.items():
-        if isinstance(value, str):
-            block = re.sub(
-                rf'({re.escape(key)}\s*:\s*)"[^"]*"',
-                lambda mo, v=value: f'{mo.group(1)}"{v}"',
-                block,
-            )
-        elif isinstance(value, list) and all(isinstance(x, str) for x in value):
-            items_str = ", ".join(f'"{x}"' for x in value)
-            block = re.sub(
-                rf'({re.escape(key)}\s*:\s*)\[[^\]]*\]',
-                lambda mo, s=items_str: f'{mo.group(1)}[{s}]',
-                block,
-                flags=re.DOTALL,
-            )
-
-    new_content = content[:block_start] + block + content[end:]
+    new_block = _props_to_ts_block(composition_id, template_type, merged)
+    new_content = content[:block_start] + new_block + content[end:]
     tsx.write_text(new_content, encoding="utf-8")
     return {
         "status": "success",
         "composition_id": composition_id,
         "updated_fields": list(updates.keys()),
-        "message": f"Root.tsx mis à jour — {len(updates)} champ(s) modifié(s). Lance render_video pour regénérer.",
+        "message": f"Root.tsx mis à jour — relance render_video pour regénérer la vidéo.",
     }
 
 

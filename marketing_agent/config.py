@@ -5,7 +5,7 @@ load_dotenv()
 
 # Google Gemini
 GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash-lite"
 
 # Shopify (optionnel — mode simulation si non configuré)
 SHOPIFY_SHOP_URL = os.environ.get("SHOPIFY_SHOP_URL", "")

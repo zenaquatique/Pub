@@ -1,5 +1,6 @@
 """Lecture de la vault Obsidian et du dossier d'assets vidéo."""
 import logging
+from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -7,6 +8,30 @@ logger = logging.getLogger(__name__)
 _MD_EXTS = {".md", ".txt"}
 _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+_MEMORY_FOLDER = "Mémoire Agent"
+_MEMORY_FILE   = "memoire.md"
+
+
+def read_agent_memory(vault_path: str) -> str:
+    """Lit le fichier mémoire de l'agent dans la vault Obsidian."""
+    p = Path(vault_path) / _MEMORY_FOLDER / _MEMORY_FILE
+    if not p.exists():
+        return ""
+    return p.read_text(encoding="utf-8", errors="ignore").strip()
+
+
+def append_agent_memory(vault_path: str, note: str) -> dict:
+    """Ajoute une note datée dans la mémoire persistante de l'agent."""
+    folder = Path(vault_path) / _MEMORY_FOLDER
+    folder.mkdir(parents=True, exist_ok=True)
+    f = folder / _MEMORY_FILE
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    entry = f"\n## {timestamp}\n{note.strip()}\n"
+    with f.open("a", encoding="utf-8") as fp:
+        fp.write(entry)
+    logger.info("Mémoire agent mise à jour : %s", f)
+    return {"status": "success", "path": str(f), "note_saved": note[:120]}
 
 
 def read_obsidian_vault(vault_path: str, max_chars: int = 80_000) -> str:

@@ -202,6 +202,9 @@
     <a href="#" onclick="showSection('calendar',this)">
       <i class="fa-solid fa-calendar-week"></i> Calendrier
     </a>
+    <a href="#" onclick="showSection('memory',this)">
+      <i class="fa-solid fa-brain"></i> Mémoire
+    </a>
     <a href="#" onclick="showSection('approval',this)">
       <i class="fa-solid fa-circle-check"></i> Approbation
       <span id="approval-badge" class="badge bg-danger ms-auto" style="display:none">0</span>
@@ -428,6 +431,51 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ MÉMOIRE ══════════════════════ -->
+  <div id="sec-memory" class="section">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="mb-0"><i class="fa-solid fa-brain me-2" style="color:var(--accent)"></i>Mémoire de l'agent</h5>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadMemory()">
+          <i class="fa-solid fa-rotate-right"></i> Actualiser
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="clearMemory()">
+          <i class="fa-solid fa-trash me-1"></i>Effacer tout
+        </button>
+      </div>
+    </div>
+    <div class="alert alert-info small mb-3">
+      <i class="fa-solid fa-circle-info me-2"></i>
+      L'agent lit cette mémoire à chaque démarrage et en tient compte dans toutes ses actions.
+      Le fichier est aussi visible dans ta vault Obsidian : <strong>Mémoire Agent / memoire.md</strong>
+    </div>
+
+    <!-- Ajouter une note manuellement -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <label class="form-label fw-semibold">Ajouter une instruction permanente</label>
+        <div class="d-flex gap-2">
+          <input type="text" id="memory-input" class="form-control"
+            placeholder="Ex : Toujours utiliser un ton décontracté, éviter les vidéos Versus le lundi…"
+            onkeydown="if(event.key==='Enter') addMemoryNote()" />
+          <button class="btn btn-primary flex-shrink-0" onclick="addMemoryNote()">
+            <i class="fa-solid fa-plus me-1"></i>Ajouter
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenu de la mémoire -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <pre id="memory-content"
+          style="white-space:pre-wrap;font-size:.88rem;line-height:1.7;padding:1.25rem;margin:0;
+                 max-height:520px;overflow-y:auto;background:#fafafa;border-radius:14px">
+Chargement…</pre>
       </div>
     </div>
   </div>
@@ -701,6 +749,7 @@ function showSection(name, link) {
   if (name === 'reports') loadReports();
   if (name === 'approval') loadPendingActions();
   if (name === 'calendar') loadCalendar();
+  if (name === 'memory') loadMemory();
 }
 
 function toggleSidebar() {
@@ -1242,6 +1291,42 @@ async function generateVideoScript() {
 function copyText(id) {
   const text = document.getElementById(id).textContent;
   navigator.clipboard.writeText(text).then(() => showToast('Copié !'));
+}
+
+// ── Mémoire agent ────────────────────────────────────────────────────────────
+async function loadMemory() {
+  const el = document.getElementById('memory-content');
+  try {
+    const d = await fetch('/api/memory').then(r => r.json());
+    el.textContent = d.content || '(aucune mémoire enregistrée pour le moment)';
+  } catch(e) {
+    el.textContent = 'Erreur de chargement.';
+  }
+}
+
+async function addMemoryNote() {
+  const input = document.getElementById('memory-input');
+  const note = input.value.trim();
+  if (!note) return;
+  try {
+    await fetch('/api/memory', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({note}),
+    });
+    input.value = '';
+    showToast('Note mémorisée !', 'success');
+    loadMemory();
+  } catch(e) {
+    showToast('Erreur', 'danger');
+  }
+}
+
+async function clearMemory() {
+  if (!confirm('Effacer toute la mémoire de l\'agent ? Cette action est irréversible.')) return;
+  await fetch('/api/memory', {method: 'DELETE'});
+  showToast('Mémoire effacée.', 'secondary');
+  loadMemory();
 }
 
 // ── Calendrier éditorial ─────────────────────────────────────────────────────

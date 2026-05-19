@@ -15,7 +15,10 @@ from config import (
     SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
 )
 from tools import shopify, social, email_campaigns, customer
-from tools.knowledge import read_obsidian_vault, list_video_assets, write_calendar_file
+from tools.knowledge import (
+    read_obsidian_vault, list_video_assets, write_calendar_file,
+    read_agent_memory, append_agent_memory,
+)
 from tools.remotion import render_video, list_rendered_videos, update_post_props, extract_post_props
 
 logger = logging.getLogger(__name__)
@@ -237,6 +240,25 @@ TOOLS = [
                 ),
             ),
             types.FunctionDeclaration(
+                name="save_to_memory",
+                description=(
+                    "Enregistre une note importante dans ta mémoire persistante (vault Obsidian). "
+                    "Utilise dès que l'utilisateur exprime une préférence, une instruction récurrente, "
+                    "un retour sur un contenu, ou toute information à retenir pour les prochaines sessions. "
+                    "Exemples : préférences de format, sujets à éviter, ton souhaité, feedback sur des vidéos."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "note": types.Schema(
+                            type=types.Type.STRING,
+                            description="Note claire et concise à mémoriser (instruction, préférence, feedback)",
+                        ),
+                    },
+                    required=["note"],
+                ),
+            ),
+            types.FunctionDeclaration(
                 name="get_post_props",
                 description=(
                     "Lit les props actuelles d'un post Remotion dans Root.tsx "
@@ -428,6 +450,9 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
     if name == "list_rendered_videos":
         return list_rendered_videos(VIDEO_ASSETS_PATH)
 
+    if name == "save_to_memory":
+        return append_agent_memory(OBSIDIAN_VAULT_PATH, inputs["note"])
+
     if name == "get_post_props":
         return extract_post_props(inputs["composition_id"], VIDEO_ASSETS_PATH)
 
@@ -460,6 +485,20 @@ def build_system_prompt() -> str:
 
     vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
     assets = list_video_assets(VIDEO_ASSETS_PATH)
+    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+
+    memory_section = ""
+    if memory:
+        memory_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MÉMOIRE PERSISTANTE — CE QUE TU AS APPRIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{memory}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ces informations proviennent de tes sessions précédentes.
+RESPECTE-LES EN PRIORITÉ dans toutes tes actions.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 
     vault_section = ""
     if vault_content:
@@ -491,7 +530,7 @@ Voix de marque : {BRAND_VOICE}
 Cible : {TARGET_AUDIENCE}
 URL boutique : https://{SHOPIFY_SHOP_URL}
 Date d'aujourd'hui : {today}
-{vault_section}{assets_section}
+{memory_section}{vault_section}{assets_section}
 TON RÔLE : Gérer 99 % du marketing de façon autonome, sans intervention humaine.
 
 CALENDRIER ÉDITORIAL :
@@ -535,6 +574,12 @@ RÈGLES :
 - Si tu ne trouves pas d'image pour un post, utilise l'image du produit Shopify
 - Fais toujours les actions dans l'ordre logique : données → contenu → publication
 - Pour les vidéos : utilise render_video — NE rédige PAS de script si le post existe dans Root.tsx
+
+MÉMOIRE :
+- Si l'utilisateur exprime une préférence, une instruction, ou un retour ("j'aime pas", "toujours faire X", "évite Y") → appelle save_to_memory immédiatement
+- Si l'utilisateur corrige quelque chose que tu as fait → mémorise la correction
+- En fin de session, si des décisions importantes ont été prises → sauvegarde-les
+- Ta mémoire est stockée dans la vault Obsidian et relue à chaque démarrage
 
 IMPORTANT: Tes actions de publication (Instagram, Facebook, newsletter, descriptions, réponses) seront soumises à validation humaine avant d'être exécutées. Le rendu vidéo est local et immédiat, pas de validation requise.
 

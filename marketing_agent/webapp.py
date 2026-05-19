@@ -27,7 +27,7 @@ from tools.customer import (
     send_facebook_reply,
     send_instagram_reply,
 )
-from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets
+from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory
 from tools.remotion import (
     render_video, list_rendered_videos,
     extract_post_props, generate_voiceover, date_to_composition_id,
@@ -257,6 +257,33 @@ async def receive_webhook(request: Request):
                 platform = "instagram" if object_type == "instagram" else "facebook"
                 log_customer_message(platform, v.get("from", {}).get("name", "?"), v["text"], v["id"])
     return {"status": "ok"}
+
+
+# ─── API — Mémoire agent ─────────────────────────────────────────────────────
+
+@app.get("/api/memory")
+async def api_get_memory():
+    content = read_agent_memory(OBSIDIAN_VAULT_PATH)
+    return {"content": content}
+
+
+@app.post("/api/memory")
+async def api_add_memory(request: Request):
+    body = await request.json()
+    note = body.get("note", "").strip()
+    if not note:
+        raise HTTPException(400, "note manquante")
+    result = append_agent_memory(OBSIDIAN_VAULT_PATH, note)
+    return result
+
+
+@app.delete("/api/memory")
+async def api_clear_memory():
+    from pathlib import Path
+    p = Path(OBSIDIAN_VAULT_PATH) / "Mémoire Agent" / "memoire.md"
+    if p.exists():
+        p.unlink()
+    return {"status": "cleared"}
 
 
 # ─── API — Calendrier éditorial ──────────────────────────────────────────────

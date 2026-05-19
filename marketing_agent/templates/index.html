@@ -571,7 +571,7 @@
         <i class="fa-solid fa-rotate-right"></i> Actualiser
       </button>
     </div>
-    <div id="calendar-source" class="text-muted small mb-3"></div>
+    <div id="calendar-tabs" class="mb-3"></div>
     <div id="calendar-content">
       <p class="text-muted">Chargement…</p>
     </div>
@@ -1136,46 +1136,94 @@ function copyText(id) {
 }
 
 // ── Calendrier éditorial ─────────────────────────────────────────────────────
+let _calendarFiles = [];
+
+function renderMarkdown(raw) {
+  const lines = raw.split('\n');
+  let html = '';
+  let inList = false;
+  for (const line of lines) {
+    const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const isList = line.startsWith('- ') || line.startsWith('* ');
+    if (!isList && inList) { html += '</ul>'; inList = false; }
+    if (line.startsWith('### '))     html += `<h6 class="fw-bold mt-3 mb-1">${esc.slice(4)}</h6>`;
+    else if (line.startsWith('## ')) html += `<h5 class="fw-bold mt-4 mb-2" style="color:var(--accent)">${esc.slice(3)}</h5>`;
+    else if (line.startsWith('# '))  html += `<h4 class="fw-bold mt-4 mb-2">${esc.slice(2)}</h4>`;
+    else if (isList) {
+      if (!inList) { html += '<ul class="mb-2">'; inList = true; }
+      html += `<li>${esc.slice(2)}</li>`;
+    }
+    else if (line.startsWith('|')) {
+      // Tableau markdown
+      const cells = line.split('|').filter((_,i,a) => i>0 && i<a.length-1);
+      const isHeader = cells.some(c => /^[-:]+$/.test(c.trim()));
+      if (!isHeader) html += `<tr>${cells.map(c=>`<td class="px-2 py-1 border">${c.trim()}</td>`).join('')}</tr>`;
+      else html = html.replace(/<tr>([^<]*(?:<td[^>]*>[^<]*<\/td>)*)<\/tr>(?![\s\S]*<tr>)/,
+        m => `<div class="table-responsive"><table class="table table-sm table-bordered mb-2"><thead class="table-light">${m.replace(/td/g,'th')}</thead><tbody>`);
+    }
+    else if (line.startsWith('---')) html += `<hr>`;
+    else if (line.trim() === '')     html += `<br>`;
+    else html += `<p class="mb-1">${esc}</p>`;
+  }
+  if (inList) html += '</ul>';
+  // Fermer les tableaux ouverts
+  if (html.includes('<tbody>') && !html.includes('</tbody>')) html += '</tbody></table></div>';
+  return html;
+}
+
 async function loadCalendar() {
   const container = document.getElementById('calendar-content');
-  const sourceEl  = document.getElementById('calendar-source');
+  const tabsEl    = document.getElementById('calendar-tabs');
   container.innerHTML = '<p class="text-muted">Chargement…</p>';
+  tabsEl.innerHTML = '';
 
   try {
     const res = await fetch('/api/calendar');
     const d   = await res.json();
 
     if (!d.raw) {
-      sourceEl.textContent = '';
       container.innerHTML = `
         <div class="alert alert-info">
           <i class="fa-solid fa-circle-info me-2"></i>
           Aucun fichier calendrier trouvé dans la vault Obsidian.<br>
-          <small class="text-muted">Crée un fichier avec "calendrier" ou "planning" dans le nom (ex: <code>calendrier-editorial.md</code>).</small>
+          <small class="text-muted">Nomme ton dossier "Calendrier Publication" ou ton fichier avec "calendrier" / "planning".</small>
         </div>`;
       return;
     }
 
-    sourceEl.innerHTML = `<i class="fa-solid fa-file-lines me-1"></i>Source : <strong>${d.source}</strong>`;
-
-    // Render markdown-like content
-    const lines = d.raw.split('\n');
-    let html = '';
-    for (const line of lines) {
-      const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      if (line.startsWith('### '))      html += `<h6 class="fw-bold mt-3 mb-1">${esc.slice(4)}</h6>`;
-      else if (line.startsWith('## '))  html += `<h5 class="fw-bold mt-4 mb-2" style="color:var(--accent)">${esc.slice(3)}</h5>`;
-      else if (line.startsWith('# '))   html += `<h4 class="fw-bold mt-4 mb-2">${esc.slice(2)}</h4>`;
-      else if (line.startsWith('- ') || line.startsWith('* '))
-                                        html += `<li class="mb-1">${esc.slice(2)}</li>`;
-      else if (line.startsWith('---'))  html += `<hr>`;
-      else if (line.trim() === '')      html += `<br>`;
-      else                              html += `<p class="mb-1">${esc}</p>`;
+    _calendarFiles = d.all_files || [d.source];
+    // Construire les onglets si plusieurs fichiers
+    if (_calendarFiles.length > 1) {
+      tabsEl.innerHTML = '<div class="d-flex flex-wrap gap-2">' +
+        _calendarFiles.map((f, i) => {
+          const label = f.split(/[/\\]/).pop().replace(/\.md$/, '');
+          return `<button class="btn btn-sm ${i===0?'btn-primary':'btn-outline-secondary'} calendar-tab"
+                    onclick="switchCalendarTab(this,${i})">${label}</button>`;
+        }).join('') + '</div>';
     }
-    container.innerHTML = `<div class="card border-0 shadow-sm"><div class="card-body" style="line-height:1.7">${html}</div></div>`;
+
+    showCalendarContent(d.raw, d.source);
   } catch(e) {
-    container.innerHTML = `<p class="text-danger">Erreur de chargement : ${e.message}</p>`;
+    container.innerHTML = `<p class="text-danger">Erreur : ${e.message}</p>`;
   }
+}
+
+function showCalendarContent(raw, source) {
+  const container = document.getElementById('calendar-content');
+  const html = renderMarkdown(raw);
+  container.innerHTML = `
+    <p class="text-muted small mb-2"><i class="fa-solid fa-file-lines me-1"></i>${escHtml(source)}</p>
+    <div class="card border-0 shadow-sm"><div class="card-body" style="line-height:1.7">${html}</div></div>`;
+}
+
+async function switchCalendarTab(btn, idx) {
+  document.querySelectorAll('.calendar-tab').forEach(b => b.className = b.className.replace('btn-primary','btn-outline-secondary'));
+  btn.className = btn.className.replace('btn-outline-secondary','btn-primary');
+  const container = document.getElementById('calendar-content');
+  container.innerHTML = '<p class="text-muted">Chargement…</p>';
+  const res = await fetch(`/api/calendar?file_index=${idx}`);
+  const d   = await res.json();
+  showCalendarContent(d.raw, d.source);
 }
 </script>
 </body>

@@ -39,38 +39,49 @@ def read_obsidian_vault(vault_path: str, max_chars: int = 80_000) -> str:
     return "\n".join(parts)
 
 
-_CALENDAR_KEYWORDS = {
-    "calendrier", "calendar", "planning", "plan", "editorial",
-    "éditorial", "contenu", "schedule", "publication",
-}
+# Mots-clés précis — on évite les termes trop génériques ("contenu", "plan")
+_CALENDAR_FOLDER_KEYWORDS = {"calendrier", "calendar", "planning", "editorial", "éditorial", "schedule"}
+_CALENDAR_FILE_KEYWORDS   = {"calendrier", "calendar", "planning", "editorial", "éditorial", "schedule", "publication"}
 
 
 def find_calendar_files(vault_path: str) -> list[dict]:
     """Retourne les fichiers Obsidian liés au calendrier éditorial.
 
-    Vérifie le nom du fichier ET le nom de tous les dossiers parents.
-    Ex: 'Calendrier Publication/mai-2026.md' sera détecté via le dossier parent.
+    Priorité :
+    1. Fichiers dont un dossier parent contient un mot-clé calendrier (ex: 'Calendrier Publication/mai-2026.md')
+    2. Fichiers dont le nom contient un mot-clé calendrier
     """
     p = Path(vault_path)
     if not vault_path or not p.exists():
         return []
 
-    results: list[dict] = []
+    priority: list[dict] = []   # dossier parent calendrier
+    fallback: list[dict] = []   # nom de fichier calendrier
+
     for f in sorted(p.rglob("*.md")):
         try:
-            # Vérifier nom du fichier et tous les dossiers parents
-            parts_lower = [part.lower() for part in f.relative_to(p).parts]
-            if any(kw in part for kw in _CALENDAR_KEYWORDS for part in parts_lower):
-                content = f.read_text(encoding="utf-8", errors="ignore").strip()
-                if content:
-                    relative = str(f.relative_to(p))
-                    results.append({"file": relative, "path": str(f), "content": content})
+            rel = f.relative_to(p)
+            parts = list(rel.parts)
+            folder_parts_lower = [pt.lower() for pt in parts[:-1]]  # dossiers seulement
+            file_name_lower    = rel.stem.lower()
+
+            content = f.read_text(encoding="utf-8", errors="ignore").strip()
+            if not content:
+                continue
+
+            entry = {"file": str(rel), "path": str(f), "content": content}
+
+            if any(kw in fp for kw in _CALENDAR_FOLDER_KEYWORDS for fp in folder_parts_lower):
+                priority.append(entry)
+            elif any(kw in file_name_lower for kw in _CALENDAR_FILE_KEYWORDS):
+                fallback.append(entry)
         except Exception as exc:
             logger.warning("Lecture calendrier ignorée %s : %s", f, exc)
 
-    # Trier : fichiers les plus récents / nommés avec l'année/mois en premier
-    results.sort(key=lambda x: x["file"], reverse=True)
-    return results
+    # Dans chaque groupe, les plus récents (année/mois dans le nom) en premier
+    priority.sort(key=lambda x: x["file"], reverse=True)
+    fallback.sort(key=lambda x: x["file"], reverse=True)
+    return priority + fallback
 
 
 def list_video_assets(assets_path: str) -> list[dict]:

@@ -255,13 +255,13 @@ async def receive_webhook(request: Request):
 # ─── API — Calendrier éditorial ──────────────────────────────────────────────
 
 @app.get("/api/calendar")
-async def api_calendar():
+async def api_calendar(file_index: int = 0):
     files = find_calendar_files(OBSIDIAN_VAULT_PATH)
     if not files:
-        return {"entries": [], "raw": "", "source": ""}
-    # Retourne le premier fichier calendrier trouvé
-    main = files[0]
-    return {"entries": [], "raw": main["content"], "source": main["file"], "all_files": [f["file"] for f in files]}
+        return {"raw": "", "source": "", "all_files": []}
+    idx  = max(0, min(file_index, len(files) - 1))
+    main = files[idx]
+    return {"raw": main["content"], "source": main["file"], "all_files": [f["file"] for f in files]}
 
 
 # ─── API — Script vidéo ───────────────────────────────────────────────────────

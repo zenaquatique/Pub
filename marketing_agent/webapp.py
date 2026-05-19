@@ -51,7 +51,7 @@ _executor = ThreadPoolExecutor(max_workers=1)
 def _load_reports() -> list:
     REPORTS_FILE.parent.mkdir(exist_ok=True)
     if REPORTS_FILE.exists():
-        return json.loads(REPORTS_FILE.read_text())
+        return json.loads(REPORTS_FILE.read_text(encoding="utf-8"))
     return []
 
 
@@ -63,7 +63,7 @@ def _save_report(report: str, task: str = "") -> None:
         "task": task or "Routine quotidienne",
         "report": report,
     })
-    REPORTS_FILE.write_text(json.dumps(reports[:50], ensure_ascii=False, indent=2))
+    REPORTS_FILE.write_text(json.dumps(reports[:50], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 # ─── Exécution de l'agent dans un thread ─────────────────────────────────────
@@ -143,7 +143,7 @@ async def api_reports():
 @app.delete("/api/reports/{report_id}")
 async def delete_report(report_id: str):
     reports = [r for r in _load_reports() if r["id"] != report_id]
-    REPORTS_FILE.write_text(json.dumps(reports, ensure_ascii=False, indent=2))
+    REPORTS_FILE.write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"status": "deleted"}
 
 
@@ -184,7 +184,7 @@ async def api_reject_action(action_id: str):
     if not found:
         raise HTTPException(404, f"Action introuvable : {action_id}")
     PENDING_ACTIONS_FILE.write_text(
-        json.dumps(actions, ensure_ascii=False, indent=2)
+        json.dumps(actions, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return {"status": "rejected"}
 

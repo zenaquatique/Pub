@@ -8,11 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME
+from config import META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE
 from tools.customer import (
     get_pending_messages,
     log_customer_message,
@@ -207,6 +209,25 @@ async def receive_webhook(request: Request):
 @app.get("/health")
 async def health():
     return {"status": "healthy", "store": STORE_NAME}
+
+
+# ─── Planificateur automatique ───────────────────────────────────────────────
+
+def _scheduled_job():
+    if _agent_state["status"] == "running":
+        return
+    logger.info("=== Routine automatique déclenchée ===")
+    _executor.submit(_run_agent_sync, "Routine marketing quotidienne automatique")
+
+_scheduler = BackgroundScheduler(timezone="Europe/Paris")
+_scheduler.add_job(
+    _scheduled_job,
+    CronTrigger(hour=POSTING_HOUR, minute=POSTING_MINUTE, timezone="Europe/Paris"),
+    id="routine_quotidienne",
+    replace_existing=True,
+)
+_scheduler.start()
+logger.info("Planificateur démarré — routine automatique à %02d:%02d", POSTING_HOUR, POSTING_MINUTE)
 
 
 # ─── Entrée ───────────────────────────────────────────────────────────────────

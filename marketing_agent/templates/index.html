@@ -11,6 +11,8 @@
   <link rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     crossorigin="anonymous" />
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <style>
     :root {
       --accent: #6c63ff;
@@ -163,17 +165,37 @@
   <div id="sec-dashboard" class="section active">
 
     <!-- Sélecteur de période -->
-    <div class="d-flex align-items-center gap-2 mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
       <i class="fa-solid fa-calendar-days text-muted"></i>
       <select id="period-select" class="form-select form-select-sm w-auto" onchange="onPeriodChange()">
-        <option value="today">Aujourd'hui</option>
-        <option value="week">7 derniers jours</option>
-        <option value="month" selected>30 derniers jours</option>
-        <option value="3months">3 derniers mois</option>
-        <option value="6months">6 derniers mois</option>
-        <option value="year">12 derniers mois</option>
-        <option value="all">Depuis le début</option>
+        <optgroup label="Calendrier">
+          <option value="today">Aujourd'hui</option>
+          <option value="yesterday">Hier</option>
+          <option value="this_week">Cette semaine</option>
+          <option value="this_month" selected>Ce mois-ci</option>
+          <option value="this_year">Cette année</option>
+        </optgroup>
+        <optgroup label="Glissant">
+          <option value="week">7 derniers jours</option>
+          <option value="month">30 derniers jours</option>
+          <option value="3months">3 derniers mois</option>
+          <option value="6months">6 derniers mois</option>
+          <option value="year">12 derniers mois</option>
+          <option value="all">Depuis le début</option>
+        </optgroup>
+        <optgroup label="Personnalisé">
+          <option value="custom">Choisir une période…</option>
+        </optgroup>
       </select>
+
+      <!-- Calendrier personnalisé (visible uniquement si custom) -->
+      <div id="custom-range" class="d-flex align-items-center gap-2" style="display:none !important">
+        <input type="text" id="date-start" class="form-control form-control-sm" style="width:130px" placeholder="Début" readonly />
+        <span class="text-muted">→</span>
+        <input type="text" id="date-end" class="form-control form-control-sm" style="width:130px" placeholder="Fin" readonly />
+        <button class="btn btn-sm btn-primary" onclick="loadAnalytics()">OK</button>
+      </div>
+
       <span id="period-loading" class="text-muted small" style="display:none">
         <i class="fa-solid fa-circle-notch spin"></i> Chargement…
       </span>
@@ -403,6 +425,8 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.to/flatpickr/dist/l10n/fr.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
   integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmYGAAAAA5W0F43V9bkr8GqZLi10"
   crossorigin="anonymous"></script>
@@ -432,26 +456,39 @@ function showToast(msg, type = 'success') {
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
-function getPeriod() {
-  return document.getElementById('period-select')?.value || 'month';
-}
-
 function onPeriodChange() {
-  loadAnalytics();
+  const period = document.getElementById('period-select').value;
+  const customRange = document.getElementById('custom-range');
+  if (period === 'custom') {
+    customRange.style.display = 'flex';
+    customRange.style.removeProperty('display'); // annule le !important
+    customRange.style.display = 'flex';
+  } else {
+    customRange.style.cssText = 'display:none !important';
+    loadAnalytics();
+  }
 }
 
 async function loadAnalytics() {
-  const period = getPeriod();
+  const period = document.getElementById('period-select')?.value || 'this_month';
   const loading = document.getElementById('period-loading');
   if (loading) loading.style.display = '';
+
+  let url = `/api/analytics?period=${period}`;
+  if (period === 'custom') {
+    const s = document.getElementById('date-start')?.value;
+    const e = document.getElementById('date-end')?.value;
+    if (!s) return;
+    url += `&start_date=${s}&end_date=${e || s}`;
+  }
+
   try {
-    const d = await fetch(`/api/analytics?period=${period}`).then(r => r.json());
+    const d = await fetch(url).then(r => r.json());
     document.getElementById('kpi-orders').textContent = d.orders?.total_orders ?? '—';
     document.getElementById('kpi-revenue').textContent =
       d.orders?.total_revenue != null ? d.orders.total_revenue.toFixed(0) + ' €' : '—';
     document.getElementById('kpi-products').textContent = d.total_products ?? '—';
     document.getElementById('kpi-lowstock').textContent = d.low_stock_count ?? '—';
-    // Top products
     const ul = document.getElementById('top-products');
     const tops = d.orders?.top_selling ?? [];
     const label = d.period_label || period;
@@ -460,9 +497,9 @@ async function loadAnalytics() {
           `<li class="list-group-item d-flex justify-content-between small">
              <span>${n}</span><span class="badge bg-light text-dark">${q} ventes</span>
            </li>`).join('')
-      : `<li class="list-group-item text-muted small">Aucune vente sur : ${label}</li>`;
+      : `<li class="list-group-item text-muted small">Aucune vente — ${label}</li>`;
   } catch(e) {
-    console.warn('Analytics non disponible (mode simulation)');
+    console.warn('Analytics non disponible');
   } finally {
     if (loading) loading.style.display = 'none';
   }
@@ -702,8 +739,18 @@ function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Calendriers flatpickr ─────────────────────────────────────────────────────
+function initDatePickers() {
+  const cfg = { locale: 'fr', dateFormat: 'Y-m-d', maxDate: 'today', disableMobile: true };
+  flatpickr('#date-start', { ...cfg, onChange: ([d]) => {
+    if (d) endPicker.set('minDate', d);
+  }});
+  const endPicker = flatpickr('#date-end', { ...cfg });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
+  initDatePickers();
   loadAnalytics();
   loadLastReport();
   loadMessages();

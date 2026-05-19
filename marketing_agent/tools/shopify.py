@@ -3,25 +3,53 @@ from datetime import datetime, timedelta
 import requests
 from config import SHOPIFY_SHOP_URL, SHOPIFY_ACCESS_TOKEN
 
-PERIODS = {
-    "today":    1,
-    "week":     7,
-    "month":    30,
-    "3months":  90,
-    "6months":  180,
-    "year":     365,
-    "all":      None,
+PERIOD_LABELS = {
+    "today":      "Aujourd'hui",
+    "yesterday":  "Hier",
+    "this_week":  "Cette semaine",
+    "this_month": "Ce mois-ci",
+    "this_year":  "Cette année",
+    "week":       "7 derniers jours",
+    "month":      "30 derniers jours",
+    "3months":    "3 derniers mois",
+    "6months":    "6 derniers mois",
+    "year":       "12 derniers mois",
+    "all":        "Depuis le début",
+    "custom":     "Période personnalisée",
 }
 
-PERIOD_LABELS = {
-    "today":   "Aujourd'hui",
-    "week":    "7 derniers jours",
-    "month":   "30 derniers jours",
-    "3months": "3 derniers mois",
-    "6months": "6 derniers mois",
-    "year":    "12 derniers mois",
-    "all":     "Depuis le début",
-}
+
+def _period_dates(period: str, start_date: str = None, end_date: str = None):
+    """Retourne (created_at_min, created_at_max) ou (None, None) pour 'all'."""
+    now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if period == "custom":
+        fmt = "%Y-%m-%d"
+        start = datetime.strptime(start_date, fmt) if start_date else today
+        end   = datetime.strptime(end_date, fmt) + timedelta(days=1) if end_date else now
+        return start.isoformat(), end.isoformat()
+
+    if period == "today":
+        return today.isoformat(), now.isoformat()
+    if period == "yesterday":
+        y = today - timedelta(days=1)
+        return y.isoformat(), today.isoformat()
+    if period == "this_week":
+        monday = today - timedelta(days=today.weekday())
+        return monday.isoformat(), now.isoformat()
+    if period == "this_month":
+        first = today.replace(day=1)
+        return first.isoformat(), now.isoformat()
+    if period == "this_year":
+        first = today.replace(month=1, day=1)
+        return first.isoformat(), now.isoformat()
+
+    days = {"week": 7, "month": 30, "3months": 90, "6months": 180, "year": 365}.get(period)
+    if days:
+        return (today - timedelta(days=days)).isoformat(), now.isoformat()
+
+    return None, None  # "all"
 
 
 def _shopify_configured() -> bool:
@@ -67,12 +95,13 @@ def get_products(limit: int = 20, status: str = "active") -> list[dict]:
     return products
 
 
-def get_orders(period: str = "month") -> dict:
-    days = PERIODS.get(period)
+def get_orders(period: str = "month", start_date: str = None, end_date: str = None) -> dict:
+    date_min, date_max = _period_dates(period, start_date, end_date)
     params: dict = {"limit": 250, "status": "any", "financial_status": "paid"}
-    if days is not None:
-        since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00")
-        params["created_at_min"] = since
+    if date_min:
+        params["created_at_min"] = date_min
+    if date_max:
+        params["created_at_max"] = date_max
 
     data = _get("orders.json", params)
     orders = data.get("orders", [])
@@ -101,8 +130,8 @@ def update_product_description(product_id: int, new_description: str) -> dict:
     return _put(f"products/{product_id}.json", data)
 
 
-def get_store_analytics(period: str = "month") -> dict:
-    orders_data = get_orders(period=period)
+def get_store_analytics(period: str = "month", start_date: str = None, end_date: str = None) -> dict:
+    orders_data = get_orders(period=period, start_date=start_date, end_date=end_date)
     products = get_products(limit=50)
     low_stock = get_low_stock_products()
     return {

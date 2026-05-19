@@ -120,6 +120,15 @@
       background: #fafafa; border-radius: 8px; padding: 1rem;
     }
 
+    /* ── Calendrier avec boutons ── */
+    .cal-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    .cal-table th { background:#f0f0f8; padding:.5rem .75rem; text-align:left; font-weight:600; white-space:nowrap; border-bottom:2px solid #ddd; }
+    .cal-table td { padding:.5rem .75rem; border-bottom:1px solid #eee; vertical-align:middle; }
+    .cal-table tr:hover td { background:#fafafa; }
+    .cal-table tr.today-row td { background:#fffbeb; }
+    .cal-table tr.done-row td { opacity:.55; }
+    .btn-render { font-size:.78rem; padding:.25rem .6rem; white-space:nowrap; }
+
     /* ── Template cards vidéo ── */
     .template-card {
       border: 2px solid #e0e0e0; border-radius: 12px; padding: .85rem 1rem;
@@ -593,6 +602,29 @@
     <div id="calendar-tabs" class="mb-3"></div>
     <div id="calendar-content">
       <p class="text-muted">Chargement…</p>
+    </div>
+
+    <!-- Panneau script voix off (caché par défaut) -->
+    <div id="voiceover-panel" class="mt-4" style="display:none">
+      <div class="card border-0 shadow-sm" style="border-left:4px solid var(--accent) !important">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0">
+              <i class="fa-solid fa-microphone me-2" style="color:var(--accent)"></i>
+              Script voix off — <span id="voiceover-id"></span>
+            </h6>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-secondary" onclick="copyText('voiceover-text')">
+                <i class="fa-solid fa-copy me-1"></i>Copier
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('voiceover-panel').style.display='none'">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+          <pre id="voiceover-text" style="white-space:pre-wrap;font-size:.88rem;background:#f8f9fa;padding:1rem;border-radius:8px;margin:0"></pre>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1205,14 +1237,131 @@ function copyText(id) {
 // ── Calendrier éditorial ─────────────────────────────────────────────────────
 let _calendarFiles = [];
 
+// ── Utilitaire : date française → composition_id YYYYMMDD ──────────────────
+const _FR_MONTHS = {jan:1,fév:2,feb:2,mar:3,avr:4,apr:4,mai:5,may:5,jun:6,juin:6,
+  jul:7,juil:7,aoû:8,aug:8,sep:9,oct:10,nov:11,déc:12,dec:12};
+
+function dateToCompositionId(dateStr, year=2026) {
+  const tokens = dateStr.toLowerCase().replace(/[^\w\s]/g,'').split(/\s+/);
+  let day=null, month=null;
+  for (const t of tokens) {
+    if (/^\d+$/.test(t)) day = parseInt(t);
+    else if (_FR_MONTHS[t.slice(0,3)]) month = _FR_MONTHS[t.slice(0,3)];
+  }
+  if (!day || !month) return '';
+  return `${year}${String(month).padStart(2,'0')}${String(day).padStart(2,'0')}`;
+}
+
+// ── Rendu Remotion depuis le calendrier ────────────────────────────────────
+async function calendarRender(btn, compositionId) {
+  if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rendu…';
+
+  try {
+    const res = await fetch('/api/render-video', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: compositionId}),
+    });
+    const d = await res.json();
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Rendu !';
+    btn.className = btn.className.replace('btn-primary','btn-success');
+    showToast(`✅ ${compositionId}.mp4 généré !`, 'success');
+  } catch(e) {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+    showToast('Erreur rendu : ' + e.message, 'danger');
+  }
+}
+
+async function calendarVoiceover(compositionId) {
+  if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
+  try {
+    const res = await fetch(`/api/post-script/${compositionId}`);
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
+    const d = await res.json();
+    document.getElementById('voiceover-id').textContent = compositionId;
+    document.getElementById('voiceover-text').textContent = d.voiceover;
+    const panel = document.getElementById('voiceover-panel');
+    panel.style.display = 'block';
+    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } catch(e) {
+    showToast('Script introuvable : ' + e.message, 'danger');
+  }
+}
+
+// ── Parsing markdown avec détection des lignes de dates ─────────────────────
 function renderMarkdown(raw) {
   const lines = raw.split('\n');
-  let html = '';
-  let inList = false;
-  for (const line of lines) {
+  let html = '', inList = false, inTable = false, headerCols = [];
+
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
     const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const isList = line.startsWith('- ') || line.startsWith('* ');
+
     if (!isList && inList) { html += '</ul>'; inList = false; }
+
+    if (line.startsWith('|')) {
+      const cells = line.split('|').filter((_,i,a) => i>0 && i<a.length-1).map(c=>c.trim());
+      const isSep = cells.every(c => /^[-:]+$/.test(c));
+
+      if (isSep) {
+        // Separator row — close header, open body
+        html += `</thead><tbody>`;
+        inTable = true;
+      } else if (!inTable && !isSep) {
+        // Header row
+        headerCols = cells;
+        html += `<div class="table-responsive"><table class="cal-table"><thead><tr>`;
+        html += cells.map(c => `<th>${c}</th>`).join('');
+        html += `<th>Actions</th></tr>`;
+      } else {
+        // Data row — detect date cell for composition_id
+        const today = new Date();
+        const todayId = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+
+        // Find date in cells (look for cell containing a digit + month word)
+        let compositionId = '';
+        for (const cell of cells) {
+          const cid = dateToCompositionId(cell);
+          if (cid) { compositionId = cid; break; }
+        }
+
+        // Detect if done (✓ or ✅ in last cell)
+        const lastCell = cells[cells.length-1] || '';
+        const isDone = /[✓✅]/.test(lastCell);
+        const isToday = compositionId === todayId;
+
+        const rowClass = isToday ? 'today-row' : isDone ? 'done-row' : '';
+        html += `<tr class="${rowClass}">`;
+        html += cells.map(c => `<td>${c}</td>`).join('');
+
+        // Action buttons
+        const cid = escHtml(compositionId);
+        if (compositionId) {
+          html += `<td style="white-space:nowrap">
+            <button class="btn btn-primary btn-render me-1"
+              onclick="calendarRender(this,'${cid}')">
+              <i class="fa-solid fa-clapperboard me-1"></i>Générer
+            </button>
+            <button class="btn btn-outline-secondary btn-render"
+              onclick="calendarVoiceover('${cid}')">
+              <i class="fa-solid fa-microphone me-1"></i>Voix off
+            </button>
+          </td>`;
+        } else {
+          html += `<td></td>`;
+        }
+        html += `</tr>`;
+      }
+      continue;
+    }
+
+    if (inTable) { html += '</tbody></table></div>'; inTable = false; }
+
     if (line.startsWith('### '))     html += `<h6 class="fw-bold mt-3 mb-1">${esc.slice(4)}</h6>`;
     else if (line.startsWith('## ')) html += `<h5 class="fw-bold mt-4 mb-2" style="color:var(--accent)">${esc.slice(3)}</h5>`;
     else if (line.startsWith('# '))  html += `<h4 class="fw-bold mt-4 mb-2">${esc.slice(2)}</h4>`;
@@ -1220,21 +1369,13 @@ function renderMarkdown(raw) {
       if (!inList) { html += '<ul class="mb-2">'; inList = true; }
       html += `<li>${esc.slice(2)}</li>`;
     }
-    else if (line.startsWith('|')) {
-      // Tableau markdown
-      const cells = line.split('|').filter((_,i,a) => i>0 && i<a.length-1);
-      const isHeader = cells.some(c => /^[-:]+$/.test(c.trim()));
-      if (!isHeader) html += `<tr>${cells.map(c=>`<td class="px-2 py-1 border">${c.trim()}</td>`).join('')}</tr>`;
-      else html = html.replace(/<tr>([^<]*(?:<td[^>]*>[^<]*<\/td>)*)<\/tr>(?![\s\S]*<tr>)/,
-        m => `<div class="table-responsive"><table class="table table-sm table-bordered mb-2"><thead class="table-light">${m.replace(/td/g,'th')}</thead><tbody>`);
-    }
     else if (line.startsWith('---')) html += `<hr>`;
     else if (line.trim() === '')     html += `<br>`;
     else html += `<p class="mb-1">${esc}</p>`;
   }
+
   if (inList) html += '</ul>';
-  // Fermer les tableaux ouverts
-  if (html.includes('<tbody>') && !html.includes('</tbody>')) html += '</tbody></table></div>';
+  if (inTable) html += '</tbody></table></div>';
   return html;
 }
 
@@ -1253,13 +1394,12 @@ async function loadCalendar() {
         <div class="alert alert-info">
           <i class="fa-solid fa-circle-info me-2"></i>
           Aucun fichier calendrier trouvé dans la vault Obsidian.<br>
-          <small class="text-muted">Nomme ton dossier "Calendrier Publication" ou ton fichier avec "calendrier" / "planning".</small>
+          <small class="text-muted">Nomme ton dossier "Calendrier Publication".</small>
         </div>`;
       return;
     }
 
     _calendarFiles = d.all_files || [d.source];
-    // Construire les onglets si plusieurs fichiers
     if (_calendarFiles.length > 1) {
       tabsEl.innerHTML = '<div class="d-flex flex-wrap gap-2">' +
         _calendarFiles.map((f, i) => {
@@ -1280,14 +1420,13 @@ function showCalendarContent(raw, source) {
   const html = renderMarkdown(raw);
   container.innerHTML = `
     <p class="text-muted small mb-2"><i class="fa-solid fa-file-lines me-1"></i>${escHtml(source)}</p>
-    <div class="card border-0 shadow-sm"><div class="card-body" style="line-height:1.7">${html}</div></div>`;
+    <div class="card border-0 shadow-sm"><div class="card-body p-0 overflow-hidden">${html}</div></div>`;
 }
 
 async function switchCalendarTab(btn, idx) {
   document.querySelectorAll('.calendar-tab').forEach(b => b.className = b.className.replace('btn-primary','btn-outline-secondary'));
   btn.className = btn.className.replace('btn-outline-secondary','btn-primary');
-  const container = document.getElementById('calendar-content');
-  container.innerHTML = '<p class="text-muted">Chargement…</p>';
+  document.getElementById('calendar-content').innerHTML = '<p class="text-muted">Chargement…</p>';
   const res = await fetch(`/api/calendar?file_index=${idx}`);
   const d   = await res.json();
   showCalendarContent(d.raw, d.source);

@@ -28,6 +28,10 @@ from tools.customer import (
     send_instagram_reply,
 )
 from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets
+from tools.remotion import (
+    render_video, list_rendered_videos,
+    extract_post_props, generate_voiceover, date_to_composition_id,
+)
 from tools.shopify import get_products, get_store_analytics
 
 logger = logging.getLogger(__name__)
@@ -265,6 +269,39 @@ async def api_calendar(file_index: int = 0):
     idx  = max(0, min(file_index, len(files) - 1))
     main = files[idx]
     return {"raw": main["content"], "source": main["file"], "all_files": [f["file"] for f in files]}
+
+
+# ─── API — Rendu Remotion ────────────────────────────────────────────────────
+
+def _render_sync(composition_id: str) -> dict:
+    return render_video(composition_id, VIDEO_ASSETS_PATH, f"{composition_id}.mp4")
+
+
+@app.post("/api/render-video")
+async def api_render_video(request: Request):
+    body = await request.json()
+    composition_id = body.get("composition_id", "").strip()
+    if not composition_id:
+        raise HTTPException(400, "composition_id manquant")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _render_sync, composition_id)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
+@app.get("/api/post-script/{composition_id}")
+async def api_post_script(composition_id: str):
+    props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+    if not props:
+        raise HTTPException(404, f"Composition '{composition_id}' introuvable dans Root.tsx")
+    voiceover = generate_voiceover(props)
+    return {"composition_id": composition_id, "props": props, "voiceover": voiceover}
+
+
+@app.get("/api/rendered-videos")
+async def api_rendered_videos():
+    return list_rendered_videos(VIDEO_ASSETS_PATH)
 
 
 # ─── API — Script vidéo ───────────────────────────────────────────────────────

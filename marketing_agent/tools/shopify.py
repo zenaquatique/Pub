@@ -1,6 +1,27 @@
 """Outils de connexion à l'API Shopify."""
+from datetime import datetime, timedelta
 import requests
 from config import SHOPIFY_SHOP_URL, SHOPIFY_ACCESS_TOKEN
+
+PERIODS = {
+    "today":    1,
+    "week":     7,
+    "month":    30,
+    "3months":  90,
+    "6months":  180,
+    "year":     365,
+    "all":      None,
+}
+
+PERIOD_LABELS = {
+    "today":   "Aujourd'hui",
+    "week":    "7 derniers jours",
+    "month":   "30 derniers jours",
+    "3months": "3 derniers mois",
+    "6months": "6 derniers mois",
+    "year":    "12 derniers mois",
+    "all":     "Depuis le début",
+}
 
 
 def _shopify_configured() -> bool:
@@ -46,8 +67,14 @@ def get_products(limit: int = 20, status: str = "active") -> list[dict]:
     return products
 
 
-def get_orders(limit: int = 50, status: str = "any") -> dict:
-    data = _get("orders.json", {"limit": limit, "status": status, "financial_status": "paid"})
+def get_orders(period: str = "month") -> dict:
+    days = PERIODS.get(period)
+    params: dict = {"limit": 250, "status": "any", "financial_status": "paid"}
+    if days is not None:
+        since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00")
+        params["created_at_min"] = since
+
+    data = _get("orders.json", params)
     orders = data.get("orders", [])
     total_revenue = sum(float(o.get("total_price", 0)) for o in orders)
     product_sales: dict[str, int] = {}
@@ -60,7 +87,7 @@ def get_orders(limit: int = 50, status: str = "any") -> dict:
         "total_orders": len(orders),
         "total_revenue": round(total_revenue, 2),
         "top_selling": top_products,
-        "recent_orders": len([o for o in orders if o.get("financial_status") == "paid"]),
+        "period_label": PERIOD_LABELS.get(period, period),
     }
 
 
@@ -74,8 +101,8 @@ def update_product_description(product_id: int, new_description: str) -> dict:
     return _put(f"products/{product_id}.json", data)
 
 
-def get_store_analytics() -> dict:
-    orders_data = get_orders(limit=250)
+def get_store_analytics(period: str = "month") -> dict:
+    orders_data = get_orders(period=period)
     products = get_products(limit=50)
     low_stock = get_low_stock_products()
     return {
@@ -83,4 +110,6 @@ def get_store_analytics() -> dict:
         "total_products": len(products),
         "low_stock_count": len(low_stock),
         "low_stock_products": [p["title"] for p in low_stock],
+        "period": period,
+        "period_label": PERIOD_LABELS.get(period, period),
     }

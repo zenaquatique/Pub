@@ -112,9 +112,9 @@ async def api_status():
 # ─── API — Données boutique ───────────────────────────────────────────────────
 
 @app.get("/api/analytics")
-async def api_analytics():
+async def api_analytics(period: str = "month"):
     try:
-        return get_store_analytics()
+        return get_store_analytics(period=period)
     except Exception as exc:
         raise HTTPException(502, f"Erreur Shopify : {exc}")
 

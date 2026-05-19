@@ -161,6 +161,24 @@
 
   <!-- ══════════════════════ DASHBOARD ══════════════════════ -->
   <div id="sec-dashboard" class="section active">
+
+    <!-- Sélecteur de période -->
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <i class="fa-solid fa-calendar-days text-muted"></i>
+      <select id="period-select" class="form-select form-select-sm w-auto" onchange="onPeriodChange()">
+        <option value="today">Aujourd'hui</option>
+        <option value="week">7 derniers jours</option>
+        <option value="month" selected>30 derniers jours</option>
+        <option value="3months">3 derniers mois</option>
+        <option value="6months">6 derniers mois</option>
+        <option value="year">12 derniers mois</option>
+        <option value="all">Depuis le début</option>
+      </select>
+      <span id="period-loading" class="text-muted small" style="display:none">
+        <i class="fa-solid fa-circle-notch spin"></i> Chargement…
+      </span>
+    </div>
+
     <div class="row g-3 mb-4">
       <div class="col-6 col-lg-3">
         <div class="kpi-card">
@@ -414,9 +432,20 @@ function showToast(msg, type = 'success') {
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
+function getPeriod() {
+  return document.getElementById('period-select')?.value || 'month';
+}
+
+function onPeriodChange() {
+  loadAnalytics();
+}
+
 async function loadAnalytics() {
+  const period = getPeriod();
+  const loading = document.getElementById('period-loading');
+  if (loading) loading.style.display = '';
   try {
-    const d = await fetch('/api/analytics').then(r => r.json());
+    const d = await fetch(`/api/analytics?period=${period}`).then(r => r.json());
     document.getElementById('kpi-orders').textContent = d.orders?.total_orders ?? '—';
     document.getElementById('kpi-revenue').textContent =
       d.orders?.total_revenue != null ? d.orders.total_revenue.toFixed(0) + ' €' : '—';
@@ -425,14 +454,17 @@ async function loadAnalytics() {
     // Top products
     const ul = document.getElementById('top-products');
     const tops = d.orders?.top_selling ?? [];
+    const label = d.period_label || period;
     ul.innerHTML = tops.length
       ? tops.map(([n, q]) =>
           `<li class="list-group-item d-flex justify-content-between small">
              <span>${n}</span><span class="badge bg-light text-dark">${q} ventes</span>
            </li>`).join('')
-      : '<li class="list-group-item text-muted small">Aucune donnée</li>';
+      : `<li class="list-group-item text-muted small">Aucune vente sur : ${label}</li>`;
   } catch(e) {
     console.warn('Analytics non disponible (mode simulation)');
+  } finally {
+    if (loading) loading.style.display = 'none';
   }
 }
 

@@ -266,7 +266,37 @@ async def api_calendar():
 
 # ─── API — Script vidéo ───────────────────────────────────────────────────────
 
-def _generate_video_script_sync(topic: str, platform: str, duration: str) -> dict:
+_REMOTION_TEMPLATE_HINTS = {
+    "Top3": (
+        "Format Top3 (TikTokOrganic ~13s) : présente 3 plantes/produits en rafale. "
+        "Chaque 'slot' = 1 produit avec son nom + bénéfice clé + prix. Rythme ultra-rapide. "
+        "Script en 3 blocs : Slot1 / Slot2 / Slot3 + CTA final."
+    ),
+    "Concept": (
+        "Format Concept (ConceptVideo-ZenAquatique 30s) : storytelling de marque. "
+        "Accroche émotionnelle → problème du viewer → solution ZenAquatique → preuve → CTA. "
+        "Ton chaleureux, voix off posée."
+    ),
+    "Educatif": (
+        "Format Educatif (EducatifVideo-ZenAquatique 20s) : 3 conseils / erreurs / étapes. "
+        "Structure : Intro question → Conseil 1 → Conseil 2 → Conseil 3 → CTA. "
+        "Texte à l'écran court pour chaque conseil."
+    ),
+    "Versus": (
+        "Format Versus (VersusVideo-ZenAquatique 20s) : comparaison bouture vs pot / boutique vs animalerie. "
+        "Structure : Versus intro → Option A (avantages) → Option B (avantages) → Verdict ZenAquatique → CTA. "
+        "Ton factuel et convaincant."
+    ),
+    "Promo": (
+        "Format Promo (PromoVideo-ZenAquatique 16s) : 3 plantes en promotion week-end. "
+        "Ultra direct : offre + prix barré + prix promo + urgence (weekend only). "
+        "Chaque plante = 1 slide rapide. CTA : 'Commande avant dimanche'."
+    ),
+}
+
+
+def _generate_video_script_sync(topic: str, platform: str, duration: str,
+                                 template: str = "", remotion: str = "") -> dict:
     from google import genai
     from google.genai import types as gtypes
 
@@ -275,33 +305,36 @@ def _generate_video_script_sync(topic: str, platform: str, duration: str) -> dic
     asset_list = "\n".join(f"  - [{a['type']}] {a['name']}" for a in assets) if assets else "  (aucun asset trouvé)"
 
     platform_tips = {
-        "tiktok":    "TikTok : accroche dans les 3 premières secondes, rythme rapide, texte à l'écran court, trending sounds",
-        "instagram": "Instagram Reels : esthétique soignée, transitions fluides, CTA clair en fin de vidéo",
-        "facebook":  "Facebook : format carré ou 16:9, sous-titres obligatoires (60 % visionnés sans son), CTA avec lien",
+        "tiktok":    "TikTok : accroche dans les 3 premières secondes, rythme rapide, texte à l'écran très court",
+        "instagram": "Instagram Reels : esthétique soignée, transitions fluides, CTA clair en fin",
+        "facebook":  "Facebook : sous-titres obligatoires (60 % visionnés sans son), CTA avec lien boutique",
     }
 
-    vault_section = f"\n\nVAULT OBSIDIAN (connaissances marque) :\n{vault_content}" if vault_content else ""
-    assets_section = f"\n\nASSETS DISPONIBLES :\n{asset_list}"
+    template_hint = _REMOTION_TEMPLATE_HINTS.get(template, "")
+    template_section = f"\n\nTEMPLATE REMOTION SÉLECTIONNÉ — {template} ({remotion}) :\n{template_hint}" if template_hint else ""
+    vault_section = f"\n\nVAULT OBSIDIAN (connaissances marque et calendrier) :\n{vault_content}" if vault_content else ""
+    assets_section = f"\n\nASSETS DISPONIBLES dans le dossier vidéo :\n{asset_list}"
 
-    prompt = f"""Tu es expert en création de contenu vidéo pour {STORE_NAME} ({STORE_NICHE}).
+    prompt = f"""Tu es expert en création de contenu vidéo courts pour {STORE_NAME} ({STORE_NICHE}).
 Voix de marque : {BRAND_VOICE}
 Cible : {TARGET_AUDIENCE}
-{platform_tips.get(platform, '')}
-{vault_section}{assets_section}
+Plateforme : {platform_tips.get(platform, platform.upper())}
+{template_section}{vault_section}{assets_section}
 
-Crée un script vidéo complet pour {platform.upper()} (durée cible : {duration}).
-Sujet / brief : {topic or 'Produit phare de la boutique'}
+Crée un script vidéo COMPLET adapté au template ci-dessus (durée : {duration}).
+Sujet / brief : {topic or 'Choisis le produit le plus pertinent depuis le calendrier éditorial ou les analytics'}
 
-Réponds UNIQUEMENT en JSON valide avec cette structure exacte :
+Respecte STRICTEMENT la structure du template (nombre de slots, durée, rythme).
+Réponds UNIQUEMENT en JSON valide avec cette structure :
 {{
-  "hook": "Accroche (3 premières secondes — phrase qui stoppe le scroll)",
-  "script": "Script complet mot à mot (ce que dit la voix off ou ce qui est montré)",
-  "subtitles": ["ligne 1", "ligne 2", "ligne 3"],
-  "visuals": "Description des plans / visuels à filmer ou animer",
+  "hook": "Accroche (3 premières secondes — ce qui stoppe le scroll)",
+  "script": "Script complet structuré selon le template — mot à mot, slot par slot",
+  "subtitles": ["sous-titre ligne 1", "sous-titre ligne 2", "..."],
+  "visuals": "Description précise des plans / visuels à filmer ou à insérer dans Remotion",
   "cta": "Call-to-action final",
-  "caption": "Légende du post avec emojis",
+  "caption": "Légende complète du post avec emojis",
   "hashtags": ["#hashtag1", "#hashtag2"],
-  "assets_to_use": ["nom des assets du dossier à utiliser si pertinent"]
+  "remotion_notes": "Notes spécifiques pour configurer le template Remotion (textes des slots, couleurs, musique suggérée…)"
 }}"""
 
     client = genai.Client(api_key=GOOGLE_API_KEY)
@@ -326,8 +359,12 @@ async def api_video_script(request: Request):
     topic    = body.get("topic", "")
     platform = body.get("platform", "facebook")
     duration = body.get("duration", "30-60 secondes")
+    template = body.get("template", "")
+    remotion = body.get("remotion", "")
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_executor, _generate_video_script_sync, topic, platform, duration)
+    result = await loop.run_in_executor(
+        _executor, _generate_video_script_sync, topic, platform, duration, template, remotion
+    )
     return result
 
 

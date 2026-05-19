@@ -39,11 +39,18 @@ def read_obsidian_vault(vault_path: str, max_chars: int = 80_000) -> str:
     return "\n".join(parts)
 
 
-_CALENDAR_KEYWORDS = {"calendrier", "calendar", "planning", "plan", "editorial", "éditorial", "contenu", "schedule"}
+_CALENDAR_KEYWORDS = {
+    "calendrier", "calendar", "planning", "plan", "editorial",
+    "éditorial", "contenu", "schedule", "publication",
+}
 
 
 def find_calendar_files(vault_path: str) -> list[dict]:
-    """Retourne les fichiers Obsidian dont le nom ou le contenu concerne le calendrier éditorial."""
+    """Retourne les fichiers Obsidian liés au calendrier éditorial.
+
+    Vérifie le nom du fichier ET le nom de tous les dossiers parents.
+    Ex: 'Calendrier Publication/mai-2026.md' sera détecté via le dossier parent.
+    """
     p = Path(vault_path)
     if not vault_path or not p.exists():
         return []
@@ -51,13 +58,18 @@ def find_calendar_files(vault_path: str) -> list[dict]:
     results: list[dict] = []
     for f in sorted(p.rglob("*.md")):
         try:
-            name_lower = f.stem.lower()
-            if any(kw in name_lower for kw in _CALENDAR_KEYWORDS):
+            # Vérifier nom du fichier et tous les dossiers parents
+            parts_lower = [part.lower() for part in f.relative_to(p).parts]
+            if any(kw in part for kw in _CALENDAR_KEYWORDS for part in parts_lower):
                 content = f.read_text(encoding="utf-8", errors="ignore").strip()
-                results.append({"file": f.name, "path": str(f), "content": content})
+                if content:
+                    relative = str(f.relative_to(p))
+                    results.append({"file": relative, "path": str(f), "content": content})
         except Exception as exc:
             logger.warning("Lecture calendrier ignorée %s : %s", f, exc)
 
+    # Trier : fichiers les plus récents / nommés avec l'année/mois en premier
+    results.sort(key=lambda x: x["file"], reverse=True)
     return results
 
 

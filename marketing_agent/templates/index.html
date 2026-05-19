@@ -86,6 +86,18 @@
       background: #fafafa; border-radius: 8px; padding: 1rem;
     }
 
+    /* ── Template cards vidéo ── */
+    .template-card {
+      border: 2px solid #e0e0e0; border-radius: 12px; padding: .85rem 1rem;
+      cursor: pointer; text-align: center; background: #fff;
+      transition: border-color .15s, box-shadow .15s; min-width: 120px;
+    }
+    .template-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(108,99,255,.15); }
+    .template-card.selected {
+      border-color: var(--accent); background: var(--accent-light);
+      box-shadow: 0 2px 12px rgba(108,99,255,.25);
+    }
+
     /* ── Messages ── */
     .msg-item {
       border-left: 3px solid var(--accent); background: #fff;
@@ -408,32 +420,71 @@
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h5 class="mb-0"><i class="fa-solid fa-film me-2" style="color:var(--accent)"></i>Générateur de script vidéo</h5>
     </div>
+    <!-- Templates Remotion -->
+    <div class="row g-3 mb-3">
+      <div class="col-12"><p class="text-muted small mb-1 fw-semibold">Choisis ton template Remotion :</p></div>
+      <div class="col-6 col-md-auto">
+        <div class="template-card" onclick="selectTemplate(this,'Top3','TikTokOrganic','~13s')" data-template="Top3">
+          <span class="fs-4">🌿</span>
+          <div class="fw-semibold">Top3</div>
+          <div class="text-muted" style="font-size:.75rem">TikTokOrganic · ~13s</div>
+          <div class="text-muted" style="font-size:.72rem">3 plantes, vente directe</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-auto">
+        <div class="template-card" onclick="selectTemplate(this,'Concept','ConceptVideo-ZenAquatique','30s')" data-template="Concept">
+          <span class="fs-4">💡</span>
+          <div class="fw-semibold">Concept</div>
+          <div class="text-muted" style="font-size:.75rem">ConceptVideo · 30s</div>
+          <div class="text-muted" style="font-size:.72rem">Storytelling brand</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-auto">
+        <div class="template-card" onclick="selectTemplate(this,'Educatif','EducatifVideo-ZenAquatique','20s')" data-template="Educatif">
+          <span class="fs-4">🪴</span>
+          <div class="fw-semibold">Educatif</div>
+          <div class="text-muted" style="font-size:.75rem">EducatifVideo · 20s</div>
+          <div class="text-muted" style="font-size:.72rem">3 conseils / étapes</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-auto">
+        <div class="template-card" onclick="selectTemplate(this,'Versus','VersusVideo-ZenAquatique','20s')" data-template="Versus">
+          <span class="fs-4">⚔️</span>
+          <div class="fw-semibold">Versus</div>
+          <div class="text-muted" style="font-size:.75rem">VersusVideo · 20s</div>
+          <div class="text-muted" style="font-size:.72rem">Comparaison bouture vs pot</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-auto">
+        <div class="template-card" onclick="selectTemplate(this,'Promo','PromoVideo-ZenAquatique','16s')" data-template="Promo">
+          <span class="fs-4">🔥</span>
+          <div class="fw-semibold">Promo</div>
+          <div class="text-muted" style="font-size:.75rem">PromoVideo · 16s</div>
+          <div class="text-muted" style="font-size:.72rem">3 plantes promo week-end</div>
+        </div>
+      </div>
+    </div>
+    <input type="hidden" id="vid-template" value="">
+    <input type="hidden" id="vid-remotion" value="">
+    <input type="hidden" id="vid-duration" value="30-60 secondes">
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
         <div class="row g-3">
-          <div class="col-md-5">
-            <label class="form-label fw-semibold">Sujet / brief</label>
-            <input id="vid-topic" type="text" class="form-control" placeholder="Ex: Présenter notre bestseller aquatique…">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Sujet / brief <span class="text-muted fw-normal">(optionnel — sinon l'agent choisit depuis le calendrier)</span></label>
+            <input id="vid-topic" type="text" class="form-control" placeholder="Ex: Ces 3 plantes adorent ton bac communautaire…">
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-semibold">Plateforme</label>
+            <label class="form-label fw-semibold">Plateforme de diffusion</label>
             <select id="vid-platform" class="form-select">
-              <option value="facebook">Facebook</option>
-              <option value="instagram">Instagram Reels</option>
               <option value="tiktok">TikTok</option>
+              <option value="instagram">Instagram Reels</option>
+              <option value="facebook" selected>Facebook</option>
             </select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label fw-semibold">Durée cible</label>
-            <select id="vid-duration" class="form-select">
-              <option value="15-30 secondes">15-30 s</option>
-              <option value="30-60 secondes" selected>30-60 s</option>
-              <option value="60-90 secondes">60-90 s</option>
-            </select>
-          </div>
-          <div class="col-md-2 d-flex align-items-end">
+          <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-primary w-100" onclick="generateVideoScript()">
-              <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Générer
+              <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Générer le script
             </button>
           </div>
         </div>
@@ -493,6 +544,14 @@
               </div>
               <p id="vid-caption" class="mb-2" style="white-space:pre-wrap"></p>
               <div id="vid-hashtags"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12" id="vid-remotion-block" style="display:none">
+          <div class="card border-0 shadow-sm" style="border-left:4px solid var(--accent) !important">
+            <div class="card-body">
+              <h6 class="fw-bold mb-2"><i class="fa-solid fa-code text-purple me-1" style="color:var(--accent)"></i>Notes Remotion</h6>
+              <p id="vid-remotion-notes" class="mb-0 small" style="white-space:pre-wrap"></p>
             </div>
           </div>
         </div>
@@ -1010,10 +1069,25 @@ function initDatePickers() {
 })();
 
 // ── Script Vidéo ─────────────────────────────────────────────────────────────
+function selectTemplate(el, template, remotion, duration) {
+  document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('vid-template').value = template;
+  document.getElementById('vid-remotion').value = remotion;
+  document.getElementById('vid-duration').value = duration;
+}
+
 async function generateVideoScript() {
   const topic    = document.getElementById('vid-topic').value.trim();
   const platform = document.getElementById('vid-platform').value;
   const duration = document.getElementById('vid-duration').value;
+  const template = document.getElementById('vid-template').value;
+  const remotion = document.getElementById('vid-remotion').value;
+
+  if (!template) {
+    showToast('Sélectionne un template Remotion d\'abord.', 'warning');
+    return;
+  }
 
   document.getElementById('video-result').style.display  = 'none';
   document.getElementById('video-spinner').style.display = 'block';
@@ -1022,7 +1096,7 @@ async function generateVideoScript() {
     const res = await fetch('/api/video-script', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({topic, platform, duration}),
+      body: JSON.stringify({topic, platform, duration, template, remotion}),
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.detail || 'Erreur');
@@ -1038,6 +1112,14 @@ async function generateVideoScript() {
 
     const tags = document.getElementById('vid-hashtags');
     tags.innerHTML = (d.hashtags || []).map(h => `<span class="badge me-1 mb-1" style="background:var(--accent-light);color:var(--accent)">${h}</span>`).join('');
+
+    const rBlock = document.getElementById('vid-remotion-block');
+    if (d.remotion_notes) {
+      document.getElementById('vid-remotion-notes').textContent = d.remotion_notes;
+      rBlock.style.display = 'block';
+    } else {
+      rBlock.style.display = 'none';
+    }
 
     document.getElementById('video-result').style.display  = 'block';
     showToast('Script généré avec succès !');

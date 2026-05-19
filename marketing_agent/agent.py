@@ -319,7 +319,11 @@ def run_marketing_session(task: str = None) -> str:
 
         # Execute every tool called in this turn, one response per call
         for fc in function_calls:
-            tool_result = execute_tool(fc.name, dict(fc.args))
+            try:
+                tool_result = execute_tool(fc.name, dict(fc.args))
+            except Exception as exc:
+                logger.warning("Outil %s échoué : %s", fc.name, exc)
+                tool_result = {"status": "skipped", "reason": str(exc)}
             response = chat.send_message(
                 types.Part.from_function_response(
                     name=fc.name,

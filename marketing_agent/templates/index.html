@@ -1345,7 +1345,10 @@ function renderMarkdown(raw) {
         }
 
         const lastCell = cells[cells.length-1] || '';
-        const isDone = /[✓✅]/.test(lastCell);
+        // Publié = date passée, ou marqueur ✓/✅/Publié dans n'importe quelle cellule
+        const hasMarker = cells.some(c => /[✓✅✔]/.test(c) || /publi[eé]/i.test(c) || /\[x\]/i.test(c) || /\bfait\b/i.test(c));
+        const isPast = compositionId && compositionId < todayId;
+        const isDone = hasMarker || isPast;
         const isToday = compositionId === todayId;
 
         if (isDone) doneCount++;

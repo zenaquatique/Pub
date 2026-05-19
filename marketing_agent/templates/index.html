@@ -663,48 +663,36 @@ Chargement…</pre>
     <div id="voiceover-panel" class="mt-4" style="display:none">
       <div class="card border-0 shadow-sm" style="border-left:4px solid var(--accent) !important">
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="fw-bold mb-0">
               <i class="fa-solid fa-microphone me-2" style="color:var(--accent)"></i>
-              Script voix off IA — <span id="voiceover-id"></span>
+              Script — <span id="voiceover-id"></span>
+              <span class="badge bg-light text-muted ms-2" id="voiceover-template" style="font-size:.7rem"></span>
             </h6>
             <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('voiceover-panel').style.display='none'">
               <i class="fa-solid fa-xmark"></i>
             </button>
           </div>
 
-          <!-- Spinner génération -->
           <div id="voiceover-spinner" class="text-center py-4" style="display:none">
             <div class="spinner-border spinner-border-sm me-2" style="color:var(--accent)"></div>
-            <span class="text-muted">Gemini génère le script…</span>
+            <span class="text-muted">Gemini génère une première version…</span>
           </div>
 
-          <!-- Résultat -->
-          <div id="voiceover-result" style="display:none">
-            <pre id="voiceover-text" style="white-space:pre-wrap;font-size:.88rem;background:#f8f9fa;padding:1rem;border-radius:8px;margin:0 0 1rem"></pre>
+          <!-- Champs éditables -->
+          <div id="voiceover-fields" style="display:none"></div>
 
-            <!-- Feedback pour regénérer -->
-            <div class="input-group mb-3">
-              <input type="text" id="voiceover-feedback" class="form-control form-control-sm"
-                placeholder="Correction optionnelle… (ex: enlève la partie sur le prix)"
-                onkeydown="if(event.key==='Enter') regenVoiceover()" />
-              <button class="btn btn-sm btn-outline-secondary" onclick="regenVoiceover()">
-                <i class="fa-solid fa-rotate-right me-1"></i>Regénérer
-              </button>
-            </div>
-
-            <!-- Actions -->
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-success btn-sm" onclick="approveVoiceover()">
-                <i class="fa-solid fa-check me-1"></i>Approuver + écrire dans Root.tsx
-              </button>
-              <button class="btn btn-primary btn-sm" onclick="approveAndRender()">
-                <i class="fa-solid fa-clapperboard me-1"></i>Approuver + Rendre la vidéo
-              </button>
-              <button class="btn btn-outline-secondary btn-sm" onclick="copyText('voiceover-text')">
-                <i class="fa-solid fa-copy me-1"></i>Copier
-              </button>
-            </div>
+          <!-- Actions -->
+          <div id="voiceover-actions" class="d-flex gap-2 flex-wrap mt-3" style="display:none !important">
+            <button class="btn btn-primary" onclick="approveAndRender()">
+              <i class="fa-solid fa-clapperboard me-1"></i>Écrire dans Root.tsx + Rendre la vidéo
+            </button>
+            <button class="btn btn-outline-secondary" onclick="approveVoiceover()">
+              <i class="fa-solid fa-check me-1"></i>Écrire uniquement
+            </button>
+            <button class="btn btn-outline-secondary" onclick="regenVoiceover()">
+              <i class="fa-solid fa-rotate-right me-1"></i>Regénérer
+            </button>
           </div>
         </div>
       </div>
@@ -1396,18 +1384,126 @@ async function calendarRender(btn, compositionId) {
   }
 }
 
-// Stocke les props IA en attente d'approbation
-let _pendingProps = null;
-let _pendingCompositionId = null;
+// ── Voix off IA — champs éditables ──────────────────────────────────────────
+let _voCid = null;   // composition id courant
+let _voTpl = null;   // template type courant
+
+function _field(id, label, value, placeholder='') {
+  return `<div class="mb-2">
+    <label class="form-label fw-semibold small mb-1">${label}</label>
+    <input type="text" class="form-control form-control-sm" id="${id}"
+      value="${escHtml(value)}" placeholder="${placeholder}">
+  </div>`;
+}
+function _textarea(id, label, value) {
+  return `<div class="mb-2">
+    <label class="form-label fw-semibold small mb-1">${label}</label>
+    <textarea class="form-control form-control-sm" id="${id}" rows="2">${escHtml(value)}</textarea>
+  </div>`;
+}
+
+function _buildForm(props) {
+  const t = props.template_type || '';
+  let html = '';
+
+  if (t.includes('Versus')) {
+    html += `<div class="row g-2">
+      <div class="col-12">${_field('vo_hook','🎣 Accroche (Hook)',props.hookText||'','Max 8 mots')}</div>
+      <div class="col-md-6">
+        <div class="p-2 rounded" style="background:#f0f0f8">
+          ${_field('vo_ll','Label gauche',props.leftLabel||'')}
+          ${_field('vo_l0','Item 1',(props.leftItems||[])[0]||'')}
+          ${_field('vo_l1','Item 2',(props.leftItems||[])[1]||'')}
+          ${_field('vo_l2','Item 3',(props.leftItems||[])[2]||'')}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="p-2 rounded" style="background:#f0f8f0">
+          ${_field('vo_rl','Label droite',props.rightLabel||'')}
+          ${_field('vo_r0','Item 1',(props.rightItems||[])[0]||'')}
+          ${_field('vo_r1','Item 2',(props.rightItems||[])[1]||'')}
+          ${_field('vo_r2','Item 3',(props.rightItems||[])[2]||'')}
+        </div>
+      </div>
+      <div class="col-md-8">${_field('vo_verdict','⚖️ Verdict',props.verdict||'')}</div>
+      <div class="col-md-4">${_field('vo_cta','CTA',props.ctaText||'','Clique sur le lien en bio !')}</div>
+    </div>`;
+  } else if (t.includes('Educatif')) {
+    const tips = props.tips || [{num:'01',title:'',desc:''},{num:'02',title:'',desc:''},{num:'03',title:'',desc:''}];
+    html += `<div class="row g-2">
+      <div class="col-md-8">${_field('vo_hook','🎣 Accroche',props.hookText||'')}</div>
+      <div class="col-md-4">${_field('vo_emoji','Emoji accroche',props.hookEmoji||'')}</div>`;
+    tips.forEach((tip,i) => {
+      html += `<div class="col-md-4">
+        <div class="p-2 rounded" style="background:#f8f9fa">
+          <div class="fw-semibold small mb-1">Conseil ${tip.num||i+1}</div>
+          ${_field(`vo_t${i}t`,'Titre affiché',tip.title||'')}
+          ${_textarea(`vo_t${i}d`,'Voix off',tip.desc||'')}
+        </div>
+      </div>`;
+    });
+    html += `<div class="col-12">${_field('vo_cta','CTA',props.ctaText||'')}</div></div>`;
+  } else if (t.includes('Promo')) {
+    const plants = props.plants || [{emoji:'🌿',name:'',description:'',price:''},{emoji:'🌿',name:'',description:'',price:''},{emoji:'🌿',name:'',description:'',price:''}];
+    html += `<div class="row g-2">
+      <div class="col-12">${_field('vo_hook','🎣 Accroche',props.hookText||'')}</div>`;
+    plants.forEach((p,i) => {
+      html += `<div class="col-md-4">
+        <div class="p-2 rounded" style="background:#f8f9fa">
+          <div class="fw-semibold small mb-1">Plante ${i+1}</div>
+          ${_field(`vo_p${i}e`,'Emoji',p.emoji||'🌿')}
+          ${_field(`vo_p${i}n`,'Nom',p.name||'')}
+          ${_field(`vo_p${i}d`,'Description courte',p.description||'')}
+          ${_field(`vo_p${i}p`,'Prix',p.price||'')}
+        </div>
+      </div>`;
+    });
+    html += `<div class="col-12">${_field('vo_cta','CTA',props.ctaText||'')}</div></div>`;
+  } else {
+    html = `<p class="text-muted small">Template "${t}" — édition manuelle non supportée.</p>`;
+  }
+  return html;
+}
+
+function _readForm(tpl) {
+  const g = id => (document.getElementById(id)||{}).value || '';
+  if (tpl.includes('Versus')) return {
+    hookText: g('vo_hook'),
+    leftLabel: g('vo_ll'), leftItems: [g('vo_l0'), g('vo_l1'), g('vo_l2')].filter(Boolean),
+    rightLabel: g('vo_rl'), rightItems: [g('vo_r0'), g('vo_r1'), g('vo_r2')].filter(Boolean),
+    verdict: g('vo_verdict'), ctaText: g('vo_cta'),
+  };
+  if (tpl.includes('Educatif')) return {
+    hookText: g('vo_hook'), hookEmoji: g('vo_emoji'),
+    tips: [0,1,2].map(i => ({num:`0${i+1}`, title: g(`vo_t${i}t`), desc: g(`vo_t${i}d`)})),
+    ctaText: g('vo_cta'),
+  };
+  if (tpl.includes('Promo')) return {
+    hookText: g('vo_hook'),
+    plants: [0,1,2].map(i => ({emoji: g(`vo_p${i}e`), name: g(`vo_p${i}n`), description: g(`vo_p${i}d`), price: g(`vo_p${i}p`)})),
+    ctaText: g('vo_cta'),
+  };
+  return {};
+}
+
+function _showVoiceoverForm(props) {
+  _voTpl = props.template_type || '';
+  document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
+  document.getElementById('voiceover-fields').innerHTML = _buildForm(props);
+  document.getElementById('voiceover-spinner').style.display = 'none';
+  document.getElementById('voiceover-fields').style.display = 'block';
+  const actEl = document.getElementById('voiceover-actions');
+  actEl.style.cssText = '';  // remove !important display:none
+  actEl.style.display = 'flex';
+}
 
 async function calendarVoiceover(compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
-  _pendingCompositionId = compositionId;
-  _pendingProps = null;
+  _voCid = compositionId;
   document.getElementById('voiceover-id').textContent = compositionId;
   document.getElementById('voiceover-spinner').style.display = 'block';
-  document.getElementById('voiceover-result').style.display = 'none';
-  document.getElementById('voiceover-feedback').value = '';
+  document.getElementById('voiceover-fields').style.display = 'none';
+  document.getElementById('voiceover-actions').style.display = 'none';
   const panel = document.getElementById('voiceover-panel');
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -1415,10 +1511,14 @@ async function calendarVoiceover(compositionId) {
 }
 
 async function regenVoiceover() {
-  const feedback = document.getElementById('voiceover-feedback').value.trim();
+  // Collect any manual edits as feedback context
+  const currentProps = _voTpl ? _readForm(_voTpl) : {};
+  const feedback = prompt('Qu\'est-ce qui ne va pas ? Décris la correction souhaitée :') || '';
+  if (!feedback) return;
   document.getElementById('voiceover-spinner').style.display = 'block';
-  document.getElementById('voiceover-result').style.display = 'none';
-  await _fetchVoiceover(_pendingCompositionId, feedback);
+  document.getElementById('voiceover-fields').style.display = 'none';
+  document.getElementById('voiceover-actions').style.display = 'none';
+  await _fetchVoiceover(_voCid, feedback);
 }
 
 async function _fetchVoiceover(compositionId, feedback) {
@@ -1430,45 +1530,42 @@ async function _fetchVoiceover(compositionId, feedback) {
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
     const d = await res.json();
-    _pendingProps = d.props;
-    document.getElementById('voiceover-text').textContent = d.voiceover;
-    document.getElementById('voiceover-spinner').style.display = 'none';
-    document.getElementById('voiceover-result').style.display = 'block';
+    _showVoiceoverForm(d.props);
   } catch(e) {
     document.getElementById('voiceover-spinner').style.display = 'none';
     showToast('Erreur génération : ' + e.message, 'danger');
   }
 }
 
+function _collectProps() {
+  if (!_voTpl || !_voCid) return null;
+  return _readForm(_voTpl);
+}
+
 async function approveVoiceover() {
-  if (!_pendingProps || !_pendingCompositionId) return;
+  const props = _collectProps();
+  if (!props) return;
   const res = await fetch('/api/approve-voiceover', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({composition_id: _pendingCompositionId, props: _pendingProps}),
+    body: JSON.stringify({composition_id: _voCid, props}),
   });
   if (res.ok) showToast('✅ Root.tsx mis à jour !', 'success');
   else showToast('Erreur écriture', 'danger');
 }
 
 async function approveAndRender() {
-  if (!_pendingProps || !_pendingCompositionId) return;
+  const props = _collectProps();
+  if (!props) return;
   const res = await fetch('/api/approve-voiceover', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({composition_id: _pendingCompositionId, props: _pendingProps}),
+    body: JSON.stringify({composition_id: _voCid, props}),
   });
   if (!res.ok) { showToast('Erreur écriture Root.tsx', 'danger'); return; }
-  // Find render button for this composition and trigger it
-  const renderBtns = document.querySelectorAll('[onclick*="calendarRender"]');
-  for (const btn of renderBtns) {
-    if (btn.getAttribute('onclick').includes(_pendingCompositionId)) {
-      calendarRender(btn, _pendingCompositionId);
-      return;
-    }
-  }
-  // Fallback: call render directly
-  await calendarRender(document.createElement('button'), _pendingCompositionId);
+  showToast('Root.tsx mis à jour — lancement du rendu…', 'info');
+  const dummy = document.createElement('button');
+  await calendarRender(dummy, _voCid);
 }
 
 // ── Parsing markdown avec détection des lignes de dates ─────────────────────

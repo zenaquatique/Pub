@@ -693,6 +693,9 @@ Chargement…</pre>
               <button class="btn btn-outline-secondary" onclick="regenVoiceover()">
                 <i class="fa-solid fa-rotate-right me-1"></i>Recharger
               </button>
+              <button class="btn btn-outline-warning" onclick="regenVoiceoverAI()">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Regénérer
+              </button>
               <button class="btn btn-outline-secondary" onclick="copyVoiceover()">
                 <i class="fa-solid fa-copy me-1"></i>Copier
               </button>
@@ -1408,6 +1411,30 @@ async function regenVoiceover() {
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
   await _fetchVoiceover(_voCid);
+}
+
+async function regenVoiceoverAI() {
+  const feedback = prompt('Qu\'est-ce qui ne va pas ? (ex: prix faux, plantes ne meurent pas en 2 semaines…)') || '';
+  if (!feedback) return;
+  document.getElementById('voiceover-spinner').style.display = 'block';
+  document.getElementById('voiceover-fields').style.display = 'none';
+  try {
+    const res = await fetch('/api/generate-voiceover-ai', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: _voCid, feedback}),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
+    const d = await res.json();
+    _voTpl = d.props?.template_type || '';
+    document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
+    document.getElementById('voiceover-text').value = d.voiceover;
+    document.getElementById('voiceover-spinner').style.display = 'none';
+    document.getElementById('voiceover-fields').style.display = 'block';
+  } catch(e) {
+    document.getElementById('voiceover-spinner').style.display = 'none';
+    showToast('Erreur génération : ' + e.message, 'danger');
+  }
 }
 
 async function _fetchVoiceover(compositionId) {

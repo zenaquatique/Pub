@@ -15,7 +15,11 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent import execute_pending_action, _load_pending_actions, PENDING_ACTIONS_FILE
-from config import META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE
+from config import (
+    META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE,
+    OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH, GOOGLE_API_KEY, GEMINI_MODEL,
+    STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
+)
 from tools.customer import (
     get_pending_messages,
     log_customer_message,
@@ -23,6 +27,7 @@ from tools.customer import (
     send_facebook_reply,
     send_instagram_reply,
 )
+from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets
 from tools.shopify import get_products, get_store_analytics
 
 logger = logging.getLogger(__name__)
@@ -245,6 +250,85 @@ async def receive_webhook(request: Request):
                 platform = "instagram" if object_type == "instagram" else "facebook"
                 log_customer_message(platform, v.get("from", {}).get("name", "?"), v["text"], v["id"])
     return {"status": "ok"}
+
+
+# ─── API — Calendrier éditorial ──────────────────────────────────────────────
+
+@app.get("/api/calendar")
+async def api_calendar():
+    files = find_calendar_files(OBSIDIAN_VAULT_PATH)
+    if not files:
+        return {"entries": [], "raw": "", "source": ""}
+    # Retourne le premier fichier calendrier trouvé
+    main = files[0]
+    return {"entries": [], "raw": main["content"], "source": main["file"], "all_files": [f["file"] for f in files]}
+
+
+# ─── API — Script vidéo ───────────────────────────────────────────────────────
+
+def _generate_video_script_sync(topic: str, platform: str, duration: str) -> dict:
+    from google import genai
+    from google.genai import types as gtypes
+
+    vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+    assets = list_video_assets(VIDEO_ASSETS_PATH)
+    asset_list = "\n".join(f"  - [{a['type']}] {a['name']}" for a in assets) if assets else "  (aucun asset trouvé)"
+
+    platform_tips = {
+        "tiktok":    "TikTok : accroche dans les 3 premières secondes, rythme rapide, texte à l'écran court, trending sounds",
+        "instagram": "Instagram Reels : esthétique soignée, transitions fluides, CTA clair en fin de vidéo",
+        "facebook":  "Facebook : format carré ou 16:9, sous-titres obligatoires (60 % visionnés sans son), CTA avec lien",
+    }
+
+    vault_section = f"\n\nVAULT OBSIDIAN (connaissances marque) :\n{vault_content}" if vault_content else ""
+    assets_section = f"\n\nASSETS DISPONIBLES :\n{asset_list}"
+
+    prompt = f"""Tu es expert en création de contenu vidéo pour {STORE_NAME} ({STORE_NICHE}).
+Voix de marque : {BRAND_VOICE}
+Cible : {TARGET_AUDIENCE}
+{platform_tips.get(platform, '')}
+{vault_section}{assets_section}
+
+Crée un script vidéo complet pour {platform.upper()} (durée cible : {duration}).
+Sujet / brief : {topic or 'Produit phare de la boutique'}
+
+Réponds UNIQUEMENT en JSON valide avec cette structure exacte :
+{{
+  "hook": "Accroche (3 premières secondes — phrase qui stoppe le scroll)",
+  "script": "Script complet mot à mot (ce que dit la voix off ou ce qui est montré)",
+  "subtitles": ["ligne 1", "ligne 2", "ligne 3"],
+  "visuals": "Description des plans / visuels à filmer ou animer",
+  "cta": "Call-to-action final",
+  "caption": "Légende du post avec emojis",
+  "hashtags": ["#hashtag1", "#hashtag2"],
+  "assets_to_use": ["nom des assets du dossier à utiliser si pertinent"]
+}}"""
+
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=gtypes.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.8,
+        ),
+    )
+    raw = response.text.strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {"raw": raw}
+
+
+@app.post("/api/video-script")
+async def api_video_script(request: Request):
+    body = await request.json()
+    topic    = body.get("topic", "")
+    platform = body.get("platform", "facebook")
+    duration = body.get("duration", "30-60 secondes")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _generate_video_script_sync, topic, platform, duration)
+    return result
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────

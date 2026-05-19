@@ -39,6 +39,28 @@ def read_obsidian_vault(vault_path: str, max_chars: int = 80_000) -> str:
     return "\n".join(parts)
 
 
+_CALENDAR_KEYWORDS = {"calendrier", "calendar", "planning", "plan", "editorial", "éditorial", "contenu", "schedule"}
+
+
+def find_calendar_files(vault_path: str) -> list[dict]:
+    """Retourne les fichiers Obsidian dont le nom ou le contenu concerne le calendrier éditorial."""
+    p = Path(vault_path)
+    if not vault_path or not p.exists():
+        return []
+
+    results: list[dict] = []
+    for f in sorted(p.rglob("*.md")):
+        try:
+            name_lower = f.stem.lower()
+            if any(kw in name_lower for kw in _CALENDAR_KEYWORDS):
+                content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                results.append({"file": f.name, "path": str(f), "content": content})
+        except Exception as exc:
+            logger.warning("Lecture calendrier ignorée %s : %s", f, exc)
+
+    return results
+
+
 def list_video_assets(assets_path: str) -> list[dict]:
     """Liste les vidéos, images et docs du dossier d'assets."""
     p = Path(assets_path)

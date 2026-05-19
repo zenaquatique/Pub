@@ -279,9 +279,10 @@ TOOLS = [
             types.FunctionDeclaration(
                 name="update_post_props",
                 description=(
-                    "Modifie des champs d'un post Remotion dans Root.tsx. "
-                    "Permet de corriger hookText, verdict, leftItems, rightItems, tips, plants, ctaText, etc. "
-                    "Appelle render_video ensuite pour regénérer la vidéo avec le nouveau contenu."
+                    "Écrit directement les nouvelles valeurs d'un post dans Root.tsx. "
+                    "Tu AS le droit et le DEVOIR de modifier Root.tsx avec cet outil. "
+                    "Champs modifiables : hookText, verdict, leftItems, rightItems, ctaText, tips, plants, musicTrack. "
+                    "Appelle TOUJOURS render_video juste après pour regénérer la vidéo MP4."
                 ),
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
@@ -531,7 +532,7 @@ Boutique : https://{SHOPIFY_SHOP_URL} | Aujourd'hui : {today}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE COMPORTEMENT — OBLIGATOIRES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Réponds TOUJOURS en "tu" — JAMAIS "vous"
+• Réponds TOUJOURS en "tu" — JAMAIS "vous", JAMAIS "votre", JAMAIS "Souhaitez-vous"
 • Sois COURT : 1 à 3 phrases après avoir agi, pas de listes inutiles
 • N'affiche JAMAIS le script voix off dans le chat — modifie Root.tsx et rends la vidéo
 • N'ATTENDS PAS de confirmation — si on te dit de faire quelque chose, FAIS-LE directement
@@ -561,8 +562,13 @@ VIDÉO REMOTION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Projet : {VIDEO_ASSETS_PATH}
 • ID composition : YYYYMMDD (ex: "20260519" = 19 mai 2026)
-• Modification d'un post : get_post_props → update_post_props → render_video (dans cet ordre, sans pause)
-• Ne génère pas de script texte — modifie Root.tsx et rends la vidéo
+• Root.tsx contient les props de chaque post — TU PEUX ET TU DOIS le modifier avec update_post_props
+• Workflow OBLIGATOIRE quand l'utilisateur veut changer un post :
+  1. get_post_props("20260519")           ← lire le contenu actuel
+  2. update_post_props("20260519", {...}) ← écrire les nouvelles valeurs dans Root.tsx
+  3. render_video("20260519")            ← regénérer la vidéo MP4
+  Fais les 3 étapes d'affilée SANS t'arrêter pour demander quoi que ce soit
+• Ne génère JAMAIS un script texte dans le chat — modifie Root.tsx et rends la vidéo
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CALENDRIER ÉDITORIAL

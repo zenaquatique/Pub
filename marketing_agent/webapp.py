@@ -51,7 +51,10 @@ _executor = ThreadPoolExecutor(max_workers=1)
 def _load_reports() -> list:
     REPORTS_FILE.parent.mkdir(exist_ok=True)
     if REPORTS_FILE.exists():
-        return json.loads(REPORTS_FILE.read_text(encoding="utf-8"))
+        try:
+            return json.loads(REPORTS_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            REPORTS_FILE.unlink(missing_ok=True)
     return []
 
 

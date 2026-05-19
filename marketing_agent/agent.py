@@ -213,7 +213,10 @@ TOOLS = [
 def _load_pending_actions() -> list:
     PENDING_ACTIONS_FILE.parent.mkdir(exist_ok=True)
     if PENDING_ACTIONS_FILE.exists():
-        return json.loads(PENDING_ACTIONS_FILE.read_text(encoding="utf-8"))
+        try:
+            return json.loads(PENDING_ACTIONS_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            PENDING_ACTIONS_FILE.unlink(missing_ok=True)
     return []
 
 

@@ -14,6 +14,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from agent import execute_pending_action, _load_pending_actions, PENDING_ACTIONS_FILE
 from config import META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE
 from tools.customer import (
     get_pending_messages,
@@ -139,6 +140,48 @@ async def delete_report(report_id: str):
     reports = [r for r in _load_reports() if r["id"] != report_id]
     REPORTS_FILE.write_text(json.dumps(reports, ensure_ascii=False, indent=2))
     return {"status": "deleted"}
+
+
+# ─── API — Approbation des actions ───────────────────────────────────────────
+
+@app.get("/api/pending-actions")
+async def api_pending_actions():
+    actions = _load_pending_actions()
+    return [a for a in actions if a.get("status") == "pending"]
+
+
+@app.get("/api/pending-actions/count")
+async def api_pending_actions_count():
+    actions = _load_pending_actions()
+    count = sum(1 for a in actions if a.get("status") == "pending")
+    return {"count": count}
+
+
+@app.post("/api/pending-actions/{action_id}/approve")
+async def api_approve_action(action_id: str):
+    try:
+        result = execute_pending_action(action_id)
+        return {"status": "approved", "result": result}
+    except Exception as exc:
+        raise HTTPException(500, f"Erreur exécution : {exc}")
+
+
+@app.post("/api/pending-actions/{action_id}/reject")
+async def api_reject_action(action_id: str):
+    actions = _load_pending_actions()
+    found = False
+    for action in actions:
+        if action["id"] == action_id:
+            action["status"] = "rejected"
+            action["rejected_at"] = datetime.now().isoformat()
+            found = True
+            break
+    if not found:
+        raise HTTPException(404, f"Action introuvable : {action_id}")
+    PENDING_ACTIONS_FILE.write_text(
+        json.dumps(actions, ensure_ascii=False, indent=2)
+    )
+    return {"status": "rejected"}
 
 
 # ─── API — Messages clients ───────────────────────────────────────────────────

@@ -1,7 +1,9 @@
 """Agent marketing autonome — cerveau central alimenté par Gemini."""
 import json
 import logging
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from google import genai
@@ -15,6 +17,17 @@ from config import (
 from tools import shopify, social, email_campaigns, customer
 
 logger = logging.getLogger(__name__)
+
+PENDING_ACTIONS_FILE = Path(__file__).parent / "data" / "pending_actions.json"
+
+WRITE_TOOLS = {
+    "post_to_instagram",
+    "post_to_facebook",
+    "send_newsletter",
+    "update_product_description",
+    "reply_to_customer",
+    "send_abandoned_cart_email",
+}
 
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
@@ -183,11 +196,55 @@ TOOLS = [
     )
 ]
 
+# ─── Gestion des actions en attente ──────────────────────────────────────────
+
+def _load_pending_actions() -> list:
+    PENDING_ACTIONS_FILE.parent.mkdir(exist_ok=True)
+    if PENDING_ACTIONS_FILE.exists():
+        return json.loads(PENDING_ACTIONS_FILE.read_text(encoding="utf-8"))
+    return []
+
+
+def _queue_action(name: str, inputs: dict) -> dict:
+    actions = _load_pending_actions()
+    action_id = str(uuid.uuid4())
+    action = {
+        "id": action_id,
+        "tool": name,
+        "inputs": inputs,
+        "created_at": datetime.now().isoformat(),
+        "status": "pending",
+    }
+    actions.append(action)
+    PENDING_ACTIONS_FILE.write_text(
+        json.dumps(actions, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    logger.info("Action mise en attente : %s | id=%s", name, action_id)
+    return {
+        "status": "queued",
+        "message": "Action mise en attente pour approbation.",
+        "id": action_id,
+    }
+
+
+def execute_pending_action(action_id: str) -> dict:
+    actions = _load_pending_actions()
+    for action in actions:
+        if action["id"] == action_id:
+            result = _execute_tool_directly(action["tool"], action["inputs"])
+            action["status"] = "executed"
+            action["executed_at"] = datetime.now().isoformat()
+            PENDING_ACTIONS_FILE.write_text(
+                json.dumps(actions, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            return result
+    return {"error": f"Action introuvable : {action_id}"}
+
+
 # ─── Exécution des outils ─────────────────────────────────────────────────────
 
-def execute_tool(name: str, inputs: dict) -> Any:
-    logger.info("Exécution de l'outil: %s | inputs: %s", name, inputs)
-
+def _execute_tool_directly(name: str, inputs: dict) -> Any:
+    """Execute a tool without going through the approval queue."""
     if name == "get_store_analytics":
         return shopify.get_store_analytics()
 
@@ -241,6 +298,15 @@ def execute_tool(name: str, inputs: dict) -> Any:
     return {"error": f"Outil inconnu: {name}"}
 
 
+def execute_tool(name: str, inputs: dict) -> Any:
+    logger.info("Exécution de l'outil: %s | inputs: %s", name, inputs)
+
+    if name in WRITE_TOOLS:
+        return _queue_action(name, inputs)
+
+    return _execute_tool_directly(name, inputs)
+
+
 # ─── Prompt système ───────────────────────────────────────────────────────────
 
 def build_system_prompt() -> str:
@@ -270,6 +336,8 @@ RÈGLES :
 - Ne publie JAMAIS de fausses informations sur les produits
 - Si tu ne trouves pas d'image pour un post, utilise l'image du produit Shopify
 - Fais toujours les actions dans l'ordre logique : données → contenu → publication
+
+IMPORTANT: Tes actions de publication (Instagram, Facebook, newsletter, descriptions, réponses) seront soumises à validation humaine avant d'être exécutées. Continue normalement — indique dans ton rapport ce que tu as mis en attente.
 
 Commence maintenant par collecter les données de la boutique."""
 

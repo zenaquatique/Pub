@@ -139,6 +139,10 @@
     <a href="#" onclick="showSection('reports',this)">
       <i class="fa-solid fa-file-lines"></i> Historique
     </a>
+    <a href="#" onclick="showSection('approval',this)">
+      <i class="fa-solid fa-circle-check"></i> Approbation
+      <span id="approval-badge" class="badge bg-danger ms-auto" style="display:none">0</span>
+    </a>
   </nav>
   <div class="p-3" style="font-size:.75rem; color:#555; border-top:1px solid #2e2e4a">
     <span id="sidebar-status">● idle</span>
@@ -380,6 +384,19 @@
     </div>
   </div>
 
+  <!-- ══════════════════════ APPROBATION ══════════════════════ -->
+  <div id="sec-approval" class="section">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="mb-0"><i class="fa-solid fa-circle-check me-2" style="color:var(--accent)"></i>Actions en attente d'approbation</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadPendingActions()">
+        <i class="fa-solid fa-rotate-right"></i> Actualiser
+      </button>
+    </div>
+    <div id="approval-list">
+      <p class="text-muted">Chargement…</p>
+    </div>
+  </div>
+
   <!-- ══════════════════════ HISTORIQUE ══════════════════════ -->
   <div id="sec-reports" class="section">
     <div class="d-flex align-items-center justify-content-between mb-3">
@@ -441,6 +458,7 @@ function showSection(name, link) {
   if (name === 'messages') loadMessages();
   if (name === 'products') loadProducts();
   if (name === 'reports') loadReports();
+  if (name === 'approval') loadPendingActions();
 }
 
 function toggleSidebar() {
@@ -563,6 +581,7 @@ async function pollStatus() {
         showToast('Routine terminée !', 'success');
         loadAnalytics();
         loadLastReport();
+        updateApprovalBadge();
       } else if (s.status === 'error') {
         showToast('Erreur agent : ' + s.error, 'danger');
       }
@@ -734,6 +753,113 @@ async function deleteReport(id) {
   loadReports();
 }
 
+// ── Pending actions (approbation) ────────────────────────────────────────────
+const TOOL_LABELS = {
+  post_to_instagram: 'Post Instagram',
+  post_to_facebook: 'Post Facebook',
+  send_newsletter: 'Newsletter',
+  update_product_description: 'Description produit',
+  reply_to_customer: 'Réponse client',
+  send_abandoned_cart_email: 'Email panier abandonné',
+};
+
+function getActionPreview(action) {
+  const inp = action.inputs || {};
+  switch (action.tool) {
+    case 'post_to_instagram':
+    case 'post_to_facebook':
+      return escHtml((inp.caption || inp.message || '').substring(0, 150));
+    case 'send_newsletter':
+      return `<strong>Objet :</strong> ${escHtml(inp.subject || '')}`;
+    case 'update_product_description':
+      return `<strong>Produit #${escHtml(String(inp.product_id || ''))}</strong> — ${escHtml((inp.new_description || '').replace(/<[^>]+>/g, '').substring(0, 100))}`;
+    case 'reply_to_customer':
+      return `<strong>${escHtml(inp.platform || '')}</strong> → ${escHtml((inp.reply_text || '').substring(0, 120))}`;
+    case 'send_abandoned_cart_email':
+      return `<strong>${escHtml(inp.customer_name || inp.customer_email || '')}</strong> — ${escHtml((inp.cart_items || []).join(', ').substring(0, 100))}`;
+    default:
+      return escHtml(JSON.stringify(inp).substring(0, 150));
+  }
+}
+
+async function updateApprovalBadge() {
+  try {
+    const data = await fetch('/api/pending-actions/count').then(r => r.json());
+    const badge = document.getElementById('approval-badge');
+    if (badge) {
+      badge.style.display = data.count > 0 ? '' : 'none';
+      badge.textContent = data.count;
+    }
+  } catch(e) {}
+}
+
+async function loadPendingActions() {
+  try {
+    const actions = await fetch('/api/pending-actions').then(r => r.json());
+    const container = document.getElementById('approval-list');
+    await updateApprovalBadge();
+    if (!actions.length) {
+      container.innerHTML = '<p class="text-muted">Aucune action en attente d\'approbation.</p>';
+      return;
+    }
+    container.innerHTML = actions.map(a => `
+      <div class="card mb-3" id="action-card-${escHtml(a.id)}">
+        <div class="card-header px-3 py-2 d-flex align-items-center justify-content-between">
+          <span>
+            <i class="fa-solid fa-hourglass-half me-2 text-warning"></i>
+            <strong>${escHtml(TOOL_LABELS[a.tool] || a.tool)}</strong>
+            <span class="text-muted small ms-2">${new Date(a.created_at).toLocaleString('fr-FR')}</span>
+          </span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-success" onclick="approveAction('${escHtml(a.id)}')">
+              <i class="fa-solid fa-check me-1"></i>Approuver
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="rejectAction('${escHtml(a.id)}')">
+              <i class="fa-solid fa-xmark me-1"></i>Rejeter
+            </button>
+          </div>
+        </div>
+        <div class="card-body small">
+          <p class="mb-0">${getActionPreview(a)}</p>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('approval-list').innerHTML = '<p class="text-danger">Erreur de chargement.</p>';
+  }
+}
+
+async function approveAction(id) {
+  try {
+    const res = await fetch(`/api/pending-actions/${encodeURIComponent(id)}/approve`, {method: 'POST'});
+    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
+    showToast('Action approuvée et exécutée !', 'success');
+    document.getElementById('action-card-' + id)?.remove();
+    await updateApprovalBadge();
+    const remaining = document.querySelectorAll('[id^="action-card-"]');
+    if (!remaining.length) {
+      document.getElementById('approval-list').innerHTML = '<p class="text-muted">Aucune action en attente d\'approbation.</p>';
+    }
+  } catch(e) {
+    showToast('Erreur : ' + e.message, 'danger');
+  }
+}
+
+async function rejectAction(id) {
+  if (!confirm('Rejeter cette action ?')) return;
+  try {
+    await fetch(`/api/pending-actions/${encodeURIComponent(id)}/reject`, {method: 'POST'});
+    showToast('Action rejetée.', 'secondary');
+    document.getElementById('action-card-' + id)?.remove();
+    await updateApprovalBadge();
+    const remaining = document.querySelectorAll('[id^="action-card-"]');
+    if (!remaining.length) {
+      document.getElementById('approval-list').innerHTML = '<p class="text-muted">Aucune action en attente d\'approbation.</p>';
+    }
+  } catch(e) {
+    showToast('Erreur rejet', 'danger');
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -754,6 +880,7 @@ function initDatePickers() {
   loadAnalytics();
   loadLastReport();
   loadMessages();
+  updateApprovalBadge();
   // Reprendre le polling si l'agent tourne déjà
   const s = await fetch('/api/status').then(r => r.json()).catch(() => ({}));
   updateAgentUI(s);

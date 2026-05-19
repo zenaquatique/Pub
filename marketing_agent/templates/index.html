@@ -691,7 +691,7 @@ Chargement…</pre>
                 <i class="fa-solid fa-clapperboard me-1"></i>Valider + Rendre la vidéo
               </button>
               <button class="btn btn-outline-secondary" onclick="regenVoiceover()">
-                <i class="fa-solid fa-rotate-right me-1"></i>Regénérer
+                <i class="fa-solid fa-rotate-right me-1"></i>Recharger
               </button>
               <button class="btn btn-outline-secondary" onclick="copyVoiceover()">
                 <i class="fa-solid fa-copy me-1"></i>Copier
@@ -1405,21 +1405,14 @@ async function calendarVoiceover(compositionId) {
 }
 
 async function regenVoiceover() {
-  const current = (document.getElementById('voiceover-text')||{}).value || '';
-  const feedback = prompt('Qu\'est-ce qui ne va pas dans ce script ?') || '';
-  if (!feedback) return;
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
-  await _fetchVoiceover(_voCid, feedback);
+  await _fetchVoiceover(_voCid);
 }
 
-async function _fetchVoiceover(compositionId, feedback) {
+async function _fetchVoiceover(compositionId) {
   try {
-    const res = await fetch('/api/generate-voiceover-ai', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({composition_id: compositionId, feedback}),
-    });
+    const res = await fetch(`/api/post-script/${compositionId}`);
     if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
     const d = await res.json();
     _voTpl = d.props?.template_type || '';
@@ -1429,7 +1422,7 @@ async function _fetchVoiceover(compositionId, feedback) {
     document.getElementById('voiceover-fields').style.display = 'block';
   } catch(e) {
     document.getElementById('voiceover-spinner').style.display = 'none';
-    showToast('Erreur génération : ' + e.message, 'danger');
+    showToast('Erreur lecture Root.tsx : ' + e.message, 'danger');
   }
 }
 

@@ -597,9 +597,14 @@
   <div id="sec-calendar" class="section">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h5 class="mb-0"><i class="fa-solid fa-calendar-week me-2" style="color:var(--accent)"></i>Calendrier éditorial</h5>
-      <button class="btn btn-sm btn-outline-secondary" onclick="loadCalendar()">
-        <i class="fa-solid fa-rotate-right"></i> Actualiser
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" onclick="prepareNextMonth()">
+          <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Préparer le mois suivant
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadCalendar()">
+          <i class="fa-solid fa-rotate-right"></i> Actualiser
+        </button>
+      </div>
     </div>
     <div id="calendar-tabs" class="mb-3"></div>
     <div id="calendar-content">
@@ -1393,6 +1398,33 @@ function renderMarkdown(raw) {
   if (inList) html += '</ul>';
   if (inTable) html += closeTable();
   return html;
+}
+
+function prepareNextMonth() {
+  const now = new Date();
+  // Compute next month
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const months = ['janvier','février','mars','avril','mai','juin',
+                  'juillet','août','septembre','octobre','novembre','décembre'];
+  const monthName = months[next.getMonth()];
+  const year = next.getFullYear();
+  const filename = `${monthName}-${year}.md`;
+
+  const task = `Prépare le calendrier éditorial de ${monthName} ${year}.\n` +
+    `1. Lis d'abord le fichier calendrier actuel (get_brand_knowledge) pour voir le format exact.\n` +
+    `2. Génère le planning complet du 1er au 30 ${monthName} ${year} (lundi→samedi, pas dimanche).\n` +
+    `3. 1 post vidéo par jour — alterne les formats : VersusVideo, EducatifVideo, PromoVideo, TikTokOrganic, ConceptVideo.\n` +
+    `4. Adapte les sujets aux produits ZenAquatique, aux promotions et à la saison.\n` +
+    `5. Sauvegarde le fichier "${filename}" dans la vault Obsidian avec write_calendar_file.\n` +
+    `Respecte exactement le même format de tableau que le mois actuel.`;
+
+  // Switch to chat and pre-fill
+  const chatLink = document.querySelector('[onclick*="\'agent\'"]');
+  showSection('agent', chatLink);
+  const input = document.getElementById('chat-input');
+  input.value = task;
+  autoResize(input);
+  input.focus();
 }
 
 function toggleDoneRows(tableId, btn) {

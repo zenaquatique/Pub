@@ -84,6 +84,29 @@ def find_calendar_files(vault_path: str) -> list[dict]:
     return priority + fallback
 
 
+def write_calendar_file(vault_path: str, filename: str, content: str) -> dict:
+    """Crée ou met à jour un fichier markdown dans le dossier Calendrier Publication."""
+    p = Path(vault_path)
+    if not vault_path or not p.exists():
+        return {"status": "error", "error": f"Vault introuvable : {vault_path}"}
+
+    # Cherche le dossier calendrier existant
+    cal_folder = None
+    for folder in sorted(p.rglob("*")):
+        if folder.is_dir() and any(kw in folder.name.lower() for kw in _CALENDAR_FOLDER_KEYWORDS):
+            cal_folder = folder
+            break
+
+    if cal_folder is None:
+        cal_folder = p / "Calendrier Publication"
+        cal_folder.mkdir(parents=True, exist_ok=True)
+
+    target = cal_folder / filename
+    target.write_text(content, encoding="utf-8")
+    logger.info("Calendrier écrit : %s", target)
+    return {"status": "success", "path": str(target), "file": filename}
+
+
 def list_video_assets(assets_path: str) -> list[dict]:
     """Liste les vidéos, images et docs du dossier d'assets."""
     p = Path(assets_path)

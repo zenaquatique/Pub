@@ -15,7 +15,7 @@ from config import (
     SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
 )
 from tools import shopify, social, email_campaigns, customer
-from tools.knowledge import read_obsidian_vault, list_video_assets
+from tools.knowledge import read_obsidian_vault, list_video_assets, write_calendar_file
 from tools.remotion import render_video, list_rendered_videos
 
 logger = logging.getLogger(__name__)
@@ -236,6 +236,28 @@ TOOLS = [
                     properties={},
                 ),
             ),
+            types.FunctionDeclaration(
+                name="write_calendar_file",
+                description=(
+                    "Crée ou met à jour un fichier markdown de calendrier éditorial dans la vault Obsidian. "
+                    "Utilise pour planifier un nouveau mois de contenu. "
+                    "Le fichier est écrit directement dans le dossier Calendrier Publication."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "filename": types.Schema(
+                            type=types.Type.STRING,
+                            description="Nom du fichier (ex: 'juin-2026.md')",
+                        ),
+                        "content": types.Schema(
+                            type=types.Type.STRING,
+                            description="Contenu markdown complet du calendrier éditorial",
+                        ),
+                    },
+                    required=["filename", "content"],
+                ),
+            ),
         ]
     )
 ]
@@ -362,6 +384,13 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
     if name == "list_rendered_videos":
         return list_rendered_videos(VIDEO_ASSETS_PATH)
 
+    if name == "write_calendar_file":
+        return write_calendar_file(
+            OBSIDIAN_VAULT_PATH,
+            inputs["filename"],
+            inputs["content"],
+        )
+
     return {"error": f"Outil inconnu: {name}"}
 
 
@@ -414,6 +443,19 @@ URL boutique : https://{SHOPIFY_SHOP_URL}
 Date d'aujourd'hui : {today}
 {vault_section}{assets_section}
 TON RÔLE : Gérer 99 % du marketing de façon autonome, sans intervention humaine.
+
+CALENDRIER ÉDITORIAL :
+- Pour créer ou mettre à jour le planning d'un mois : utilise write_calendar_file
+- Lis d'abord get_brand_knowledge pour voir le format exact du fichier mai-2026.md
+- Format de tableau à respecter (exemple) :
+  | Jour | Date | Template Remotion | Plateformes | Sujet / Accroche | ID Composition |
+  |------|------|-------------------|-------------|------------------|----------------|
+  | Lun | 2 juin | EducatifVideo | TikTok, Instagram | 3 erreurs à éviter en aquariophilie | 20260602 |
+- L'ID composition = YYYYMMDD (ex: 20260602 pour le 2 juin 2026)
+- Planifie du lundi au samedi (pas le dimanche), 1 post vidéo par jour
+- Alterne les formats : VersusVideo, EducatifVideo, PromoVideo, TikTokOrganic, ConceptVideo
+- Adapte les sujets aux produits ZenAquatique, aux promotions et à la saison
+- Écriture directe dans la vault — aucune validation humaine requise
 
 SYSTÈME VIDÉO REMOTION :
 - Le projet Remotion est dans : {VIDEO_ASSETS_PATH}

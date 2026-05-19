@@ -12,9 +12,10 @@ from google.genai import types
 from config import (
     GOOGLE_API_KEY, GEMINI_MODEL, STORE_NAME,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
-    SHOPIFY_SHOP_URL,
+    SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
 )
 from tools import shopify, social, email_campaigns, customer
+from tools.knowledge import read_obsidian_vault, list_video_assets
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,17 @@ TOOLS = [
                     required=["customer_email", "customer_name", "cart_items", "cart_url"],
                 ),
             ),
+            types.FunctionDeclaration(
+                name="get_brand_knowledge",
+                description=(
+                    "Relit la vault Obsidian et le dossier d'assets vidéo pour rafraîchir "
+                    "le contexte de marque, les instructions et les ressources disponibles."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={},
+                ),
+            ),
         ]
     )
 ]
@@ -295,6 +307,16 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
             inputs["cart_url"],
         )
 
+    if name == "get_brand_knowledge":
+        vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+        assets = list_video_assets(VIDEO_ASSETS_PATH)
+        return {
+            "vault_content": vault_content or "Vault non trouvée ou vide.",
+            "video_assets": assets,
+            "vault_path": OBSIDIAN_VAULT_PATH,
+            "assets_path": VIDEO_ASSETS_PATH,
+        }
+
     return {"error": f"Outil inconnu: {name}"}
 
 
@@ -311,13 +333,41 @@ def execute_tool(name: str, inputs: dict) -> Any:
 
 def build_system_prompt() -> str:
     today = datetime.now().strftime("%A %d %B %Y")
+
+    vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+    assets = list_video_assets(VIDEO_ASSETS_PATH)
+
+    vault_section = ""
+    if vault_content:
+        vault_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VAULT OBSIDIAN — CONNAISSANCES DE LA MARQUE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{vault_content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+    assets_section = ""
+    if assets:
+        lines = "\n".join(
+            f"  - [{a['type'].upper()}] {a['name']}  ({a['size_kb']} KB)  → {a['path']}"
+            for a in assets
+        )
+        assets_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ASSETS VIDÉO / IMAGES DISPONIBLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{lines}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
     return f"""Tu es l'agent marketing IA autonome de la boutique e-commerce "{STORE_NAME}".
 Niche : {STORE_NICHE}
 Voix de marque : {BRAND_VOICE}
 Cible : {TARGET_AUDIENCE}
 URL boutique : https://{SHOPIFY_SHOP_URL}
 Date d'aujourd'hui : {today}
-
+{vault_section}{assets_section}
 TON RÔLE : Gérer 99 % du marketing de façon autonome, sans intervention humaine.
 
 PROCESSUS À SUIVRE À CHAQUE EXÉCUTION :
@@ -328,14 +378,18 @@ PROCESSUS À SUIVRE À CHAQUE EXÉCUTION :
 5. Si du stock est faible sur un produit populaire, crée un email de newsletter d'urgence
 6. Améliore les descriptions des produits qui n'en ont pas ou peu
 7. Propose un email newsletter hebdomadaire si c'est lundi
+8. Si tu dois créer du contenu vidéo, propose un script complet (accroche, développement, CTA, hashtags)
+   en t'appuyant sur les assets disponibles et les instructions de la vault
 
 RÈGLES :
+- Respecte toutes les instructions présentes dans la vault Obsidian — elles ont priorité absolue
 - Adapte le ton à la marque : {BRAND_VOICE}
 - Les posts sociaux doivent être engageants, avec des emojis pertinents et des hashtags
 - Les réponses clients sont chaleureuses, rapides, et orientées solution
 - Ne publie JAMAIS de fausses informations sur les produits
 - Si tu ne trouves pas d'image pour un post, utilise l'image du produit Shopify
 - Fais toujours les actions dans l'ordre logique : données → contenu → publication
+- Pour les vidéos : rédige le script complet + sous-titres + description + hashtags
 
 IMPORTANT: Tes actions de publication (Instagram, Facebook, newsletter, descriptions, réponses) seront soumises à validation humaine avant d'être exécutées. Continue normalement — indique dans ton rapport ce que tu as mis en attente.
 

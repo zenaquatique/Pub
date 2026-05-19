@@ -38,3 +38,7 @@ META_WEBHOOK_VERIFY_TOKEN = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "mon_tok
 POSTING_HOUR = int(os.environ.get("POSTING_HOUR", "9"))
 POSTING_MINUTE = int(os.environ.get("POSTING_MINUTE", "0"))
 POSTING_TIMEZONE = os.environ.get("POSTING_TIMEZONE", "Europe/Paris")
+
+# Ressources locales (vault Obsidian + dossier vidéo)
+OBSIDIAN_VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", r"C:\Users\ec\Desktop\Obsidian\Pub")
+VIDEO_ASSETS_PATH   = os.environ.get("VIDEO_ASSETS_PATH",   r"C:\Users\ec\Desktop\zenaquatique-video")

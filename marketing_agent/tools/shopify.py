@@ -1,4 +1,5 @@
 """Outils de connexion à l'API Shopify."""
+import re
 from datetime import datetime, timedelta
 import requests
 from config import SHOPIFY_SHOP_URL, SHOPIFY_ACCESS_TOKEN
@@ -66,6 +67,32 @@ def _get(endpoint: str, params: dict = None) -> dict:
     return resp.json()
 
 
+def _get_all_orders(params: dict) -> list:
+    """Récupère toutes les commandes avec pagination automatique."""
+    if not _shopify_configured():
+        return []
+    headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN, "Content-Type": "application/json"}
+    base_url = f"https://{SHOPIFY_SHOP_URL}/admin/api/2024-01/orders.json"
+    all_orders = []
+    url = base_url
+    current_params = {**params, "limit": 250}
+    while url:
+        resp = requests.get(url, headers=headers, params=current_params, timeout=30)
+        resp.raise_for_status()
+        all_orders.extend(resp.json().get("orders", []))
+        # Pagination via le header Link
+        next_url = None
+        for part in resp.headers.get("Link", "").split(","):
+            if 'rel="next"' in part:
+                m = re.search(r"<([^>]+)>", part)
+                if m:
+                    next_url = m.group(1)
+                    break
+        url = next_url
+        current_params = {}  # l'URL suivante contient déjà tous les paramètres
+    return all_orders
+
+
 def _put(endpoint: str, data: dict) -> dict:
     if not _shopify_configured():
         return {"status": "simulated", "reason": "Shopify non configuré"}
@@ -104,8 +131,8 @@ def get_orders(period: str = "month", start_date: str = None, end_date: str = No
         params["created_at_max"] = date_max
 
     params["status"] = "any"
-    data = _get("orders.json", params)
-    orders = [o for o in data.get("orders", []) if o.get("cancel_reason") is None]
+    raw_orders = _get_all_orders(params)
+    orders = [o for o in raw_orders if o.get("cancel_reason") is None]
 
     def _net(order: dict) -> float:
         gross = float(order.get("total_price", 0))

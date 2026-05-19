@@ -106,7 +106,18 @@ def get_orders(period: str = "month", start_date: str = None, end_date: str = No
     params["status"] = "any"
     data = _get("orders.json", params)
     orders = [o for o in data.get("orders", []) if o.get("cancel_reason") is None]
-    total_revenue = sum(float(o.get("current_total_price", o.get("total_price", 0))) for o in orders)
+
+    def _net(order: dict) -> float:
+        gross = float(order.get("total_price", 0))
+        refunded = sum(
+            float(txn.get("amount", 0))
+            for refund in order.get("refunds", [])
+            for txn in refund.get("transactions", [])
+            if txn.get("kind") == "refund" and txn.get("status") == "success"
+        )
+        return gross - refunded
+
+    total_revenue = sum(_net(o) for o in orders)
     product_sales: dict[str, int] = {}
     for order in orders:
         for item in order.get("line_items", []):

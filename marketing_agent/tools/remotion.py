@@ -188,6 +188,57 @@ def generate_voiceover(props: dict) -> str:
     return "\n".join(lines)
 
 
+def update_post_props(composition_id: str, project_path: str, updates: dict) -> dict:
+    """Met à jour des champs du post dans Root.tsx (hookText, verdict, items, etc.)."""
+    tsx = Path(project_path) / "src" / "Root.tsx"
+    if not tsx.exists():
+        return {"status": "error", "error": "Root.tsx introuvable"}
+
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+
+    m = re.search(rf"const post{composition_id}:\s*\w+Props\s*=\s*\{{", content)
+    if not m:
+        return {"status": "error", "error": f"Composition '{composition_id}' introuvable dans Root.tsx"}
+
+    block_start = m.end() - 1
+    depth, end = 0, block_start
+    for i, ch in enumerate(content[block_start:], block_start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    block = content[block_start:end]
+
+    for key, value in updates.items():
+        if isinstance(value, str):
+            block = re.sub(
+                rf'({re.escape(key)}\s*:\s*)"[^"]*"',
+                lambda mo, v=value: f'{mo.group(1)}"{v}"',
+                block,
+            )
+        elif isinstance(value, list) and all(isinstance(x, str) for x in value):
+            items_str = ", ".join(f'"{x}"' for x in value)
+            block = re.sub(
+                rf'({re.escape(key)}\s*:\s*)\[[^\]]*\]',
+                lambda mo, s=items_str: f'{mo.group(1)}[{s}]',
+                block,
+                flags=re.DOTALL,
+            )
+
+    new_content = content[:block_start] + block + content[end:]
+    tsx.write_text(new_content, encoding="utf-8")
+    return {
+        "status": "success",
+        "composition_id": composition_id,
+        "updated_fields": list(updates.keys()),
+        "message": f"Root.tsx mis à jour — {len(updates)} champ(s) modifié(s). Lance render_video pour regénérer.",
+    }
+
+
 def render_video(composition_id: str, project_path: str, output_filename: str = "") -> dict:
     """Lance npx remotion render <composition_id> dans le dossier du projet."""
     project = Path(project_path)

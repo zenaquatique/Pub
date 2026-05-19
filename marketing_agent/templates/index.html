@@ -624,6 +624,9 @@
               <button class="btn btn-sm btn-outline-secondary" onclick="copyText('voiceover-text')">
                 <i class="fa-solid fa-copy me-1"></i>Copier
               </button>
+              <button class="btn btn-sm btn-warning" id="voiceover-edit-btn" onclick="editVoiceover()">
+                <i class="fa-solid fa-pen me-1"></i>Modifier
+              </button>
               <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('voiceover-panel').style.display='none'">
                 <i class="fa-solid fa-xmark"></i>
               </button>
@@ -1398,6 +1401,24 @@ function renderMarkdown(raw) {
   if (inList) html += '</ul>';
   if (inTable) html += closeTable();
   return html;
+}
+
+function editVoiceover() {
+  const compositionId = document.getElementById('voiceover-id').textContent.trim();
+  const script = document.getElementById('voiceover-text').textContent.trim();
+  if (!compositionId) return;
+
+  const task = `Le script du post ${compositionId} ne me convient pas. Voici le script actuel :\n\n${script}\n\n` +
+    `Ce que je veux changer : `;
+
+  const chatLink = document.querySelector('[onclick*="\'agent\'"]');
+  showSection('agent', chatLink);
+  const input = document.getElementById('chat-input');
+  input.value = task;
+  autoResize(input);
+  // Place cursor at end so user can type their feedback directly
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 function prepareNextMonth() {

@@ -16,7 +16,7 @@ from config import (
 )
 from tools import shopify, social, email_campaigns, customer
 from tools.knowledge import read_obsidian_vault, list_video_assets, write_calendar_file
-from tools.remotion import render_video, list_rendered_videos
+from tools.remotion import render_video, list_rendered_videos, update_post_props, extract_post_props
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +237,50 @@ TOOLS = [
                 ),
             ),
             types.FunctionDeclaration(
+                name="get_post_props",
+                description=(
+                    "Lit les props actuelles d'un post Remotion dans Root.tsx "
+                    "(hookText, leftItems, rightItems, verdict, tips, plants, etc.). "
+                    "À appeler avant de modifier un post pour voir son contenu actuel."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "composition_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="ID du post au format YYYYMMDD (ex: '20260519')",
+                        ),
+                    },
+                    required=["composition_id"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="update_post_props",
+                description=(
+                    "Modifie des champs d'un post Remotion dans Root.tsx. "
+                    "Permet de corriger hookText, verdict, leftItems, rightItems, tips, plants, ctaText, etc. "
+                    "Appelle render_video ensuite pour regénérer la vidéo avec le nouveau contenu."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "composition_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="ID du post au format YYYYMMDD (ex: '20260519')",
+                        ),
+                        "updates": types.Schema(
+                            type=types.Type.OBJECT,
+                            description=(
+                                "Champs à modifier. Clés = noms des props TypeScript. "
+                                "Ex: {\"hookText\": \"Nouveau texte\", \"verdict\": \"Nouveau verdict\"} "
+                                "ou {\"leftItems\": [\"item1\", \"item2\", \"item3\"]}"
+                            ),
+                        ),
+                    },
+                    required=["composition_id", "updates"],
+                ),
+            ),
+            types.FunctionDeclaration(
                 name="write_calendar_file",
                 description=(
                     "Crée ou met à jour un fichier markdown de calendrier éditorial dans la vault Obsidian. "
@@ -383,6 +427,12 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
 
     if name == "list_rendered_videos":
         return list_rendered_videos(VIDEO_ASSETS_PATH)
+
+    if name == "get_post_props":
+        return extract_post_props(inputs["composition_id"], VIDEO_ASSETS_PATH)
+
+    if name == "update_post_props":
+        return update_post_props(inputs["composition_id"], VIDEO_ASSETS_PATH, inputs["updates"])
 
     if name == "write_calendar_file":
         return write_calendar_file(

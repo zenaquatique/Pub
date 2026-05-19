@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ store_name }} — Agent Marketing</title>
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+    crossorigin="anonymous" />
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    crossorigin="anonymous" />
+  <style>
+    :root {
+      --accent: #6c63ff;
+      --accent-light: #ebe9ff;
+      --sidebar-w: 240px;
+    }
+    body { background: #f4f5f9; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; width: var(--sidebar-w);
+      background: #1a1a2e; color: #ccc; display: flex; flex-direction: column;
+      z-index: 100; transition: transform .25s;
+    }
+    #sidebar .brand {
+      padding: 1.5rem 1.25rem 1rem;
+      font-size: 1.1rem; font-weight: 700; color: #fff;
+      border-bottom: 1px solid #2e2e4a;
+    }
+    #sidebar .brand small { display: block; font-size: .7rem; font-weight: 400; color: #888; margin-top: 2px; }
+    #sidebar nav a {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .7rem 1.25rem; color: #aaa; text-decoration: none;
+      border-left: 3px solid transparent; font-size: .9rem;
+      transition: background .15s, color .15s;
+    }
+    #sidebar nav a:hover, #sidebar nav a.active {
+      background: #23234a; color: #fff; border-left-color: var(--accent);
+    }
+    #sidebar nav a i { width: 18px; text-align: center; }
+
+    /* ── Main ── */
+    #main { margin-left: var(--sidebar-w); padding: 2rem; min-height: 100vh; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 2rem;
+    }
+    .topbar h1 { font-size: 1.35rem; font-weight: 700; margin: 0; }
+
+    /* ── Cards KPI ── */
+    .kpi-card {
+      background: #fff; border-radius: 14px; padding: 1.25rem 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07); display: flex; align-items: center; gap: 1rem;
+    }
+    .kpi-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; flex-shrink: 0;
+    }
+    .kpi-val { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .kpi-lbl { font-size: .8rem; color: #888; margin-top: 2px; }
+
+    /* ── Section cards ── */
+    .card { border: none; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .card-header {
+      background: #fff; border-bottom: 1px solid #f0f0f0;
+      font-weight: 600; border-radius: 14px 14px 0 0 !important;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* ── Agent status badge ── */
+    .status-idle   { color: #888; }
+    .status-running { color: #f59e0b; }
+    .status-done   { color: #10b981; }
+    .status-error  { color: #ef4444; }
+
+    /* ── Report display ── */
+    #report-content {
+      white-space: pre-wrap; font-size: .88rem; line-height: 1.7;
+      max-height: 420px; overflow-y: auto;
+      background: #fafafa; border-radius: 8px; padding: 1rem;
+    }
+
+    /* ── Messages ── */
+    .msg-item {
+      border-left: 3px solid var(--accent); background: #fff;
+      border-radius: 8px; padding: .9rem 1rem; margin-bottom: .75rem;
+    }
+    .msg-meta { font-size: .78rem; color: #888; }
+    .msg-text { margin: .3rem 0 .6rem; font-size: .9rem; }
+
+    /* ── Product table ── */
+    .inv-low { color: #ef4444; font-weight: 600; }
+    .inv-ok  { color: #10b981; }
+
+    /* ── Spinner ── */
+    .spin { animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Section visibility ── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+      #main { margin-left: 0; padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<div id="sidebar">
+  <div class="brand">
+    <i class="fa-solid fa-robot me-2" style="color:var(--accent)"></i>{{ store_name }}
+    <small>Agent Marketing IA</small>
+  </div>
+  <nav class="mt-2 flex-grow-1">
+    <a href="#" class="active" onclick="showSection('dashboard',this)">
+      <i class="fa-solid fa-gauge-high"></i> Tableau de bord
+    </a>
+    <a href="#" onclick="showSection('agent',this)">
+      <i class="fa-solid fa-brain"></i> Agent
+    </a>
+    <a href="#" onclick="showSection('messages',this)">
+      <i class="fa-solid fa-comments"></i> Messages clients
+      <span id="msg-badge" class="badge bg-danger ms-auto" style="display:none">0</span>
+    </a>
+    <a href="#" onclick="showSection('products',this)">
+      <i class="fa-solid fa-box-open"></i> Produits
+    </a>
+    <a href="#" onclick="showSection('reports',this)">
+      <i class="fa-solid fa-file-lines"></i> Historique
+    </a>
+  </nav>
+  <div class="p-3" style="font-size:.75rem; color:#555; border-top:1px solid #2e2e4a">
+    <span id="sidebar-status">● idle</span>
+  </div>
+</div>
+
+<!-- ── Main ── -->
+<div id="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <button class="btn btn-sm btn-outline-secondary d-md-none me-2" onclick="toggleSidebar()">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <h1 class="d-inline">Tableau de bord</h1>
+    </div>
+    <button class="btn btn-primary px-4" id="btn-run" onclick="triggerAgent()">
+      <i class="fa-solid fa-play me-2"></i>Lancer la routine
+    </button>
+  </div>
+
+  <!-- ══════════════════════ DASHBOARD ══════════════════════ -->
+  <div id="sec-dashboard" class="section active">
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#ebe9ff;color:var(--accent)">
+            <i class="fa-solid fa-cart-shopping"></i>
+          </div>
+          <div>
+            <div class="kpi-val" id="kpi-orders">—</div>
+            <div class="kpi-lbl">Commandes</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#d1fae5;color:#059669">
+            <i class="fa-solid fa-euro-sign"></i>
+          </div>
+          <div>
+            <div class="kpi-val" id="kpi-revenue">—</div>
+            <div class="kpi-lbl">Chiffre d'affaires</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#fef9c3;color:#ca8a04">
+            <i class="fa-solid fa-box-open"></i>
+          </div>
+          <div>
+            <div class="kpi-val" id="kpi-products">—</div>
+            <div class="kpi-lbl">Produits actifs</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#fee2e2;color:#dc2626">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <div class="kpi-val" id="kpi-lowstock">—</div>
+            <div class="kpi-lbl">Stock faible</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top produits + dernier rapport -->
+    <div class="row g-3">
+      <div class="col-lg-5">
+        <div class="card h-100">
+          <div class="card-header px-3 py-2">
+            <span><i class="fa-solid fa-trophy me-2 text-warning"></i>Top produits</span>
+          </div>
+          <div class="card-body p-0">
+            <ul class="list-group list-group-flush" id="top-products">
+              <li class="list-group-item text-muted small">Chargement…</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="card h-100">
+          <div class="card-header px-3 py-2">
+            <span><i class="fa-solid fa-file-lines me-2 text-primary"></i>Dernier rapport</span>
+            <span id="last-report-date" class="text-muted small"></span>
+          </div>
+          <div class="card-body p-2">
+            <pre id="report-content" class="mb-0">Aucun rapport disponible. Lancez la routine marketing pour commencer.</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ AGENT ══════════════════════ -->
+  <div id="sec-agent" class="section">
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header px-3 py-2">
+            <span><i class="fa-solid fa-brain me-2" style="color:var(--accent)"></i>Contrôle de l'agent</span>
+            <span id="agent-status-badge" class="badge bg-secondary">idle</span>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Tâche personnalisée <span class="text-muted fw-normal small">(optionnel)</span></label>
+              <textarea id="custom-task" class="form-control" rows="3"
+                placeholder="Ex : Crée une promotion spéciale pour le produit X, poste sur Instagram uniquement…"></textarea>
+            </div>
+            <button class="btn btn-primary w-100" id="btn-run2" onclick="triggerAgent()">
+              <i class="fa-solid fa-play me-2"></i>Lancer l'agent
+            </button>
+            <div id="agent-progress" class="mt-3" style="display:none">
+              <div class="d-flex align-items-center gap-2 text-warning mb-2">
+                <i class="fa-solid fa-circle-notch spin"></i>
+                <span>Agent en cours d'exécution…</span>
+              </div>
+              <div class="progress" style="height:6px">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card">
+          <div class="card-header px-3 py-2">
+            <span><i class="fa-solid fa-clock-rotate-left me-2"></i>Dernier run</span>
+          </div>
+          <div class="card-body small">
+            <table class="table table-sm mb-0">
+              <tbody>
+                <tr><td class="text-muted">Statut</td><td id="run-status">—</td></tr>
+                <tr><td class="text-muted">Démarré</td><td id="run-started">—</td></tr>
+                <tr><td class="text-muted">Terminé</td><td id="run-finished">—</td></tr>
+                <tr><td class="text-muted">Tâche</td><td id="run-task">—</td></tr>
+              </tbody>
+            </table>
+            <div id="run-error" class="alert alert-danger mt-2 mb-0 small" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header px-3 py-2">
+            <span><i class="fa-solid fa-terminal me-2"></i>Rapport en cours / dernier rapport</span>
+          </div>
+          <div class="card-body p-2">
+            <pre id="agent-report" class="mb-0" style="white-space:pre-wrap;font-size:.85rem;max-height:500px;overflow-y:auto;background:#fafafa;border-radius:8px;padding:1rem">En attente…</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ MESSAGES ══════════════════════ -->
+  <div id="sec-messages" class="section">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="mb-0"><i class="fa-solid fa-comments me-2" style="color:var(--accent)"></i>Messages clients en attente</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadMessages()">
+        <i class="fa-solid fa-rotate-right"></i> Actualiser
+      </button>
+    </div>
+    <div id="messages-list">
+      <p class="text-muted">Chargement…</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ PRODUITS ══════════════════════ -->
+  <div id="sec-products" class="section">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="mb-0"><i class="fa-solid fa-box-open me-2" style="color:var(--accent)"></i>Catalogue produits</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadProducts()">
+        <i class="fa-solid fa-rotate-right"></i> Actualiser
+      </button>
+    </div>
+    <div class="card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 small">
+            <thead class="table-light">
+              <tr>
+                <th>Produit</th>
+                <th>Prix</th>
+                <th>Stock</th>
+                <th>Description</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody id="products-table">
+              <tr><td colspan="5" class="text-muted p-3">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ HISTORIQUE ══════════════════════ -->
+  <div id="sec-reports" class="section">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h5 class="mb-0"><i class="fa-solid fa-file-lines me-2" style="color:var(--accent)"></i>Historique des rapports</h5>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadReports()">
+        <i class="fa-solid fa-rotate-right"></i> Actualiser
+      </button>
+    </div>
+    <div id="reports-list">
+      <p class="text-muted">Chargement…</p>
+    </div>
+  </div>
+
+</div><!-- /#main -->
+
+<!-- ── Toast notifications ── -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index:9999">
+  <div id="toast" class="toast align-items-center border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-msg"></div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Reply modal -->
+<div class="modal fade" id="replyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Répondre au message</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2" id="reply-context"></p>
+        <textarea id="reply-text" class="form-control" rows="4" placeholder="Votre réponse…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="sendReply()">Envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmYGAAAAA5W0F43V9bkr8GqZLi10"
+  crossorigin="anonymous"></script>
+<script>
+// ── Navigation ──────────────────────────────────────────────────────────────
+function showSection(name, link) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelector('#sec-' + name).classList.add('active');
+  document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+  if (link) link.classList.add('active');
+  // Lazy load
+  if (name === 'messages') loadMessages();
+  if (name === 'products') loadProducts();
+  if (name === 'reports') loadReports();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.className = `toast align-items-center border-0 text-bg-${type}`;
+  document.getElementById('toast-msg').textContent = msg;
+  bootstrap.Toast.getOrCreateInstance(el, {delay: 3500}).show();
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+async function loadAnalytics() {
+  try {
+    const d = await fetch('/api/analytics').then(r => r.json());
+    document.getElementById('kpi-orders').textContent = d.orders?.total_orders ?? '—';
+    document.getElementById('kpi-revenue').textContent =
+      d.orders?.total_revenue != null ? d.orders.total_revenue.toFixed(0) + ' €' : '—';
+    document.getElementById('kpi-products').textContent = d.total_products ?? '—';
+    document.getElementById('kpi-lowstock').textContent = d.low_stock_count ?? '—';
+    // Top products
+    const ul = document.getElementById('top-products');
+    const tops = d.orders?.top_selling ?? [];
+    ul.innerHTML = tops.length
+      ? tops.map(([n, q]) =>
+          `<li class="list-group-item d-flex justify-content-between small">
+             <span>${n}</span><span class="badge bg-light text-dark">${q} ventes</span>
+           </li>`).join('')
+      : '<li class="list-group-item text-muted small">Aucune donnée</li>';
+  } catch(e) {
+    console.warn('Analytics non disponible (mode simulation)');
+  }
+}
+
+// ── Last report on dashboard ─────────────────────────────────────────────────
+async function loadLastReport() {
+  try {
+    const reports = await fetch('/api/reports').then(r => r.json());
+    if (reports.length) {
+      document.getElementById('report-content').textContent = reports[0].report || '(vide)';
+      document.getElementById('last-report-date').textContent =
+        new Date(reports[0].date).toLocaleString('fr-FR');
+    }
+  } catch(e) {}
+}
+
+// ── Agent control ────────────────────────────────────────────────────────────
+let statusPoll = null;
+
+async function triggerAgent() {
+  const task = document.getElementById('custom-task')?.value || '';
+  const btns = [document.getElementById('btn-run'), document.getElementById('btn-run2')];
+  btns.forEach(b => b && (b.disabled = true));
+  try {
+    const res = await fetch('/api/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({task})
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.detail || 'Erreur', 'danger');
+      btns.forEach(b => b && (b.disabled = false));
+      return;
+    }
+    showToast('Agent démarré !', 'success');
+    document.getElementById('agent-progress') && (document.getElementById('agent-progress').style.display = '');
+    startPolling();
+  } catch(e) {
+    showToast('Connexion impossible', 'danger');
+    btns.forEach(b => b && (b.disabled = false));
+  }
+}
+
+function startPolling() {
+  if (statusPoll) clearInterval(statusPoll);
+  statusPoll = setInterval(pollStatus, 2000);
+}
+
+async function pollStatus() {
+  try {
+    const s = await fetch('/api/status').then(r => r.json());
+    updateAgentUI(s);
+    if (s.status !== 'running') {
+      clearInterval(statusPoll);
+      statusPoll = null;
+      const btns = [document.getElementById('btn-run'), document.getElementById('btn-run2')];
+      btns.forEach(b => b && (b.disabled = false));
+      if (s.status === 'done') {
+        showToast('Routine terminée !', 'success');
+        loadAnalytics();
+        loadLastReport();
+      } else if (s.status === 'error') {
+        showToast('Erreur agent : ' + s.error, 'danger');
+      }
+    }
+  } catch(e) {}
+}
+
+function updateAgentUI(s) {
+  // Status badge
+  const colors = {idle:'secondary', running:'warning', done:'success', error:'danger'};
+  const labels = {idle:'En attente', running:'En cours…', done:'Terminé', error:'Erreur'};
+  const badge = document.getElementById('agent-status-badge');
+  if (badge) {
+    badge.className = `badge bg-${colors[s.status] || 'secondary'}`;
+    badge.textContent = labels[s.status] || s.status;
+  }
+  // Sidebar dot
+  const sidebarStatus = document.getElementById('sidebar-status');
+  if (sidebarStatus) {
+    sidebarStatus.innerHTML = `<span style="color:${s.status==='running'?'#f59e0b':s.status==='done'?'#10b981':'#888'}">● ${labels[s.status]||s.status}</span>`;
+  }
+  // Progress bar
+  const prog = document.getElementById('agent-progress');
+  if (prog) prog.style.display = s.status === 'running' ? '' : 'none';
+  // Run info table
+  const fmt = iso => iso ? new Date(iso).toLocaleString('fr-FR') : '—';
+  const el = id => document.getElementById(id);
+  if (el('run-status'))   el('run-status').textContent = labels[s.status] || s.status;
+  if (el('run-started'))  el('run-started').textContent = fmt(s.started_at);
+  if (el('run-finished')) el('run-finished').textContent = fmt(s.finished_at);
+  if (el('run-task'))     el('run-task').textContent = s.task || 'Routine quotidienne';
+  if (el('run-error')) {
+    el('run-error').style.display = s.error ? '' : 'none';
+    el('run-error').textContent = s.error;
+  }
+  if (el('agent-report') && s.report) {
+    el('agent-report').textContent = s.report;
+  }
+}
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+let _replyId = null, _replyPlatform = null;
+
+async function loadMessages() {
+  try {
+    const msgs = await fetch('/api/messages').then(r => r.json());
+    const badge = document.getElementById('msg-badge');
+    if (badge) {
+      badge.style.display = msgs.length ? '' : 'none';
+      badge.textContent = msgs.length;
+    }
+    const container = document.getElementById('messages-list');
+    if (!msgs.length) {
+      container.innerHTML = '<p class="text-muted">Aucun message en attente. 🎉</p>';
+      return;
+    }
+    container.innerHTML = msgs.map(m => `
+      <div class="msg-item">
+        <div class="d-flex justify-content-between align-items-start">
+          <span class="fw-semibold">${escHtml(m.sender)}</span>
+          <span class="badge ${m.platform==='instagram'?'bg-danger':'bg-primary'}">${m.platform}</span>
+        </div>
+        <p class="msg-text">${escHtml(m.message)}</p>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="msg-meta">${new Date(m.received_at).toLocaleString('fr-FR')}</span>
+          <button class="btn btn-sm btn-outline-primary"
+            onclick="openReply('${escHtml(m.id)}','${m.platform}','${escHtml(m.sender)}')">
+            <i class="fa-solid fa-reply me-1"></i>Répondre
+          </button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('messages-list').innerHTML = '<p class="text-danger">Erreur de chargement.</p>';
+  }
+}
+
+function openReply(id, platform, sender) {
+  _replyId = id; _replyPlatform = platform;
+  document.getElementById('reply-context').textContent = `Répondre à ${sender} sur ${platform}`;
+  document.getElementById('reply-text').value = '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('replyModal')).show();
+}
+
+async function sendReply() {
+  const text = document.getElementById('reply-text').value.trim();
+  if (!text) return;
+  try {
+    const res = await fetch(`/api/messages/${encodeURIComponent(_replyId)}/reply`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({platform: _replyPlatform, reply_text: text})
+    });
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('replyModal')).hide();
+    showToast('Réponse envoyée !', 'success');
+    loadMessages();
+  } catch(e) {
+    showToast('Erreur envoi réponse', 'danger');
+  }
+}
+
+// ── Products ─────────────────────────────────────────────────────────────────
+async function loadProducts() {
+  try {
+    const prods = await fetch('/api/products').then(r => r.json());
+    const tbody = document.getElementById('products-table');
+    tbody.innerHTML = prods.map(p => {
+      const inv = parseInt(p.inventory) || 0;
+      const invClass = inv <= 5 ? 'inv-low' : 'inv-ok';
+      const desc = p.description ? '✓' : '<span class="text-danger">Manquante</span>';
+      return `<tr>
+        <td><strong>${escHtml(p.title)}</strong><br>
+            <small class="text-muted">${escHtml(p.vendor)}</small></td>
+        <td>${p.price} €</td>
+        <td class="${invClass}">${inv}</td>
+        <td>${desc}</td>
+        <td><span class="badge bg-light text-dark">${escHtml(p.product_type||'—')}</span></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" class="text-muted p-3">Aucun produit trouvé</td></tr>';
+  } catch(e) {
+    document.getElementById('products-table').innerHTML =
+      '<tr><td colspan="5" class="text-danger p-3">Erreur de chargement (mode simulation).</td></tr>';
+  }
+}
+
+// ── Reports ───────────────────────────────────────────────────────────────────
+async function loadReports() {
+  try {
+    const reports = await fetch('/api/reports').then(r => r.json());
+    const container = document.getElementById('reports-list');
+    if (!reports.length) {
+      container.innerHTML = '<p class="text-muted">Aucun rapport enregistré.</p>';
+      return;
+    }
+    container.innerHTML = reports.map((r, i) => `
+      <div class="card mb-3">
+        <div class="card-header px-3 py-2 d-flex justify-content-between align-items-center">
+          <span>
+            <i class="fa-solid fa-file-lines me-2 text-primary"></i>
+            <strong>${escHtml(r.task)}</strong>
+            <span class="text-muted small ms-2">${new Date(r.date).toLocaleString('fr-FR')}</span>
+          </span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="toggleReport('rep-${i}')">
+              <i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteReport('${r.id}')">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>
+        <div id="rep-${i}" class="card-body p-2" style="display:none">
+          <pre style="white-space:pre-wrap;font-size:.82rem;max-height:300px;overflow-y:auto">${escHtml(r.report)}</pre>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('reports-list').innerHTML = '<p class="text-danger">Erreur de chargement.</p>';
+  }
+}
+
+function toggleReport(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function deleteReport(id) {
+  if (!confirm('Supprimer ce rapport ?')) return;
+  await fetch(`/api/reports/${id}`, {method: 'DELETE'});
+  showToast('Rapport supprimé', 'secondary');
+  loadReports();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  loadAnalytics();
+  loadLastReport();
+  loadMessages();
+  // Reprendre le polling si l'agent tourne déjà
+  const s = await fetch('/api/status').then(r => r.json()).catch(() => ({}));
+  updateAgentUI(s);
+  if (s.status === 'running') startPolling();
+})();
+</script>
+</body>
+</html>

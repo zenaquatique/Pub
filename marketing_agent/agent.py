@@ -4,7 +4,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from config import (
     GOOGLE_API_KEY, GEMINI_MODEL, STORE_NAME,
@@ -15,163 +16,163 @@ from tools import shopify, social, email_campaigns, customer
 
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=GOOGLE_API_KEY)
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # ─── Définitions des outils ───────────────────────────────────────────────────
 
 TOOLS = [
-    genai.protos.Tool(
+    types.Tool(
         function_declarations=[
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="get_store_analytics",
                 description="Récupère les statistiques actuelles de la boutique Shopify : commandes, chiffre d'affaires, produits populaires, stock faible.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={},
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="get_products",
                 description="Récupère la liste des produits actifs de la boutique avec prix, stock et images.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "limit": genai.protos.Schema(
-                            type=genai.protos.Type.INTEGER,
+                        "limit": types.Schema(
+                            type=types.Type.INTEGER,
                             description="Nombre de produits à récupérer (défaut 20)",
                         ),
                     },
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="update_product_description",
                 description="Met à jour la description HTML d'un produit Shopify pour améliorer le SEO et la conversion.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "product_id": genai.protos.Schema(
-                            type=genai.protos.Type.INTEGER,
+                        "product_id": types.Schema(
+                            type=types.Type.INTEGER,
                             description="ID Shopify du produit",
                         ),
-                        "new_description": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "new_description": types.Schema(
+                            type=types.Type.STRING,
                             description="Nouvelle description en HTML",
                         ),
                     },
                     required=["product_id", "new_description"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="post_to_instagram",
                 description="Publie un post sur Instagram avec une image et une légende.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "caption": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "caption": types.Schema(
+                            type=types.Type.STRING,
                             description="Légende du post (avec hashtags)",
                         ),
-                        "image_url": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "image_url": types.Schema(
+                            type=types.Type.STRING,
                             description="URL publique de l'image",
                         ),
                     },
                     required=["caption", "image_url"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="post_to_facebook",
                 description="Publie un post sur la Page Facebook de la boutique.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "message": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "message": types.Schema(
+                            type=types.Type.STRING,
                             description="Texte du post",
                         ),
-                        "link": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "link": types.Schema(
+                            type=types.Type.STRING,
                             description="URL à partager (optionnel)",
                         ),
-                        "image_url": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "image_url": types.Schema(
+                            type=types.Type.STRING,
                             description="URL de l'image (optionnel)",
                         ),
                     },
                     required=["message"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="send_newsletter",
                 description="Envoie une newsletter à tous les abonnés email de la boutique.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "subject": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "subject": types.Schema(
+                            type=types.Type.STRING,
                             description="Objet de l'email",
                         ),
-                        "html_body": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "html_body": types.Schema(
+                            type=types.Type.STRING,
                             description="Corps de l'email en HTML",
                         ),
-                        "plain_body": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "plain_body": types.Schema(
+                            type=types.Type.STRING,
                             description="Version texte brut (optionnel)",
                         ),
                     },
                     required=["subject", "html_body"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="get_pending_customer_messages",
                 description="Récupère les messages et commentaires clients en attente de réponse.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={},
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="reply_to_customer",
                 description="Répond à un message ou commentaire client sur Instagram ou Facebook.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "message_id": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "message_id": types.Schema(
+                            type=types.Type.STRING,
                             description="ID du message client",
                         ),
-                        "platform": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "platform": types.Schema(
+                            type=types.Type.STRING,
                             description="Plateforme (instagram ou facebook)",
                         ),
-                        "reply_text": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "reply_text": types.Schema(
+                            type=types.Type.STRING,
                             description="Réponse à envoyer",
                         ),
                     },
                     required=["message_id", "platform", "reply_text"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="send_abandoned_cart_email",
                 description="Envoie un email de relance à un client qui a abandonné son panier.",
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "customer_email": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "customer_email": types.Schema(
+                            type=types.Type.STRING,
                         ),
-                        "customer_name": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "customer_name": types.Schema(
+                            type=types.Type.STRING,
                         ),
-                        "cart_items": genai.protos.Schema(
-                            type=genai.protos.Type.ARRAY,
-                            items=genai.protos.Schema(type=genai.protos.Type.STRING),
+                        "cart_items": types.Schema(
+                            type=types.Type.ARRAY,
+                            items=types.Schema(type=types.Type.STRING),
                             description="Liste des articles du panier",
                         ),
-                        "cart_url": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "cart_url": types.Schema(
+                            type=types.Type.STRING,
                             description="URL du panier",
                         ),
                     },
@@ -282,12 +283,13 @@ def run_marketing_session(task: str = None) -> str:
 
     logger.info("=== Démarrage session marketing | %s ===", datetime.now().isoformat())
 
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        tools=TOOLS,
-        system_instruction=system_prompt,
+    chat = client.chats.create(
+        model=GEMINI_MODEL,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            tools=TOOLS,
+        ),
     )
-    chat = model.start_chat()
 
     response = chat.send_message(user_message)
 
@@ -301,37 +303,29 @@ def run_marketing_session(task: str = None) -> str:
         # Collect any function calls in this response
         function_calls = [
             part.function_call
-            for part in response.parts
-            if part.function_call.name  # non-empty name means a real call
+            for part in response.candidates[0].content.parts
+            if part.function_call
         ]
 
         if not function_calls:
             # No tool calls — the model is done; extract final text
             final_text = "".join(
-                part.text for part in response.parts if hasattr(part, "text")
+                part.text
+                for part in response.candidates[0].content.parts
+                if hasattr(part, "text")
             )
             logger.info("=== Session terminée après %d tours ===", iteration)
             return final_text
 
-        # Execute every tool called in this turn and gather responses
-        function_responses = []
+        # Execute every tool called in this turn, one response per call
         for fc in function_calls:
             tool_result = execute_tool(fc.name, dict(fc.args))
-            function_responses.append(
-                genai.protos.Part(
-                    function_response=genai.protos.FunctionResponse(
-                        name=fc.name,
-                        response={"result": json.dumps(tool_result, ensure_ascii=False, default=str)},
-                    )
+            response = chat.send_message(
+                types.Part.from_function_response(
+                    name=fc.name,
+                    response={"result": json.dumps(tool_result, ensure_ascii=False, default=str)},
                 )
             )
-
-        # Send all tool results back as a single user turn
-        tool_content = genai.protos.Content(
-            role="user",
-            parts=function_responses,
-        )
-        response = chat.send_message(tool_content)
 
     logger.warning("Limite d'itérations atteinte (%d)", max_iterations)
     return "Session interrompue : limite d'itérations atteinte."

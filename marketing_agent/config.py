@@ -7,9 +7,9 @@ load_dotenv()
 GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
 GEMINI_MODEL = "gemini-2.0-flash"
 
-# Shopify
-SHOPIFY_SHOP_URL = os.environ["SHOPIFY_SHOP_URL"]        # ex: monshop.myshopify.com
-SHOPIFY_ACCESS_TOKEN = os.environ["SHOPIFY_ACCESS_TOKEN"]
+# Shopify (optionnel — mode simulation si non configuré)
+SHOPIFY_SHOP_URL = os.environ.get("SHOPIFY_SHOP_URL", "")
+SHOPIFY_ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN", "")
 
 # Meta (Instagram / Facebook)
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")

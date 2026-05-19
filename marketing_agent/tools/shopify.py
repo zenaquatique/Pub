@@ -3,7 +3,13 @@ import requests
 from config import SHOPIFY_SHOP_URL, SHOPIFY_ACCESS_TOKEN
 
 
+def _shopify_configured() -> bool:
+    return bool(SHOPIFY_SHOP_URL and SHOPIFY_ACCESS_TOKEN)
+
+
 def _get(endpoint: str, params: dict = None) -> dict:
+    if not _shopify_configured():
+        return {}
     url = f"https://{SHOPIFY_SHOP_URL}/admin/api/2024-01/{endpoint}"
     headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN, "Content-Type": "application/json"}
     resp = requests.get(url, headers=headers, params=params or {}, timeout=15)
@@ -12,6 +18,8 @@ def _get(endpoint: str, params: dict = None) -> dict:
 
 
 def _put(endpoint: str, data: dict) -> dict:
+    if not _shopify_configured():
+        return {"status": "simulated", "reason": "Shopify non configuré"}
     url = f"https://{SHOPIFY_SHOP_URL}/admin/api/2024-01/{endpoint}"
     headers = {"X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN, "Content-Type": "application/json"}
     resp = requests.put(url, headers=headers, json=data, timeout=15)

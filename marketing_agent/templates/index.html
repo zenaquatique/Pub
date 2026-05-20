@@ -1385,26 +1385,38 @@ async function calendarRender(btn, compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
   const orig = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rendu…';
   const errBox = document.getElementById('render-error-box');
   if (errBox) errBox.style.display = 'none';
 
   try {
-    const res = await fetch('/api/render-video', {
+    // Étape 1 : Charger/générer le script (cache → Root.tsx → IA)
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Script IA…';
+    const scriptRes = await fetch(`/api/script/${compositionId}`);
+    const scriptD = await scriptRes.json();
+    if (!scriptRes.ok) throw new Error(scriptD.detail || 'Erreur génération script');
+
+    // Étape 2 : Écrire Root.tsx + rendre la vidéo
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rendu…';
+    const renderRes = await fetch('/api/approve-voiceover', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({composition_id: compositionId}),
     });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
+    const renderD = await renderRes.json();
+    if (!renderRes.ok) throw new Error(renderD.detail || JSON.stringify(renderD));
+
     btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Rendu !';
-    btn.className = btn.className.replace('btn-outline-primary','btn-success').replace('btn-primary','btn-success');
-    if (errBox) errBox.style.display = 'none';
+    btn.className = btn.className.replace('btn-outline-secondary','btn-success').replace('btn-outline-primary','btn-success').replace('btn-primary','btn-success');
     showToast(`✅ ${compositionId}.mp4 généré !`, 'success');
   } catch(e) {
     btn.innerHTML = orig;
     btn.disabled = false;
-    _showRenderError(e.message);
+    if (errBox) {
+      errBox.textContent = '❌ Erreur :\n' + e.message;
+      errBox.style.display = 'block';
+    } else {
+      showToast('❌ ' + e.message, 'danger');
+    }
   }
 }
 
@@ -1421,8 +1433,9 @@ function askAgentToCreate(compositionId) {
 }
 
 // ── Voix off IA ──────────────────────────────────────────────────────────────
-let _voCid = null;
-let _voTpl = null;
+let _voCid  = null;
+let _voTpl  = null;
+let _voProps = null;
 
 async function calendarVoiceover(compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
@@ -1447,15 +1460,18 @@ async function regenVoiceoverAI() {
   if (!feedback) return;
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
+  const spinnerText = document.querySelector('#voiceover-spinner span');
+  if (spinnerText) spinnerText.textContent = 'Regénération…';
   try {
     const res = await fetch('/api/script', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({composition_id: _voCid, feedback}),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
     const d = await res.json();
-    _voTpl = d.props?.template_type || '';
+    if (!res.ok) throw new Error(d.detail || 'Erreur');
+    _voTpl   = d.props?.template_type || '';
+    _voProps = d.props || null;
     document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
     document.getElementById('voiceover-text').value = d.voiceover;
     document.getElementById('voiceover-spinner').style.display = 'none';
@@ -1468,67 +1484,61 @@ async function regenVoiceoverAI() {
 
 async function _fetchVoiceover(compositionId) {
   const errDiv = document.getElementById('voiceover-error');
+  const spinner = document.getElementById('voiceover-spinner');
+  const spinnerText = spinner?.querySelector('span');
   errDiv.style.display = 'none';
+  if (spinnerText) spinnerText.textContent = 'Chargement du script…';
   try {
-    const res = await fetch(`/api/post-script/${compositionId}`);
+    // Single endpoint: cache → Root.tsx → generate IA (auto)
+    const res = await fetch(`/api/script/${compositionId}`);
     const d = await res.json();
-
-    if (res.status === 404) {
-      const spinnerText = document.querySelector('#voiceover-spinner span');
-      if (spinnerText) spinnerText.textContent = 'Génération du script…';
-      const genRes = await fetch('/api/script', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({composition_id: compositionId, feedback: ''}),
-      });
-      const genD = await genRes.json();
-      if (!genRes.ok) throw new Error(genD.detail || 'Erreur génération');
-      _voTpl = genD.props?.template_type || '';
-      const badge = document.getElementById('voiceover-template');
+    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
+    _voTpl  = d.props?.template_type || '';
+    _voProps = d.props || null;
+    const badge = document.getElementById('voiceover-template');
+    if (d.is_new) {
       badge.textContent = '✨ Nouveau — ' + _voTpl.replace('Props','');
       badge.style.cssText = 'font-size:.7rem;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;margin-left:8px';
-      document.getElementById('voiceover-text').value = genD.voiceover;
-      document.getElementById('voiceover-spinner').style.display = 'none';
-      document.getElementById('voiceover-fields').style.display = 'block';
-      return;
+    } else {
+      badge.textContent = _voTpl.replace('Props','');
+      badge.style.cssText = '';
     }
-
-    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
-    _voTpl = d.props?.template_type || '';
-    document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
     document.getElementById('voiceover-text').value = d.voiceover;
-    document.getElementById('voiceover-spinner').style.display = 'none';
+    spinner.style.display = 'none';
     document.getElementById('voiceover-fields').style.display = 'block';
   } catch(e) {
-    document.getElementById('voiceover-spinner').style.display = 'none';
+    spinner.style.display = 'none';
     errDiv.textContent = '❌ ' + e.message;
     errDiv.style.display = 'block';
   }
 }
 
 async function approveAndRender(btn) {
-  const script = document.getElementById('voiceover-text').value.trim();
-  if (!script || !_voCid) return;
+  if (!_voCid) return;
   const orig = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>En cours…';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Écriture Root.tsx + rendu…';
+  const errBox = document.getElementById('render-error-box');
+  if (errBox) errBox.style.display = 'none';
   try {
     const res = await fetch('/api/approve-voiceover', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({composition_id: _voCid, script_text: script, template_type: _voTpl}),
+      body: JSON.stringify({composition_id: _voCid}),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur approve');
-    showToast('Root.tsx mis à jour — rendu en cours…', 'info');
-    await calendarRender(btn, _voCid);
-    // Reload the saved script from Root.tsx into the textarea
-    await _fetchVoiceover(_voCid);
-    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Fait !';
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || 'Erreur');
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Vidéo générée !';
     btn.className = btn.className.replace('btn-primary','btn-success');
+    showToast(`✅ ${_voCid}.mp4 généré !`, 'success');
   } catch(e) {
     btn.innerHTML = orig;
     btn.disabled = false;
-    showToast('Erreur : ' + e.message, 'danger');
+    if (errBox) {
+      errBox.textContent = '❌ Erreur :\n' + e.message;
+      errBox.style.display = 'block';
+    }
+    showToast('Erreur rendu', 'danger');
   }
 }
 
@@ -1603,12 +1613,12 @@ function renderMarkdown(raw) {
         if (compositionId) {
           html += `<td style="white-space:nowrap">
             <button class="btn btn-primary btn-render me-1"
-              onclick="calendarRender(this,'${cid}')">
-              <i class="fa-solid fa-clapperboard me-1"></i>Générer
+              onclick="calendarVoiceover('${cid}')">
+              <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Script IA
             </button>
             <button class="btn btn-outline-secondary btn-render"
-              onclick="calendarVoiceover('${cid}')">
-              <i class="fa-solid fa-microphone me-1"></i>Voix off
+              onclick="calendarRender(this,'${cid}')">
+              <i class="fa-solid fa-clapperboard me-1"></i>Rendre
             </button>
           </td>`;
         } else {

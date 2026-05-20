@@ -38,6 +38,7 @@ from tools.shopify import get_products, get_store_analytics
 logger = logging.getLogger(__name__)
 
 REPORTS_FILE = Path(__file__).parent / "data" / "reports.json"
+SCRIPTS_DIR  = Path(__file__).parent / "data" / "scripts"
 
 # ─── État de l'agent ─────────────────────────────────────────────────────────
 
@@ -72,6 +73,25 @@ def _save_report(report: str, task: str = "") -> None:
         "report": report,
     })
     REPORTS_FILE.write_text(json.dumps(reports[:50], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ─── Cache de scripts générés ─────────────────────────────────────────────────
+
+def _save_script(composition_id: str, data: dict) -> None:
+    SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+    (SCRIPTS_DIR / f"{composition_id}.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _load_script(composition_id: str) -> dict:
+    p = SCRIPTS_DIR / f"{composition_id}.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
 
 
 # ─── Exécution de l'agent dans un thread ─────────────────────────────────────
@@ -394,13 +414,15 @@ Réponds UNIQUEMENT en JSON valide avec ce schéma :
             new_props["template_type"] = template_type
 
         new_props["composition_id"] = composition_id
-        return {
+        result = {
             "status": "success",
             "composition_id": composition_id,
             "props": new_props,
             "voiceover": generate_voiceover(new_props),
             "is_new": is_new,
         }
+        _save_script(composition_id, result)
+        return result
     except Exception as exc:
         logger.exception("Erreur _generate_voiceover_ai_sync")
         return {"status": "error", "error": str(exc)}
@@ -426,6 +448,37 @@ async def api_generate_voiceover_ai(request: Request):
 @app.post("/api/script")
 async def api_script(request: Request):
     return await api_generate_voiceover_ai(request)
+
+
+@app.get("/api/script/{composition_id}")
+async def api_get_script(composition_id: str):
+    """Charge le script depuis le cache, Root.tsx, ou génère via IA."""
+    # 1. Cache
+    cached = _load_script(composition_id)
+    if cached.get("status") == "success":
+        return cached
+    # 2. Root.tsx
+    props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+    if props:
+        voiceover = generate_voiceover(props)
+        data = {
+            "status": "success",
+            "composition_id": composition_id,
+            "props": props,
+            "voiceover": voiceover,
+            "is_new": False,
+            "source": "root_tsx",
+        }
+        _save_script(composition_id, data)
+        return data
+    # 3. Génération IA
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, _generate_voiceover_ai_sync, composition_id, ""
+    )
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
 
 
 def _text_to_props_sync(script_text: str, composition_id: str, template_type: str) -> dict:
@@ -474,32 +527,40 @@ Réponds UNIQUEMENT en JSON valide, sans markdown ni explication."""
 
 @app.post("/api/approve-voiceover")
 async def api_approve_voiceover(request: Request):
+    """Écrit Root.tsx depuis le cache de script et génère la vidéo."""
     body = await request.json()
     composition_id = body.get("composition_id", "").strip()
-    script_text = body.get("script_text", "").strip()
-    template_type = body.get("template_type", "").strip()
-
     if not composition_id:
         raise HTTPException(400, "composition_id manquant")
 
-    if script_text and template_type:
-        # Convert free-text script to structured props via Gemini
-        loop = asyncio.get_event_loop()
-        conversion = await loop.run_in_executor(
-            _executor, _text_to_props_sync, script_text, composition_id, template_type
-        )
-        if conversion.get("status") == "error":
-            raise HTTPException(500, conversion.get("error", "Conversion échouée"))
-        props = conversion["props"]
-    else:
-        props = body.get("props", {})
-        if not props:
-            raise HTTPException(400, "script_text+template_type ou props requis")
+    # 1. Props depuis le cache
+    cached = _load_script(composition_id)
+    props = cached.get("props")
 
+    # 2. Fallback : Root.tsx
+    if not props:
+        props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+
+    if not props:
+        raise HTTPException(
+            400,
+            f"Aucun script pour '{composition_id}'. Clique d'abord sur 'Script IA'."
+        )
+
+    # 3. Écriture Root.tsx
     result = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
     if result.get("status") == "error" and "introuvable" in result.get("error", ""):
         result = create_post_composition(composition_id, VIDEO_ASSETS_PATH, props)
-    return result
+    if result.get("status") not in ("success", "created"):
+        raise HTTPException(500, result.get("error", "Erreur écriture Root.tsx"))
+
+    # 4. Rendu vidéo
+    loop = asyncio.get_event_loop()
+    render_result = await loop.run_in_executor(_executor, _render_sync, composition_id)
+    if render_result.get("status") == "error":
+        raise HTTPException(500, render_result["error"])
+
+    return {**render_result, "root_tsx_updated": True}
 
 
 # ─── API — Rendu Remotion ────────────────────────────────────────────────────

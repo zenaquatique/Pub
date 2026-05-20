@@ -354,12 +354,16 @@ _VOICEOVER_SCHEMAS = {
 }
 
 
-def _generate_voiceover_ai_sync(composition_id: str, feedback: str = "") -> dict:
+def _generate_voiceover_ai_sync(composition_id: str, feedback: str = "", force_reset: bool = False) -> dict:
     try:
         from google import genai
         from google.genai import types as gtypes
 
-        existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+        # Si feedback fourni ou force_reset, on repart du calendrier (ignore Root.tsx)
+        if feedback or force_reset:
+            existing_props = {}
+        else:
+            existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
         is_new = not existing_props
 
         memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
@@ -478,10 +482,25 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
-# Alias sans dépendance Root.tsx — même logique, endpoint stable
+# Alias POST /api/script — génère TOUJOURS un nouveau script (vide le cache d'abord)
 @app.post("/api/script")
 async def api_script(request: Request):
-    return await api_generate_voiceover_ai(request)
+    body = await request.json()
+    composition_id = body.get("composition_id", "").strip()
+    feedback = body.get("feedback", "").strip()
+    if not composition_id:
+        raise HTTPException(400, "composition_id manquant")
+    # Vider le cache pour forcer une vraie regénération
+    cache_file = SCRIPTS_DIR / f"{composition_id}.json"
+    if cache_file.exists():
+        cache_file.unlink(missing_ok=True)
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, _generate_voiceover_ai_sync, composition_id, feedback, True
+    )
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
 
 
 @app.get("/api/script/{composition_id}")
@@ -505,14 +524,23 @@ async def api_get_script(composition_id: str):
         }
         _save_script(composition_id, data)
         return data
-    # 3. Génération IA
+    # 3. Génération IA (nouveau post)
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
-        _executor, _generate_voiceover_ai_sync, composition_id, ""
+        _executor, _generate_voiceover_ai_sync, composition_id, "", False
     )
     if result.get("status") == "error":
         raise HTTPException(500, result["error"])
     return result
+
+
+@app.delete("/api/script/{composition_id}")
+async def api_delete_script(composition_id: str):
+    """Vide le cache pour un post (forcer une regénération)."""
+    cache_file = SCRIPTS_DIR / f"{composition_id}.json"
+    if cache_file.exists():
+        cache_file.unlink(missing_ok=True)
+    return {"status": "cleared", "composition_id": composition_id}
 
 
 def _text_to_props_sync(script_text: str, composition_id: str, template_type: str) -> dict:

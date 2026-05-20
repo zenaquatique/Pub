@@ -1474,15 +1474,22 @@ async function _fetchVoiceover(compositionId) {
     const d = await res.json();
 
     if (res.status === 404) {
+      const spinnerText = document.querySelector('#voiceover-spinner span');
+      if (spinnerText) spinnerText.textContent = 'Génération du script…';
+      const genRes = await fetch('/api/generate-voiceover-ai', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({composition_id: compositionId, feedback: ''}),
+      });
+      const genD = await genRes.json();
+      if (!genRes.ok) throw new Error(genD.detail || 'Erreur génération');
+      _voTpl = genD.props?.template_type || '';
+      const badge = document.getElementById('voiceover-template');
+      badge.textContent = '✨ Nouveau — ' + _voTpl.replace('Props','');
+      badge.style.cssText = 'font-size:.7rem;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;margin-left:8px';
+      document.getElementById('voiceover-text').value = genD.voiceover;
       document.getElementById('voiceover-spinner').style.display = 'none';
-      const date = compositionId.slice(6,8) + '/' + compositionId.slice(4,6) + '/' + compositionId.slice(0,4);
-      errDiv.innerHTML = `
-        <strong>Aucun script pour le ${date} dans Root.tsx.</strong><br>
-        Demande à l'agent de le créer :
-        <button class="btn btn-sm btn-warning mt-2 d-block" onclick="askAgentToCreate('${compositionId}')">
-          ✨ Demander à l'agent
-        </button>`;
-      errDiv.style.display = 'block';
+      document.getElementById('voiceover-fields').style.display = 'block';
       return;
     }
 

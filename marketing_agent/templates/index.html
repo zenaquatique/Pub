@@ -1460,10 +1460,29 @@ async function _fetchVoiceover(compositionId) {
   try {
     const res = await fetch(`/api/post-script/${compositionId}`);
     const d = await res.json();
-    if (!res.ok) {
-      if (res.status === 404) throw new Error(`Aucun script défini pour ${compositionId} dans Root.tsx.\nDemande à l'agent de préparer ce post d'abord.`);
-      throw new Error(d.detail || JSON.stringify(d));
+
+    if (res.status === 404) {
+      // Composition absente de Root.tsx → génération IA automatique
+      const spinnerText = document.querySelector('#voiceover-spinner span');
+      if (spinnerText) spinnerText.textContent = '✨ Génération IA d\'un nouveau script…';
+      const genRes = await fetch('/api/generate-new-composition', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({composition_id: compositionId}),
+      });
+      const genD = await genRes.json();
+      if (!genRes.ok) throw new Error(genD.detail || 'Erreur génération');
+      _voTpl = genD.props?.template_type || '';
+      const badge = document.getElementById('voiceover-template');
+      badge.textContent = '✨ Nouveau — ' + _voTpl.replace('Props','');
+      badge.style.cssText = 'font-size:.7rem; background:#ffc107; color:#000; padding:2px 6px; border-radius:4px';
+      document.getElementById('voiceover-text').value = genD.voiceover;
+      document.getElementById('voiceover-spinner').style.display = 'none';
+      document.getElementById('voiceover-fields').style.display = 'block';
+      return;
     }
+
+    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
     _voTpl = d.props?.template_type || '';
     document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
     document.getElementById('voiceover-text').value = d.voiceover;

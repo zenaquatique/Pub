@@ -30,7 +30,8 @@ from tools.customer import (
 from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory
 from tools.remotion import (
     render_video, list_rendered_videos,
-    extract_post_props, generate_voiceover, date_to_composition_id, update_post_props,
+    extract_post_props, generate_voiceover, date_to_composition_id,
+    update_post_props, create_post_composition,
 )
 from tools.shopify import get_products, get_store_analytics
 
@@ -391,6 +392,80 @@ Réponds UNIQUEMENT en JSON valide avec ce schéma exact :
     }
 
 
+def _generate_new_composition_sync(composition_id: str, feedback: str = "") -> dict:
+    """Génère props + script pour une composition qui n'existe pas encore dans Root.tsx."""
+    from google import genai
+    from google.genai import types as gtypes
+
+    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+    calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
+    cal_ctx = "\n".join(f["content"] for f in calendar_files[:2])[:3000] if calendar_files else ""
+
+    memory_block   = f"\nCONTRAINTES MÉMOIRE (respecte-les) :\n{memory}\n" if memory else ""
+    feedback_block = f"\nFEEDBACK : {feedback}\n" if feedback else ""
+    calendar_block = f"\nCALENDRIER ÉDITORIAL :\n{cal_ctx}\n" if cal_ctx else ""
+
+    schemas_desc = "\n\n".join(f"{k} :\n{v}" for k, v in _VOICEOVER_SCHEMAS.items())
+
+    prompt = f"""Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).
+Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
+{memory_block}{calendar_block}{feedback_block}
+Génère un script complet pour la vidéo du {composition_id}.
+Choisis le template le plus adapté au contexte du calendrier éditorial.
+
+Schemas disponibles :
+{schemas_desc}
+
+Réponds UNIQUEMENT en JSON valide :
+{{
+  "template_type": "VersusVideoProps|EducatifVideoProps|PromoVideoProps",
+  "props": {{ ... props complets selon le template choisi ... }}
+}}"""
+
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=gtypes.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.85,
+        ),
+    )
+    try:
+        raw = json.loads(resp.text.strip())
+        template_type = raw.get("template_type", "")
+        props = raw.get("props", {})
+        if not template_type or not props:
+            raise ValueError("Réponse incomplète")
+        props["template_type"] = template_type
+        props["composition_id"] = composition_id
+        return {
+            "status": "success",
+            "composition_id": composition_id,
+            "props": props,
+            "voiceover": generate_voiceover(props),
+            "is_new": True,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": f"Réponse Gemini invalide : {exc}", "raw": resp.text[:500]}
+
+
+@app.post("/api/generate-new-composition")
+async def api_generate_new_composition(request: Request):
+    body = await request.json()
+    composition_id = body.get("composition_id", "").strip()
+    feedback = body.get("feedback", "").strip()
+    if not composition_id:
+        raise HTTPException(400, "composition_id manquant")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, _generate_new_composition_sync, composition_id, feedback
+    )
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
 @app.post("/api/generate-voiceover-ai")
 async def api_generate_voiceover_ai(request: Request):
     body = await request.json()
@@ -476,6 +551,8 @@ async def api_approve_voiceover(request: Request):
             raise HTTPException(400, "script_text+template_type ou props requis")
 
     result = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
+    if result.get("status") == "error" and "introuvable" in result.get("error", ""):
+        result = create_post_composition(composition_id, VIDEO_ASSETS_PATH, props)
     return result
 
 

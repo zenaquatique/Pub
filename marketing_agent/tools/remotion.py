@@ -217,7 +217,91 @@ def _props_to_ts_block(composition_id: str, template_type: str, props: dict) -> 
     return f"const post{composition_id}: {template_type} = {{\n" + "\n".join(lines) + "\n};"
 
 
-def update_post_props(composition_id: str, project_path: str, updates: dict) -> dict:
+_TYPE_TO_COMPONENT = {
+    "VersusVideoProps":   "VersusVideo",
+    "EducatifVideoProps": "EducatifVideo",
+    "PromoVideoProps":    "PromoVideo",
+}
+
+_TYPE_DURATION = {
+    "VersusVideoProps":   690,   # 23 s × 30 fps
+    "EducatifVideoProps": 690,
+    "PromoVideoProps":    480,   # 16 s × 30 fps
+}
+
+
+def create_post_composition(composition_id: str, project_path: str, props: dict) -> dict:
+    """Crée une nouvelle composition dans Root.tsx (const block + enregistrement)."""
+    tsx = Path(project_path) / "src" / "Root.tsx"
+    if not tsx.exists():
+        return {"status": "error", "error": "Root.tsx introuvable"}
+
+    template_type = props.get("template_type", "")
+    if not template_type:
+        return {"status": "error", "error": "template_type manquant"}
+
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+
+    # Si la composition existe déjà, on update
+    if re.search(rf"const post{composition_id}:", content):
+        return update_post_props(composition_id, project_path, props)
+
+    # ── 1. Ajouter le bloc const avant le premier export ──────────────────────
+    clean = {k: v for k, v in props.items() if k not in ("template_type", "composition_id")}
+    const_block = _props_to_ts_block(composition_id, template_type, clean)
+
+    export_m = re.search(r'\nexport ', content)
+    if export_m:
+        pos = export_m.start()
+        content = content[:pos] + "\n\n" + const_block + "\n" + content[pos:]
+    else:
+        content += "\n\n" + const_block + "\n"
+
+    # ── 2. Déduire fps/width/height depuis une Composition existante ───────────
+    comp_m = re.search(
+        r'<Composition[^>]*?fps=\{(\d+)\}[^>]*?width=\{(\d+)\}[^>]*?height=\{(\d+)\}',
+        content, re.DOTALL,
+    )
+    fps    = int(comp_m.group(1)) if comp_m else 30
+    width  = int(comp_m.group(2)) if comp_m else 1080
+    height = int(comp_m.group(3)) if comp_m else 1920
+    duration = _TYPE_DURATION.get(template_type, 600)
+    component = _TYPE_TO_COMPONENT.get(template_type, template_type.replace("Props", ""))
+
+    new_comp = (
+        f'      <Composition\n'
+        f'        id="{composition_id}"\n'
+        f'        component={{{component}}}\n'
+        f'        durationInFrames={{{duration}}}\n'
+        f'        fps={{{fps}}}\n'
+        f'        width={{{width}}}\n'
+        f'        height={{{height}}}\n'
+        f'        defaultProps={{post{composition_id}}}\n'
+        f'      />'
+    )
+
+    # Insérer après le dernier /> d'une Composition
+    all_ends = list(re.finditer(r'/>[ \t]*\n(\s*(?=<Composition|\s*</))', content))
+    if all_ends:
+        m = all_ends[-1]
+        pos = m.start() + 2   # après />
+        content = content[:pos] + "\n" + new_comp + content[pos:]
+    else:
+        # Fallback : avant la fermeture du composant racine
+        close_m = re.search(r'(</>|</\w*Root>)', content)
+        if close_m:
+            pos = close_m.start()
+            content = content[:pos] + new_comp + "\n      " + content[pos:]
+
+    tsx.write_text(content, encoding="utf-8")
+    logger.info("Composition '%s' créée dans Root.tsx", composition_id)
+    return {
+        "status": "created",
+        "composition_id": composition_id,
+        "message": f"Composition '{composition_id}' créée dans Root.tsx",
+    }
+
+
     """Remplace entièrement le bloc props d'un post dans Root.tsx."""
     tsx = Path(project_path) / "src" / "Root.tsx"
     if not tsx.exists():

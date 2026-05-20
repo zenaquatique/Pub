@@ -335,66 +335,64 @@ _VOICEOVER_SCHEMAS = {
 
 
 def _generate_voiceover_ai_sync(composition_id: str, feedback: str = "") -> dict:
-    from google import genai
-    from google.genai import types as gtypes
+    try:
+        from google import genai
+        from google.genai import types as gtypes
 
-    existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
-    is_new = not existing_props
+        existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+        is_new = not existing_props
 
-    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-    memory_block   = f"\nCONTRAINTES MÉMOIRE (respecte-les à la lettre) :\n{memory}\n" if memory else ""
-    feedback_block = f"\nFEEDBACK UTILISATEUR (applique ces corrections) :\n{feedback}\n" if feedback else ""
+        memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+        memory_block   = f"\nCONTRAINTES MÉMOIRE :\n{memory}\n" if memory else ""
+        feedback_block = f"\nFEEDBACK : {feedback}\n" if feedback else ""
 
-    if is_new:
-        calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
-        cal_ctx = "\n".join(f["content"] for f in calendar_files[:2])[:3000] if calendar_files else ""
-        calendar_block = f"\nCALENDRIER ÉDITORIAL :\n{cal_ctx}\n" if cal_ctx else ""
-        schemas_desc = "\n\n".join(f"{k} :\n{v}" for k, v in _VOICEOVER_SCHEMAS.items())
-        prompt = f"""Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).
-Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
+        if is_new:
+            calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
+            cal_ctx = "\n".join(f["content"] for f in calendar_files[:2])[:3000] if calendar_files else ""
+            calendar_block = f"\nCALENDRIER :\n{cal_ctx}\n" if cal_ctx else ""
+            # Demander d'abord le template, puis les props dans un seul appel
+            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
+Voix : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
 {memory_block}{calendar_block}{feedback_block}
-Génère un script pour la vidéo du {composition_id}. Choisis le template le plus adapté au calendrier.
-
-Schemas disponibles :
-{schemas_desc}
-
-Réponds UNIQUEMENT en JSON valide :
-{{
-  "template_type": "VersusVideoProps|EducatifVideoProps|PromoVideoProps",
-  "props": {{ ... props complets selon le template choisi ... }}
-}}"""
-    else:
-        template_type = existing_props.get("template_type", "")
-        schema = _VOICEOVER_SCHEMAS.get(template_type, "")
-        vault = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-        vault_block   = f"\nCONTEXTE MARQUE :\n{vault[:6000]}\n" if vault else ""
-        current_block = f"\nSCRIPT ACTUEL :\n{generate_voiceover(existing_props)}\n"
-        prompt = f"""Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).
-Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
+Génère un script pour la vidéo {composition_id}. Choisis EducatifVideoProps sauf si le contexte indique clairement Versus ou Promo.
+Textes COURTS (hookText max 8 mots, items/desc max 6 mots).
+Réponds en JSON avec exactement cette structure :
+{{"template_type":"EducatifVideoProps","props":{_VOICEOVER_SCHEMAS["EducatifVideoProps"]}}}
+Remplace les valeurs d'exemple par le vrai contenu. template_type peut être VersusVideoProps ou PromoVideoProps si plus adapté."""
+            template_type = None
+        else:
+            template_type = existing_props.get("template_type", "")
+            schema = _VOICEOVER_SCHEMAS.get(template_type, "")
+            vault = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+            vault_block   = f"\nCONTEXTE MARQUE :\n{vault[:6000]}\n" if vault else ""
+            current_block = f"\nSCRIPT ACTUEL :\n{generate_voiceover(existing_props)}\n"
+            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
+Voix : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
 {vault_block}{memory_block}{current_block}{feedback_block}
-Génère un NOUVEAU script pour la vidéo {composition_id} (template : {template_type}).
-Textes COURTS : hookText max 8 mots, items max 6 mots. Respecte STRICTEMENT les contraintes mémoire.
-
-Réponds UNIQUEMENT en JSON valide avec ce schéma exact :
+Génère un NOUVEAU script pour {composition_id} (template : {template_type}).
+Textes COURTS. Respecte STRICTEMENT les contraintes mémoire.
+Réponds UNIQUEMENT en JSON valide avec ce schéma :
 {schema}"""
 
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    resp = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=gtypes.GenerateContentConfig(response_mime_type="application/json", temperature=0.85),
-    )
-    try:
+        client = genai.Client(api_key=GOOGLE_API_KEY)
+        resp = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=gtypes.GenerateContentConfig(response_mime_type="application/json", temperature=0.85),
+        )
+
         raw = json.loads(resp.text.strip())
+
         if is_new:
-            template_type = raw.get("template_type", "")
-            new_props = raw.get("props", {})
-            if not template_type or not new_props:
-                raise ValueError("Réponse incomplète")
+            template_type = raw.get("template_type", "EducatifVideoProps")
+            new_props = raw.get("props", raw)   # si Gemini met les props à la racine
+            if not new_props or not isinstance(new_props, dict):
+                new_props = raw
             new_props["template_type"] = template_type
         else:
             new_props = raw
             new_props["template_type"] = template_type
+
         new_props["composition_id"] = composition_id
         return {
             "status": "success",
@@ -404,7 +402,8 @@ Réponds UNIQUEMENT en JSON valide avec ce schéma exact :
             "is_new": is_new,
         }
     except Exception as exc:
-        return {"status": "error", "error": f"Réponse Gemini invalide : {exc}", "raw": resp.text[:500]}
+        logger.exception("Erreur _generate_voiceover_ai_sync")
+        return {"status": "error", "error": str(exc)}
 
 
 @app.post("/api/generate-voiceover-ai")

@@ -1,6 +1,8 @@
 """Rendu de vidéos via Remotion (npx remotion render)."""
 import logging
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -259,6 +261,24 @@ def update_post_props(composition_id: str, project_path: str, updates: dict) -> 
     }
 
 
+def _find_npx() -> str:
+    """Trouve npx dans PATH ou dans les emplacements Node.js courants."""
+    found = shutil.which("npx")
+    if found:
+        return found
+    # Emplacements Windows courants
+    candidates = [
+        r"C:\Program Files\nodejs\npx.cmd",
+        r"C:\Program Files (x86)\nodejs\npx.cmd",
+        os.path.expandvars(r"%APPDATA%\npm\npx.cmd"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\nodejs\npx.cmd"),
+    ]
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    return "npx"  # fallback — laisse le shell le trouver
+
+
 def render_video(composition_id: str, project_path: str, output_filename: str = "") -> dict:
     """Lance npx remotion render <composition_id> dans le dossier du projet."""
     project = Path(project_path)
@@ -271,12 +291,21 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
     filename = output_filename or f"{composition_id}.mp4"
     output_path = out_dir / filename
 
-    cmd = f'npx remotion render "{composition_id}" "{output_path}"'
+    npx = _find_npx()
+    cmd = f'"{npx}" remotion render "{composition_id}" "{output_path}"'
     logger.info("Remotion render : %s (cwd=%s)", cmd, project)
+
+    # Enrichit PATH avec les dossiers Node.js courants pour que npx trouve ses modules
+    env = os.environ.copy()
+    extra_paths = [
+        r"C:\Program Files\nodejs",
+        os.path.expandvars(r"%APPDATA%\npm"),
+    ]
+    env["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + env.get("PATH", "")
 
     try:
         result = subprocess.run(
-            cmd, cwd=str(project), shell=True,
+            cmd, cwd=str(project), shell=True, env=env,
             capture_output=True, text=True, timeout=600,
             encoding="utf-8", errors="replace",
         )
@@ -287,7 +316,9 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
                 "output_path": str(output_path),
                 "message": f"Vidéo rendue → {output_path}",
             }
-        return {"status": "error", "error": (result.stderr or result.stdout or "")[-3000:]}
+        error_output = (result.stderr or result.stdout or "Aucune sortie")[-3000:]
+        logger.error("Remotion render failed (code %d): %s", result.returncode, error_output)
+        return {"status": "error", "error": f"Exit code {result.returncode}\n\n{error_output}"}
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "Timeout — rendu >10 min"}
     except Exception as exc:

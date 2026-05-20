@@ -700,6 +700,7 @@ Chargement…</pre>
                 <i class="fa-solid fa-copy me-1"></i>Copier
               </button>
             </div>
+            <div id="render-error-box" class="alert alert-danger mt-3 mb-0" style="display:none; white-space:pre-wrap; max-height:220px; overflow-y:auto; font-size:.78rem; font-family:monospace;"></div>
           </div>
         </div>
       </div>
@@ -781,7 +782,8 @@ function showToast(msg, type = 'success') {
   const el = document.getElementById('toast');
   el.className = `toast align-items-center border-0 text-bg-${type}`;
   document.getElementById('toast-msg').textContent = msg;
-  bootstrap.Toast.getOrCreateInstance(el, {delay: 3500}).show();
+  const delay = type === 'danger' ? 8000 : 3500;
+  bootstrap.Toast.getOrCreateInstance(el, {delay}).show();
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
@@ -1368,11 +1370,22 @@ function dateToCompositionId(dateStr, year=2026) {
 }
 
 // ── Rendu Remotion depuis le calendrier ────────────────────────────────────
+function _showRenderError(msg) {
+  const box = document.getElementById('render-error-box');
+  if (box) {
+    box.textContent = '❌ Erreur rendu :\n' + msg;
+    box.style.display = 'block';
+  }
+  showToast('Erreur rendu — voir détail ci-dessous', 'danger');
+}
+
 async function calendarRender(btn, compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rendu…';
+  const errBox = document.getElementById('render-error-box');
+  if (errBox) errBox.style.display = 'none';
 
   try {
     const res = await fetch('/api/render-video', {
@@ -1381,14 +1394,15 @@ async function calendarRender(btn, compositionId) {
       body: JSON.stringify({composition_id: compositionId}),
     });
     const d = await res.json();
-    if (!res.ok) throw new Error(d.detail || 'Erreur rendu');
+    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
     btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Rendu !';
     btn.className = btn.className.replace('btn-outline-primary','btn-success').replace('btn-primary','btn-success');
+    if (errBox) errBox.style.display = 'none';
     showToast(`✅ ${compositionId}.mp4 généré !`, 'success');
   } catch(e) {
     btn.innerHTML = orig;
     btn.disabled = false;
-    showToast('Erreur rendu : ' + e.message, 'danger');
+    _showRenderError(e.message);
   }
 }
 

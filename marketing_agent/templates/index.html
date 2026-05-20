@@ -676,8 +676,10 @@ Chargement…</pre>
 
           <div id="voiceover-spinner" class="text-center py-4" style="display:none">
             <div class="spinner-border spinner-border-sm me-2" style="color:var(--accent)"></div>
-            <span class="text-muted">Gemini génère une première version…</span>
+            <span class="text-muted">Chargement du script…</span>
           </div>
+
+          <div id="voiceover-error" class="alert alert-danger mx-1" style="display:none"></div>
 
           <!-- Script éditable -->
           <div id="voiceover-fields" style="display:none">
@@ -1453,10 +1455,12 @@ async function regenVoiceoverAI() {
 }
 
 async function _fetchVoiceover(compositionId) {
+  const errDiv = document.getElementById('voiceover-error');
+  errDiv.style.display = 'none';
   try {
     const res = await fetch(`/api/post-script/${compositionId}`);
-    if (!res.ok) throw new Error((await res.json()).detail || 'Erreur');
     const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
     _voTpl = d.props?.template_type || '';
     document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
     document.getElementById('voiceover-text').value = d.voiceover;
@@ -1464,7 +1468,8 @@ async function _fetchVoiceover(compositionId) {
     document.getElementById('voiceover-fields').style.display = 'block';
   } catch(e) {
     document.getElementById('voiceover-spinner').style.display = 'none';
-    showToast('Erreur lecture Root.tsx : ' + e.message, 'danger');
+    errDiv.textContent = '❌ ' + e.message;
+    errDiv.style.display = 'block';
   }
 }
 

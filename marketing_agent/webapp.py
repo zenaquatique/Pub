@@ -368,18 +368,54 @@ def _generate_voiceover_ai_sync(composition_id: str, feedback: str = "") -> dict
 
         if is_new:
             calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
-            cal_ctx = "\n".join(f["content"] for f in calendar_files[:2])[:3000] if calendar_files else ""
+            cal_ctx = "\n".join(f["content"] for f in calendar_files[:2])[:4000] if calendar_files else ""
+
+            # ── Trouver l'entrée calendrier exacte pour cette date ──────────
+            _FR_MONTHS_SHORT = {
+                1:"jan", 2:"fév", 3:"mar", 4:"avr", 5:"mai", 6:"jun",
+                7:"jul", 8:"aoû", 9:"sep", 10:"oct", 11:"nov", 12:"déc",
+            }
+            year_i  = int(composition_id[:4])
+            month_i = int(composition_id[4:6])
+            day_i   = int(composition_id[6:8])
+            month_s = _FR_MONTHS_SHORT.get(month_i, "")
+
+            cal_entry = ""
+            detected_template = "EducatifVideoProps"  # défaut
+            for cf in calendar_files[:3]:
+                for line in cf["content"].split("\n"):
+                    ll = line.lower()
+                    if str(day_i) in line and month_s in ll:
+                        cal_entry = line.strip()
+                        # Détection du template via emojis / mots-clés
+                        if "⚔" in line or "versus" in ll:
+                            detected_template = "VersusVideoProps"
+                        elif "🔥" in line or "promo" in ll or "%" in line:
+                            detected_template = "PromoVideoProps"
+                        elif ("🎓" in line or "éducatif" in ll or "éducative" in ll
+                              or "guide" in ll or "conseil" in ll or "astuce" in ll
+                              or "erreur" in ll or "top" in ll):
+                            detected_template = "EducatifVideoProps"
+                        break
+                if cal_entry:
+                    break
+
+            schema = _VOICEOVER_SCHEMAS[detected_template]
+            entry_block = f"\nENTRÉE CALENDRIER du {day_i:02d}/{month_i:02d}/{year_i} :\n{cal_entry}\n" if cal_entry else ""
             calendar_block = f"\nCALENDRIER :\n{cal_ctx}\n" if cal_ctx else ""
-            # Demander d'abord le template, puis les props dans un seul appel
+            vault = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+            vault_block = f"\nCONTEXTE MARQUE :\n{vault[:4000]}\n" if vault else ""
+
             prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
 Voix : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
-{memory_block}{calendar_block}{feedback_block}
-Génère un script pour la vidéo {composition_id}. Choisis EducatifVideoProps sauf si le contexte indique clairement Versus ou Promo.
-Textes COURTS (hookText max 8 mots, items/desc max 6 mots).
-Réponds en JSON avec exactement cette structure :
-{{"template_type":"EducatifVideoProps","props":{_VOICEOVER_SCHEMAS["EducatifVideoProps"]}}}
-Remplace les valeurs d'exemple par le vrai contenu. template_type peut être VersusVideoProps ou PromoVideoProps si plus adapté."""
-            template_type = None
+{memory_block}{entry_block}{vault_block}{calendar_block}{feedback_block}
+Génère un script COMPLET pour la vidéo {composition_id} avec le template {detected_template}.
+Sujet : {cal_entry or 'choisis un sujet pertinent depuis le calendrier ou les produits'}
+Textes COURTS (hookText max 8 mots, chaque desc/item max 8 mots).
+TOUS les champs doivent être remplis — aucun tableau vide, aucune chaîne vide.
+Réponds UNIQUEMENT en JSON valide correspondant exactement à ce schéma :
+{schema}"""
+            template_type = detected_template
         else:
             template_type = existing_props.get("template_type", "")
             schema = _VOICEOVER_SCHEMAS.get(template_type, "")
@@ -404,10 +440,8 @@ Réponds UNIQUEMENT en JSON valide avec ce schéma :
         raw = json.loads(resp.text.strip())
 
         if is_new:
-            template_type = raw.get("template_type", "EducatifVideoProps")
-            new_props = raw.get("props", raw)   # si Gemini met les props à la racine
-            if not new_props or not isinstance(new_props, dict):
-                new_props = raw
+            # Le prompt demande le schéma directement — raw = props
+            new_props = raw if isinstance(raw, dict) else {}
             new_props["template_type"] = template_type
         else:
             new_props = raw

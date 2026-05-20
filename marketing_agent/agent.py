@@ -19,7 +19,7 @@ from tools.knowledge import (
     read_obsidian_vault, list_video_assets, write_calendar_file,
     read_agent_memory, append_agent_memory,
 )
-from tools.remotion import render_video, list_rendered_videos, update_post_props, extract_post_props
+from tools.remotion import render_video, list_rendered_videos, update_post_props, extract_post_props, create_post_composition
 
 logger = logging.getLogger(__name__)
 
@@ -213,8 +213,8 @@ TOOLS = [
                 description=(
                     "Lance le rendu d'une vidéo Remotion. "
                     "L'ID de composition suit le format YYYYMMDD (ex: '20260519' pour le 19 mai 2026). "
-                    "Tous les posts du mois sont déjà définis dans Root.tsx avec leur contenu. "
-                    "Cette commande génère le fichier MP4 directement dans le dossier out/ du projet."
+                    "La composition DOIT exister dans Root.tsx — utilise create_post_composition d'abord si elle n'existe pas encore. "
+                    "Génère le fichier MP4 dans le dossier out/ du projet."
                 ),
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
@@ -301,6 +301,33 @@ TOOLS = [
                         ),
                     },
                     required=["composition_id", "updates"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="create_post_composition",
+                description=(
+                    "Crée une NOUVELLE composition dans Root.tsx quand elle n'existe pas encore. "
+                    "À appeler quand get_post_props retourne vide ou quand la composition est introuvable. "
+                    "Ajoute automatiquement le bloc const ET l'enregistrement <Composition> dans Root.tsx. "
+                    "Appelle render_video ensuite pour générer la vidéo MP4."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "composition_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="ID du post au format YYYYMMDD (ex: '20260520')",
+                        ),
+                        "props": types.Schema(
+                            type=types.Type.OBJECT,
+                            description=(
+                                "Props complètes du post selon le template choisi. "
+                                "Doit inclure 'template_type' (VersusVideoProps, EducatifVideoProps ou PromoVideoProps) "
+                                "et tous les champs du template."
+                            ),
+                        ),
+                    },
+                    required=["composition_id", "props"],
                 ),
             ),
             types.FunctionDeclaration(
@@ -460,6 +487,9 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
     if name == "update_post_props":
         return update_post_props(inputs["composition_id"], VIDEO_ASSETS_PATH, inputs["updates"])
 
+    if name == "create_post_composition":
+        return create_post_composition(inputs["composition_id"], VIDEO_ASSETS_PATH, inputs["props"])
+
     if name == "write_calendar_file":
         return write_calendar_file(
             OBSIDIAN_VAULT_PATH,
@@ -572,18 +602,21 @@ MODE ROUTINE (uniquement si le message est vide ou dit explicitement "lance la r
 VIDÉO REMOTION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Projet : {VIDEO_ASSETS_PATH}
-• ID composition : YYYYMMDD (ex: "20260519" = 19 mai 2026)
-• Root.tsx contient les props de chaque post — TU PEUX ET TU DOIS le modifier avec update_post_props
-• Workflow OBLIGATOIRE quand l'utilisateur veut changer un post :
-  0. Relis la section MÉMOIRE ci-dessus — chaque contrainte s'applique au nouveau contenu
-  1. get_post_props("20260519")           ← lire le contenu actuel
-  2. Génère les nouvelles valeurs EN APPLIQUANT toutes les contraintes mémoire
-     Ex: si la mémoire dit "ne pas dire plante morte en 2 semaines" → INTERDIT dans les nouvelles valeurs
-     Ex: si la mémoire dit "pot = 5€ pas 10€" → utilise 5€ dans le nouveau contenu
-  3. update_post_props("20260519", {...}) ← écrire les nouvelles valeurs dans Root.tsx
-  4. render_video("20260519")            ← regénérer la vidéo MP4
-  Fais les étapes 1→4 d'affilée SANS t'arrêter
-• Ne génère JAMAIS un script texte dans le chat — modifie Root.tsx et rends la vidéo
+• ID composition : YYYYMMDD (ex: "20260520" = 20 mai 2026)
+
+CAS 1 — Post existant dans Root.tsx (get_post_props retourne des données) :
+  1. get_post_props(id)        ← lire le contenu actuel
+  2. update_post_props(id, {}) ← écrire les nouvelles valeurs
+  3. render_video(id)          ← générer le MP4
+
+CAS 2 — Post ABSENT de Root.tsx (get_post_props retourne vide ou erreur) :
+  1. create_post_composition(id, props_complets) ← CRÉE la composition dans Root.tsx
+  2. render_video(id)                            ← générer le MP4
+
+RÈGLES :
+• Relis toujours la MÉMOIRE avant de générer du contenu — aucune contrainte ne doit être violée
+• Ne génère JAMAIS un script texte dans le chat — écris dans Root.tsx et rends la vidéo
+• Fais toutes les étapes d'affilée SANS t'arrêter ni demander confirmation
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CALENDRIER ÉDITORIAL

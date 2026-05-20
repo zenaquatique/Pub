@@ -605,9 +605,9 @@ VIDÉO REMOTION
 • ID composition : YYYYMMDD (ex: "20260520" = 20 mai 2026)
 
 CAS 1 — Post existant dans Root.tsx (get_post_props retourne des données) :
-  1. get_post_props(id)        ← lire le contenu actuel
-  2. update_post_props(id, {}) ← écrire les nouvelles valeurs
-  3. render_video(id)          ← générer le MP4
+  1. get_post_props(id)            ← lire le contenu actuel
+  2. update_post_props(id, champs) ← écrire les nouvelles valeurs
+  3. render_video(id)              ← générer le MP4
 
 CAS 2 — Post ABSENT de Root.tsx (get_post_props retourne vide ou erreur) :
   1. create_post_composition(id, props_complets) ← CRÉE la composition dans Root.tsx

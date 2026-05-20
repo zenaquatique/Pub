@@ -1462,20 +1462,20 @@ async function _fetchVoiceover(compositionId) {
     const d = await res.json();
 
     if (res.status === 404) {
-      // Composition absente de Root.tsx → génération IA automatique
+      // Composition absente → génération IA automatique via l'endpoint existant
       const spinnerText = document.querySelector('#voiceover-spinner span');
-      if (spinnerText) spinnerText.textContent = '✨ Génération IA d\'un nouveau script…';
-      const genRes = await fetch('/api/generate-new-composition', {
+      if (spinnerText) spinnerText.textContent = '✨ Génération d\'un nouveau script…';
+      const genRes = await fetch('/api/generate-voiceover-ai', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({composition_id: compositionId}),
+        body: JSON.stringify({composition_id: compositionId, feedback: ''}),
       });
       const genD = await genRes.json();
       if (!genRes.ok) throw new Error(genD.detail || 'Erreur génération');
       _voTpl = genD.props?.template_type || '';
       const badge = document.getElementById('voiceover-template');
       badge.textContent = '✨ Nouveau — ' + _voTpl.replace('Props','');
-      badge.style.cssText = 'font-size:.7rem; background:#ffc107; color:#000; padding:2px 6px; border-radius:4px';
+      badge.style.cssText = 'font-size:.7rem;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;margin-left:8px';
       document.getElementById('voiceover-text').value = genD.voiceover;
       document.getElementById('voiceover-spinner').style.display = 'none';
       document.getElementById('voiceover-fields').style.display = 'block';

@@ -232,117 +232,126 @@ _TYPE_DURATION = {
 
 def create_post_composition(composition_id: str, project_path: str, props: dict) -> dict:
     """Crée une nouvelle composition dans Root.tsx (const block + enregistrement)."""
-    tsx = Path(project_path) / "src" / "Root.tsx"
-    if not tsx.exists():
-        return {"status": "error", "error": "Root.tsx introuvable"}
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        if not tsx.exists():
+            return {"status": "error", "error": "Root.tsx introuvable"}
 
-    template_type = props.get("template_type", "")
-    if not template_type:
-        return {"status": "error", "error": "template_type manquant"}
+        template_type = props.get("template_type", "")
+        if not template_type:
+            return {"status": "error", "error": "template_type manquant"}
 
-    content = tsx.read_text(encoding="utf-8", errors="ignore")
+        content = tsx.read_text(encoding="utf-8", errors="ignore")
 
-    # Si la composition existe déjà, on update
-    if re.search(rf"const post{composition_id}:", content):
-        return update_post_props(composition_id, project_path, props)
+        # Si la composition existe déjà, on update
+        if re.search(rf"const post{composition_id}:", content):
+            return update_post_props(composition_id, project_path, props)
 
-    # ── 1. Ajouter le bloc const avant le premier export ──────────────────────
-    clean = {k: v for k, v in props.items() if k not in ("template_type", "composition_id")}
-    const_block = _props_to_ts_block(composition_id, template_type, clean)
+        # ── 1. Ajouter le bloc const avant le premier export ──────────────────────
+        clean = {k: v for k, v in props.items() if k not in ("template_type", "composition_id")}
+        const_block = _props_to_ts_block(composition_id, template_type, clean)
 
-    export_m = re.search(r'\nexport ', content)
-    if export_m:
-        pos = export_m.start()
-        content = content[:pos] + "\n\n" + const_block + "\n" + content[pos:]
-    else:
-        content += "\n\n" + const_block + "\n"
+        export_m = re.search(r'\nexport ', content)
+        if export_m:
+            pos = export_m.start()
+            content = content[:pos] + "\n\n" + const_block + "\n" + content[pos:]
+        else:
+            content += "\n\n" + const_block + "\n"
 
-    # ── 2. Déduire fps/width/height depuis une Composition existante ───────────
-    comp_m = re.search(
-        r'<Composition[^>]*?fps=\{(\d+)\}[^>]*?width=\{(\d+)\}[^>]*?height=\{(\d+)\}',
-        content, re.DOTALL,
-    )
-    fps    = int(comp_m.group(1)) if comp_m else 30
-    width  = int(comp_m.group(2)) if comp_m else 1080
-    height = int(comp_m.group(3)) if comp_m else 1920
-    duration = _TYPE_DURATION.get(template_type, 600)
-    component = _TYPE_TO_COMPONENT.get(template_type, template_type.replace("Props", ""))
+        # ── 2. Déduire fps/width/height depuis une Composition existante ───────────
+        comp_m = re.search(
+            r'<Composition[^>]*?fps=\{(\d+)\}[^>]*?width=\{(\d+)\}[^>]*?height=\{(\d+)\}',
+            content, re.DOTALL,
+        )
+        fps    = int(comp_m.group(1)) if comp_m else 30
+        width  = int(comp_m.group(2)) if comp_m else 1080
+        height = int(comp_m.group(3)) if comp_m else 1920
+        duration = _TYPE_DURATION.get(template_type, 600)
+        component = _TYPE_TO_COMPONENT.get(template_type, template_type.replace("Props", ""))
 
-    new_comp = (
-        f'      <Composition\n'
-        f'        id="{composition_id}"\n'
-        f'        component={{{component}}}\n'
-        f'        durationInFrames={{{duration}}}\n'
-        f'        fps={{{fps}}}\n'
-        f'        width={{{width}}}\n'
-        f'        height={{{height}}}\n'
-        f'        defaultProps={{post{composition_id}}}\n'
-        f'      />'
-    )
+        new_comp = (
+            f'      <Composition\n'
+            f'        id="{composition_id}"\n'
+            f'        component={{{component}}}\n'
+            f'        durationInFrames={{{duration}}}\n'
+            f'        fps={{{fps}}}\n'
+            f'        width={{{width}}}\n'
+            f'        height={{{height}}}\n'
+            f'        defaultProps={{post{composition_id}}}\n'
+            f'      />'
+        )
 
-    # Insérer après le dernier /> d'une Composition
-    all_ends = list(re.finditer(r'/>[ \t]*\n(\s*(?=<Composition|\s*</))', content))
-    if all_ends:
-        m = all_ends[-1]
-        pos = m.start() + 2   # après />
-        content = content[:pos] + "\n" + new_comp + content[pos:]
-    else:
-        # Fallback : avant la fermeture du composant racine
-        close_m = re.search(r'(</>|</\w*Root>)', content)
-        if close_m:
-            pos = close_m.start()
-            content = content[:pos] + new_comp + "\n      " + content[pos:]
+        # Insérer après le dernier /> d'une Composition
+        all_ends = list(re.finditer(r'/>[ \t]*\n(\s*(?=<Composition|\s*</))', content))
+        if all_ends:
+            m = all_ends[-1]
+            pos = m.start() + 2   # après />
+            content = content[:pos] + "\n" + new_comp + content[pos:]
+        else:
+            # Fallback : avant la fermeture du composant racine
+            close_m = re.search(r'(</>|</\w*Root>)', content)
+            if close_m:
+                pos = close_m.start()
+                content = content[:pos] + new_comp + "\n      " + content[pos:]
 
-    tsx.write_text(content, encoding="utf-8")
-    logger.info("Composition '%s' créée dans Root.tsx", composition_id)
-    return {
-        "status": "created",
-        "composition_id": composition_id,
-        "message": f"Composition '{composition_id}' créée dans Root.tsx",
-    }
+        tsx.write_text(content, encoding="utf-8")
+        logger.info("Composition '%s' créée dans Root.tsx", composition_id)
+        return {
+            "status": "created",
+            "composition_id": composition_id,
+            "message": f"Composition '{composition_id}' créée dans Root.tsx",
+        }
+    except Exception as exc:
+        logger.exception("Erreur create_post_composition pour '%s'", composition_id)
+        return {"status": "error", "error": str(exc)}
 
 
+def update_post_props(composition_id: str, project_path: str, updates: dict) -> dict:
     """Remplace entièrement le bloc props d'un post dans Root.tsx."""
-    tsx = Path(project_path) / "src" / "Root.tsx"
-    if not tsx.exists():
-        return {"status": "error", "error": "Root.tsx introuvable"}
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        if not tsx.exists():
+            return {"status": "error", "error": "Root.tsx introuvable"}
 
-    content = tsx.read_text(encoding="utf-8", errors="ignore")
+        content = tsx.read_text(encoding="utf-8", errors="ignore")
 
-    m = re.search(rf"const post{composition_id}:\s*(\w+Props)\s*=\s*\{{", content)
-    if not m:
-        return {"status": "error", "error": f"Composition '{composition_id}' introuvable dans Root.tsx"}
+        m = re.search(rf"const post{composition_id}:\s*(\w+Props)\s*=\s*\{{", content)
+        if not m:
+            return {"status": "error", "error": f"Composition '{composition_id}' introuvable dans Root.tsx"}
 
-    template_type = m.group(1)
-    block_start = m.start()
-    brace_start = m.end() - 1
-    depth, end = 0, brace_start
-    for i, ch in enumerate(content[brace_start:], brace_start):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    # skip trailing semicolon
-    if content[end:end+1] == ";":
-        end += 1
+        template_type = m.group(1)
+        block_start = m.start()
+        brace_start = m.end() - 1
+        depth, end = 0, brace_start
+        for i, ch in enumerate(content[brace_start:], brace_start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        # skip trailing semicolon
+        if content[end:end+1] == ";":
+            end += 1
 
-    # Merge existing props with updates
-    current = extract_post_props(composition_id, project_path)
-    merged = {k: v for k, v in current.items() if k not in ("template_type", "composition_id")}
-    merged.update({k: v for k, v in updates.items() if k not in ("template_type", "composition_id")})
+        # Merge existing props with updates
+        current = extract_post_props(composition_id, project_path)
+        merged = {k: v for k, v in current.items() if k not in ("template_type", "composition_id")}
+        merged.update({k: v for k, v in updates.items() if k not in ("template_type", "composition_id")})
 
-    new_block = _props_to_ts_block(composition_id, template_type, merged)
-    new_content = content[:block_start] + new_block + content[end:]
-    tsx.write_text(new_content, encoding="utf-8")
-    return {
-        "status": "success",
-        "composition_id": composition_id,
-        "updated_fields": list(updates.keys()),
-        "message": f"Root.tsx mis à jour — relance render_video pour regénérer la vidéo.",
-    }
+        new_block = _props_to_ts_block(composition_id, template_type, merged)
+        new_content = content[:block_start] + new_block + content[end:]
+        tsx.write_text(new_content, encoding="utf-8")
+        return {
+            "status": "success",
+            "composition_id": composition_id,
+            "updated_fields": list(updates.keys()),
+            "message": f"Root.tsx mis à jour — relance render_video pour regénérer la vidéo.",
+        }
+    except Exception as exc:
+        logger.exception("Erreur update_post_props pour '%s'", composition_id)
+        return {"status": "error", "error": str(exc)}
 
 
 def _find_npx() -> str:

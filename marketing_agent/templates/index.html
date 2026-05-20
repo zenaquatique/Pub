@@ -1460,7 +1460,10 @@ async function _fetchVoiceover(compositionId) {
   try {
     const res = await fetch(`/api/post-script/${compositionId}`);
     const d = await res.json();
-    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
+    if (!res.ok) {
+      if (res.status === 404) throw new Error(`Aucun script défini pour ${compositionId} dans Root.tsx.\nDemande à l'agent de préparer ce post d'abord.`);
+      throw new Error(d.detail || JSON.stringify(d));
+    }
     _voTpl = d.props?.template_type || '';
     document.getElementById('voiceover-template').textContent = _voTpl.replace('Props','');
     document.getElementById('voiceover-text').value = d.voiceover;

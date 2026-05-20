@@ -422,6 +422,12 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
+# Alias sans dépendance Root.tsx — même logique, endpoint stable
+@app.post("/api/script")
+async def api_script(request: Request):
+    return await api_generate_voiceover_ai(request)
+
+
 def _text_to_props_sync(script_text: str, composition_id: str, template_type: str) -> dict:
     """Convertit un script texte libre en props structurés via Gemini."""
     from google import genai

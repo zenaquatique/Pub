@@ -1448,7 +1448,7 @@ async function regenVoiceoverAI() {
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
   try {
-    const res = await fetch('/api/generate-voiceover-ai', {
+    const res = await fetch('/api/script', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({composition_id: _voCid, feedback}),
@@ -1476,7 +1476,7 @@ async function _fetchVoiceover(compositionId) {
     if (res.status === 404) {
       const spinnerText = document.querySelector('#voiceover-spinner span');
       if (spinnerText) spinnerText.textContent = 'Génération du script…';
-      const genRes = await fetch('/api/generate-voiceover-ai', {
+      const genRes = await fetch('/api/script', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({composition_id: compositionId, feedback: ''}),

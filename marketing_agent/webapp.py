@@ -19,6 +19,7 @@ from config import (
     META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE,
     OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH, GOOGLE_API_KEY, GEMINI_MODEL,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
+    ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
 )
 from tools.customer import (
     get_pending_messages,
@@ -354,129 +355,247 @@ _VOICEOVER_SCHEMAS = {
 }
 
 
+def _detect_template(text: str) -> str:
+    """Déduit le template Remotion depuis un texte (ligne calendrier ou context)."""
+    tl = text.lower()
+    if "⚔" in text or "versus" in tl:
+        return "VersusVideoProps"
+    if "🔥" in text or "promo" in tl or "%" in text:
+        return "PromoVideoProps"
+    return "EducatifVideoProps"
+
+
 def _generate_voiceover_ai_sync(
     composition_id: str,
     feedback: str = "",
     force_reset: bool = False,
-    context: str = "",          # contenu de la ligne calendrier envoyé par le frontend
+    context: str = "",      # ligne du calendrier envoyée par le frontend
+) -> dict:
+    """Génère le script avec Claude (priorité) ou Gemini (fallback)."""
+    if ANTHROPIC_API_KEY:
+        return _generate_with_claude(composition_id, feedback, force_reset, context)
+    return _generate_with_gemini(composition_id, feedback, force_reset, context)
+
+
+def _build_cal_entry(composition_id: str, context: str) -> tuple[str, str]:
+    """Retourne (cal_entry, detected_template). Utilise context si fourni, sinon cherche dans la vault."""
+    if context:
+        return context, _detect_template(context)
+    calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
+    _FR = {1:"jan",2:"fév",3:"mar",4:"avr",5:"mai",6:"jun",
+           7:"jul",8:"aoû",9:"sep",10:"oct",11:"nov",12:"déc"}
+    day_i   = int(composition_id[6:8])
+    month_s = _FR.get(int(composition_id[4:6]), "")
+    for cf in calendar_files[:3]:
+        for line in cf["content"].split("\n"):
+            if str(day_i) in line and month_s in line.lower():
+                return line.strip(), _detect_template(line)
+    return "", "EducatifVideoProps"
+
+
+def _generate_with_claude(
+    composition_id: str,
+    feedback: str,
+    force_reset: bool,
+    context: str,
 ) -> dict:
     try:
-        from google import genai
-        from google.genai import types as gtypes
+        import anthropic
 
-        # Si feedback / force_reset / context → repart du calendrier, ignore Root.tsx
         if feedback or force_reset or context:
             existing_props = {}
         else:
             existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
         is_new = not existing_props
 
-        memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
         vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-        memory_block   = f"\nCONTRAINTES MÉMOIRE (respecte-les impérativement) :\n{memory}\n" if memory else ""
-        vault_block    = f"\nCONTEXTE MARQUE / PRODUITS :\n{vault[:6000]}\n" if vault else ""
-        feedback_block = f"\nFEEDBACK UTILISATEUR : {feedback}\n" if feedback else ""
+        memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
 
         if is_new:
-            # ── Détection template + sujet ─────────────────────────────────
-            if context:
-                # Le frontend a envoyé le contenu exact de la ligne calendrier
-                ctx_lower = context.lower()
-                if "⚔" in context or "versus" in ctx_lower:
-                    detected_template = "VersusVideoProps"
-                elif "🔥" in context or "promo" in ctx_lower or "%" in context:
-                    detected_template = "PromoVideoProps"
-                else:
-                    detected_template = "EducatifVideoProps"
-                cal_entry = context
-            else:
-                # Fallback : chercher dans les fichiers calendrier
-                calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
-                _FR_MONTHS = {
-                    1:"jan", 2:"fév", 3:"mar", 4:"avr", 5:"mai", 6:"jun",
-                    7:"jul", 8:"aoû", 9:"sep", 10:"oct", 11:"nov", 12:"déc",
-                }
-                day_i   = int(composition_id[6:8])
-                month_s = _FR_MONTHS.get(int(composition_id[4:6]), "")
-                cal_entry = ""
-                detected_template = "EducatifVideoProps"
-                for cf in calendar_files[:3]:
-                    for line in cf["content"].split("\n"):
-                        ll = line.lower()
-                        if str(day_i) in line and month_s in ll:
-                            cal_entry = line.strip()
-                            if "⚔" in line or "versus" in ll:
-                                detected_template = "VersusVideoProps"
-                            elif "🔥" in line or "promo" in ll:
-                                detected_template = "PromoVideoProps"
-                            elif ("🎓" in line or "éducatif" in ll or "guide" in ll
-                                  or "conseil" in ll or "astuce" in ll or "top" in ll):
-                                detected_template = "EducatifVideoProps"
-                            break
-                    if cal_entry:
-                        break
-
-            schema = _VOICEOVER_SCHEMAS[detected_template]
-            entry_block = f"\nINFOS DU POST À CRÉER :\n{cal_entry}\n" if cal_entry else ""
-
-            prompt = f"""Tu es expert en création de vidéos courtes pour ZenAquatique ({STORE_NICHE}).
-Voix de marque : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
-{memory_block}{vault_block}{entry_block}{feedback_block}
-MISSION : génère un script vidéo COMPLET et ORIGINAL pour le post {composition_id}.
-Template imposé : {detected_template}
-Sujet imposé : {cal_entry or f'post ZenAquatique du {composition_id}'}
-
-RÈGLES STRICTES :
-- Utilise OBLIGATOIREMENT le sujet ci-dessus — ne l'invente pas
-- Tous les champs JSON doivent être remplis (aucun vide, aucun tableau vide)
-- Textes courts : hookText max 8 mots, chaque desc/item max 8 mots
-- Adapte le contenu aux produits réels de ZenAquatique (plantes aquatiques, crevettes…)
-- Respecte toutes les contraintes mémoire
-
-Réponds UNIQUEMENT avec du JSON valide correspondant exactement à ce schéma :
-{schema}"""
-            template_type = detected_template
+            cal_entry, template_type = _build_cal_entry(composition_id, context)
         else:
-            template_type = existing_props.get("template_type", "")
-            schema = _VOICEOVER_SCHEMAS.get(template_type, "")
-            current_block = f"\nSCRIPT ACTUEL :\n{generate_voiceover(existing_props)}\n"
-            prompt = f"""Tu es expert en création de vidéos courtes pour ZenAquatique ({STORE_NICHE}).
+            template_type = existing_props.get("template_type", "EducatifVideoProps")
+            cal_entry = ""
+
+        schema = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
+
+        system_prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique, boutique en ligne spécialisée dans les plantes aquatiques, crevettes et équipements d'aquariophilie.
+
+MARQUE : {STORE_NAME} | NICHE : {STORE_NICHE}
+VOIX : {BRAND_VOICE}
+AUDIENCE : {TARGET_AUDIENCE}
+
+{f"CONNAISSANCES MARQUE (vault Obsidian) :{chr(10)}{vault[:8000]}" if vault else ""}
+
+{f"CONTRAINTES MÉMOIRE — OBLIGATOIRES :{chr(10)}{memory}" if memory else ""}
+
+MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts doivent :
+- Mettre en avant les vrais bénéfices des produits ZenAquatique (plantes, crevettes, équipements…)
+- Utiliser un langage naturel, dynamique, proche du client — pas du jargon marketing creux
+- Contenir de vraies phrases complètes pour la voix off (pas juste des mots-clés)
+- Donner envie d'acheter ou de suivre la boutique
+- Respecter TOUTES les contraintes mémoire ci-dessus"""
+
+        if is_new:
+            user_msg = f"""Crée le script vidéo pour le post {composition_id}.
+
+POST DU CALENDRIER : {cal_entry or f"Post ZenAquatique du {composition_id}"}
+TEMPLATE : {template_type}
+{f"FEEDBACK : {feedback}" if feedback else ""}
+
+Génère un JSON avec cette structure exacte :
+{{
+  "template_type": "{template_type}",
+  "props": {schema},
+  "voiceover": "Script voix off COMPLET en vraies phrases commerciales.\\nStructuré par section : [ACCROCHE] ... [CORPS] ... [CTA] ...\\nPhrases entières, bénéfices concrets, ton dynamique."
+}}
+
+RÈGLES props :
+- hookText : accroche percutante max 8 mots qui stoppe le scroll
+- Tous les champs remplis avec du vrai contenu ZenAquatique (plantes, crevettes, aquarium)
+- items/tips/desc : phrases courtes mais complètes (sujet + verbe + bénéfice)
+
+RÈGLES voiceover :
+- Vraies phrases, pas juste des mots-clés
+- Minimum 5-8 phrases en tout
+- Arguments de vente concrets : prix, facilité d'entretien, beauté, livraison, etc."""
+        else:
+            current_vo = generate_voiceover(existing_props)
+            user_msg = f"""Améliore le script du post {composition_id} (template : {template_type}).
+
+SCRIPT ACTUEL :
+{current_vo}
+
+{f"FEEDBACK : {feedback}" if feedback else "Génère une nouvelle version plus percutante."}
+
+Génère un JSON avec cette structure :
+{{
+  "template_type": "{template_type}",
+  "props": {schema},
+  "voiceover": "Nouveau script voix off COMPLET avec vraies phrases commerciales."
+}}"""
+
+        ai_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        with ai_client.messages.stream(
+            model=CLAUDE_SCRIPT_MODEL,
+            max_tokens=3000,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_msg}],
+        ) as stream:
+            msg = stream.get_final_message()
+
+        raw_text = next(
+            (b.text for b in msg.content if getattr(b, "type", "") == "text"),
+            "",
+        ).strip()
+
+        # Nettoie les blocs markdown éventuels
+        if "```" in raw_text:
+            parts = raw_text.split("```")
+            for part in parts:
+                stripped = part.strip()
+                if stripped.startswith("json"):
+                    stripped = stripped[4:].strip()
+                if stripped.startswith("{"):
+                    raw_text = stripped
+                    break
+
+        data       = json.loads(raw_text)
+        props      = data.get("props", data)
+        voiceover  = data.get("voiceover", "")
+        t_type     = data.get("template_type", template_type)
+
+        props["template_type"]   = t_type
+        props["composition_id"]  = composition_id
+
+        # Voiceover de secours si Claude n'en a pas généré
+        if not voiceover:
+            voiceover = generate_voiceover(props)
+
+        result = {
+            "status": "success",
+            "composition_id": composition_id,
+            "props": props,
+            "voiceover": voiceover,
+            "is_new": is_new,
+            "model": "claude",
+        }
+        _save_script(composition_id, result)
+        return result
+
+    except Exception as exc:
+        logger.exception("Erreur génération Claude — fallback Gemini")
+        return _generate_with_gemini(composition_id, feedback, force_reset, context)
+
+
+def _generate_with_gemini(
+    composition_id: str,
+    feedback: str,
+    force_reset: bool,
+    context: str,
+) -> dict:
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+
+        if feedback or force_reset or context:
+            existing_props = {}
+        else:
+            existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+        is_new = not existing_props
+
+        vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+        memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+        vault_block  = f"\nCONTEXTE MARQUE :\n{vault[:5000]}\n" if vault else ""
+        memory_block = f"\nCONTRAINTES MÉMOIRE :\n{memory}\n" if memory else ""
+        fb_block     = f"\nFEEDBACK : {feedback}\n" if feedback else ""
+
+        if is_new:
+            cal_entry, template_type = _build_cal_entry(composition_id, context)
+            schema = _VOICEOVER_SCHEMAS[template_type]
+            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
 Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
-{vault_block}{memory_block}{current_block}{feedback_block}
-MISSION : génère un NOUVEAU script amélioré pour {composition_id} (template : {template_type}).
-Tous les champs doivent être remplis. Textes courts. Respecte les contraintes mémoire.
-Réponds UNIQUEMENT en JSON valide avec ce schéma :
-{schema}"""
+{memory_block}{vault_block}
+POST : {cal_entry or composition_id}
+{fb_block}
+Génère un script pour le post {composition_id} avec le template {template_type}.
+TOUS les champs remplis, textes courts mais précis, produits réels ZenAquatique.
+Réponds UNIQUEMENT en JSON selon ce schéma : {schema}"""
+        else:
+            template_type = existing_props.get("template_type", "EducatifVideoProps")
+            schema = _VOICEOVER_SCHEMAS.get(template_type, "")
+            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
+{vault_block}{memory_block}
+Script actuel : {generate_voiceover(existing_props)}
+{fb_block}
+Améliore ce script (template : {template_type}). Réponds en JSON : {schema}"""
 
         client = genai.Client(api_key=GOOGLE_API_KEY)
         resp = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,
-            config=gtypes.GenerateContentConfig(response_mime_type="application/json", temperature=0.85),
+            config=gtypes.GenerateContentConfig(
+                response_mime_type="application/json", temperature=0.85
+            ),
         )
-
         raw = json.loads(resp.text.strip())
+        props = raw if isinstance(raw, dict) else {}
+        props["template_type"]  = template_type
+        props["composition_id"] = composition_id
 
-        if is_new:
-            # Le prompt demande le schéma directement — raw = props
-            new_props = raw if isinstance(raw, dict) else {}
-            new_props["template_type"] = template_type
-        else:
-            new_props = raw
-            new_props["template_type"] = template_type
-
-        new_props["composition_id"] = composition_id
         result = {
             "status": "success",
             "composition_id": composition_id,
-            "props": new_props,
-            "voiceover": generate_voiceover(new_props),
+            "props": props,
+            "voiceover": generate_voiceover(props),
             "is_new": is_new,
+            "model": "gemini",
         }
         _save_script(composition_id, result)
         return result
+
     except Exception as exc:
-        logger.exception("Erreur _generate_voiceover_ai_sync")
+        logger.exception("Erreur _generate_with_gemini")
         return {"status": "error", "error": str(exc)}
 
 

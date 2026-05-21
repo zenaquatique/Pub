@@ -3,9 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Google Gemini
+# Google Gemini (agent principal + actions marketing)
 GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
 GEMINI_MODEL = "gemini-2.5-flash"
+
+# Anthropic Claude (génération de scripts vidéo)
+ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
+CLAUDE_SCRIPT_MODEL = os.environ.get("CLAUDE_SCRIPT_MODEL", "claude-opus-4-7")
 
 # Shopify (optionnel — mode simulation si non configuré)
 SHOPIFY_SHOP_URL = os.environ.get("SHOPIFY_SHOP_URL", "")

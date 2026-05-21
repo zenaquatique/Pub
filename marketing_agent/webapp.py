@@ -354,83 +354,97 @@ _VOICEOVER_SCHEMAS = {
 }
 
 
-def _generate_voiceover_ai_sync(composition_id: str, feedback: str = "", force_reset: bool = False) -> dict:
+def _generate_voiceover_ai_sync(
+    composition_id: str,
+    feedback: str = "",
+    force_reset: bool = False,
+    context: str = "",          # contenu de la ligne calendrier envoyé par le frontend
+) -> dict:
     try:
         from google import genai
         from google.genai import types as gtypes
 
-        # Si feedback fourni ou force_reset, on repart du calendrier (ignore Root.tsx)
-        if feedback or force_reset:
+        # Si feedback / force_reset / context → repart du calendrier, ignore Root.tsx
+        if feedback or force_reset or context:
             existing_props = {}
         else:
             existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
         is_new = not existing_props
 
         memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-        memory_block   = f"\nCONTRAINTES MÉMOIRE :\n{memory}\n" if memory else ""
-        feedback_block = f"\nFEEDBACK : {feedback}\n" if feedback else ""
+        vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+        memory_block   = f"\nCONTRAINTES MÉMOIRE (respecte-les impérativement) :\n{memory}\n" if memory else ""
+        vault_block    = f"\nCONTEXTE MARQUE / PRODUITS :\n{vault[:6000]}\n" if vault else ""
+        feedback_block = f"\nFEEDBACK UTILISATEUR : {feedback}\n" if feedback else ""
 
         if is_new:
-            calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
-            cal_ctx = "\n".join(f["content"] for f in calendar_files[:2])[:4000] if calendar_files else ""
-
-            # ── Trouver l'entrée calendrier exacte pour cette date ──────────
-            _FR_MONTHS_SHORT = {
-                1:"jan", 2:"fév", 3:"mar", 4:"avr", 5:"mai", 6:"jun",
-                7:"jul", 8:"aoû", 9:"sep", 10:"oct", 11:"nov", 12:"déc",
-            }
-            year_i  = int(composition_id[:4])
-            month_i = int(composition_id[4:6])
-            day_i   = int(composition_id[6:8])
-            month_s = _FR_MONTHS_SHORT.get(month_i, "")
-
-            cal_entry = ""
-            detected_template = "EducatifVideoProps"  # défaut
-            for cf in calendar_files[:3]:
-                for line in cf["content"].split("\n"):
-                    ll = line.lower()
-                    if str(day_i) in line and month_s in ll:
-                        cal_entry = line.strip()
-                        # Détection du template via emojis / mots-clés
-                        if "⚔" in line or "versus" in ll:
-                            detected_template = "VersusVideoProps"
-                        elif "🔥" in line or "promo" in ll or "%" in line:
-                            detected_template = "PromoVideoProps"
-                        elif ("🎓" in line or "éducatif" in ll or "éducative" in ll
-                              or "guide" in ll or "conseil" in ll or "astuce" in ll
-                              or "erreur" in ll or "top" in ll):
-                            detected_template = "EducatifVideoProps"
+            # ── Détection template + sujet ─────────────────────────────────
+            if context:
+                # Le frontend a envoyé le contenu exact de la ligne calendrier
+                ctx_lower = context.lower()
+                if "⚔" in context or "versus" in ctx_lower:
+                    detected_template = "VersusVideoProps"
+                elif "🔥" in context or "promo" in ctx_lower or "%" in context:
+                    detected_template = "PromoVideoProps"
+                else:
+                    detected_template = "EducatifVideoProps"
+                cal_entry = context
+            else:
+                # Fallback : chercher dans les fichiers calendrier
+                calendar_files = find_calendar_files(OBSIDIAN_VAULT_PATH)
+                _FR_MONTHS = {
+                    1:"jan", 2:"fév", 3:"mar", 4:"avr", 5:"mai", 6:"jun",
+                    7:"jul", 8:"aoû", 9:"sep", 10:"oct", 11:"nov", 12:"déc",
+                }
+                day_i   = int(composition_id[6:8])
+                month_s = _FR_MONTHS.get(int(composition_id[4:6]), "")
+                cal_entry = ""
+                detected_template = "EducatifVideoProps"
+                for cf in calendar_files[:3]:
+                    for line in cf["content"].split("\n"):
+                        ll = line.lower()
+                        if str(day_i) in line and month_s in ll:
+                            cal_entry = line.strip()
+                            if "⚔" in line or "versus" in ll:
+                                detected_template = "VersusVideoProps"
+                            elif "🔥" in line or "promo" in ll:
+                                detected_template = "PromoVideoProps"
+                            elif ("🎓" in line or "éducatif" in ll or "guide" in ll
+                                  or "conseil" in ll or "astuce" in ll or "top" in ll):
+                                detected_template = "EducatifVideoProps"
+                            break
+                    if cal_entry:
                         break
-                if cal_entry:
-                    break
 
             schema = _VOICEOVER_SCHEMAS[detected_template]
-            entry_block = f"\nENTRÉE CALENDRIER du {day_i:02d}/{month_i:02d}/{year_i} :\n{cal_entry}\n" if cal_entry else ""
-            calendar_block = f"\nCALENDRIER :\n{cal_ctx}\n" if cal_ctx else ""
-            vault = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-            vault_block = f"\nCONTEXTE MARQUE :\n{vault[:4000]}\n" if vault else ""
+            entry_block = f"\nINFOS DU POST À CRÉER :\n{cal_entry}\n" if cal_entry else ""
 
-            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
-Voix : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
-{memory_block}{entry_block}{vault_block}{calendar_block}{feedback_block}
-Génère un script COMPLET pour la vidéo {composition_id} avec le template {detected_template}.
-Sujet : {cal_entry or 'choisis un sujet pertinent depuis le calendrier ou les produits'}
-Textes COURTS (hookText max 8 mots, chaque desc/item max 8 mots).
-TOUS les champs doivent être remplis — aucun tableau vide, aucune chaîne vide.
-Réponds UNIQUEMENT en JSON valide correspondant exactement à ce schéma :
+            prompt = f"""Tu es expert en création de vidéos courtes pour ZenAquatique ({STORE_NICHE}).
+Voix de marque : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
+{memory_block}{vault_block}{entry_block}{feedback_block}
+MISSION : génère un script vidéo COMPLET et ORIGINAL pour le post {composition_id}.
+Template imposé : {detected_template}
+Sujet imposé : {cal_entry or f'post ZenAquatique du {composition_id}'}
+
+RÈGLES STRICTES :
+- Utilise OBLIGATOIREMENT le sujet ci-dessus — ne l'invente pas
+- Tous les champs JSON doivent être remplis (aucun vide, aucun tableau vide)
+- Textes courts : hookText max 8 mots, chaque desc/item max 8 mots
+- Adapte le contenu aux produits réels de ZenAquatique (plantes aquatiques, crevettes…)
+- Respecte toutes les contraintes mémoire
+
+Réponds UNIQUEMENT avec du JSON valide correspondant exactement à ce schéma :
 {schema}"""
             template_type = detected_template
         else:
             template_type = existing_props.get("template_type", "")
             schema = _VOICEOVER_SCHEMAS.get(template_type, "")
-            vault = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-            vault_block   = f"\nCONTEXTE MARQUE :\n{vault[:6000]}\n" if vault else ""
             current_block = f"\nSCRIPT ACTUEL :\n{generate_voiceover(existing_props)}\n"
-            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
-Voix : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
+            prompt = f"""Tu es expert en création de vidéos courtes pour ZenAquatique ({STORE_NICHE}).
+Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
 {vault_block}{memory_block}{current_block}{feedback_block}
-Génère un NOUVEAU script pour {composition_id} (template : {template_type}).
-Textes COURTS. Respecte STRICTEMENT les contraintes mémoire.
+MISSION : génère un NOUVEAU script amélioré pour {composition_id} (template : {template_type}).
+Tous les champs doivent être remplis. Textes courts. Respecte les contraintes mémoire.
 Réponds UNIQUEMENT en JSON valide avec ce schéma :
 {schema}"""
 
@@ -482,21 +496,20 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
-# Alias POST /api/script — génère TOUJOURS un nouveau script (vide le cache d'abord)
+# POST /api/script — génère TOUJOURS un nouveau script (vide le cache d'abord)
 @app.post("/api/script")
 async def api_script(request: Request):
     body = await request.json()
     composition_id = body.get("composition_id", "").strip()
     feedback = body.get("feedback", "").strip()
+    context  = body.get("context", "").strip()   # ligne calendrier envoyée par le frontend
     if not composition_id:
         raise HTTPException(400, "composition_id manquant")
-    # Vider le cache pour forcer une vraie regénération
-    cache_file = SCRIPTS_DIR / f"{composition_id}.json"
-    if cache_file.exists():
-        cache_file.unlink(missing_ok=True)
+    # Vider le cache
+    (SCRIPTS_DIR / f"{composition_id}.json").unlink(missing_ok=True)
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
-        _executor, _generate_voiceover_ai_sync, composition_id, feedback, True
+        _executor, _generate_voiceover_ai_sync, composition_id, feedback, True, context
     )
     if result.get("status") == "error":
         raise HTTPException(500, result["error"])

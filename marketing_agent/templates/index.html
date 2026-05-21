@@ -1438,20 +1438,37 @@ function askAgentToCreate(compositionId) {
 }
 
 // ── Voix off IA ──────────────────────────────────────────────────────────────
-let _voCid  = null;
-let _voTpl  = null;
-let _voProps = null;
+let _voCid      = null;
+let _voTpl      = null;
+let _voProps    = null;
+let _voRowCtx   = '';   // contenu brut de la ligne calendrier
+
+// Extrait le texte utile d'une ligne de table pour le post donné
+function _getRowContext(compositionId) {
+  const btns = document.querySelectorAll(`button[onclick*="'${compositionId}'"]`);
+  for (const btn of btns) {
+    const row = btn.closest('tr');
+    if (row) {
+      // Toutes les cellules sauf la dernière (Actions)
+      const cells = [...row.querySelectorAll('td')].slice(0, -1);
+      return cells.map(td => td.textContent.trim()).filter(Boolean).join(' | ');
+    }
+  }
+  return '';
+}
 
 async function calendarVoiceover(compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
-  _voCid = compositionId;
+  _voCid    = compositionId;
+  _voRowCtx = _getRowContext(compositionId);   // capture la ligne du calendrier
   document.getElementById('voiceover-id').textContent = compositionId;
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
+  document.getElementById('voiceover-error').style.display = 'none';
   const panel = document.getElementById('voiceover-panel');
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
-  await _fetchVoiceover(compositionId, '');
+  await _fetchVoiceover(compositionId);
 }
 
 async function regenVoiceover() {
@@ -1473,7 +1490,7 @@ async function regenVoiceoverAI() {
     const res = await fetch('/api/script', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({composition_id: _voCid, feedback}),
+      body: JSON.stringify({composition_id: _voCid, feedback, context: _voRowCtx}),
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.detail || 'Erreur');
@@ -1495,34 +1512,57 @@ async function regenVoiceoverAI() {
 }
 
 async function _fetchVoiceover(compositionId) {
-  const errDiv = document.getElementById('voiceover-error');
+  const errDiv  = document.getElementById('voiceover-error');
   const spinner = document.getElementById('voiceover-spinner');
   const spinnerText = spinner?.querySelector('span');
   errDiv.style.display = 'none';
-  if (spinnerText) spinnerText.textContent = 'Chargement du script…';
+
   try {
-    // Single endpoint: cache → Root.tsx → generate IA (auto)
-    const res = await fetch(`/api/script/${compositionId}`);
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
-    _voTpl  = d.props?.template_type || '';
-    _voProps = d.props || null;
-    const badge = document.getElementById('voiceover-template');
-    if (d.is_new) {
-      badge.textContent = '✨ Nouveau — ' + _voTpl.replace('Props','');
-      badge.style.cssText = 'font-size:.7rem;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;margin-left:8px';
-    } else {
-      badge.textContent = _voTpl.replace('Props','');
-      badge.style.cssText = '';
+    // 1. Vérifie le cache (GET rapide)
+    if (spinnerText) spinnerText.textContent = 'Chargement…';
+    const cached = await fetch(`/api/script/${compositionId}`);
+    const cachedD = await cached.json();
+
+    if (cached.ok && cachedD.status === 'success') {
+      _applyScript(cachedD);
+      return;
     }
-    document.getElementById('voiceover-text').value = d.voiceover;
-    spinner.style.display = 'none';
-    document.getElementById('voiceover-fields').style.display = 'block';
+
+    // 2. Pas de cache → génère avec le contexte de la ligne calendrier
+    if (spinnerText) spinnerText.textContent = 'Génération du script IA…';
+    const genRes = await fetch('/api/script', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        composition_id: compositionId,
+        feedback: '',
+        context: _voRowCtx,   // ← contenu de la ligne du calendrier
+      }),
+    });
+    const genD = await genRes.json();
+    if (!genRes.ok) throw new Error(genD.detail || 'Erreur génération');
+    _applyScript(genD);
   } catch(e) {
     spinner.style.display = 'none';
     errDiv.textContent = '❌ ' + e.message;
     errDiv.style.display = 'block';
   }
+}
+
+function _applyScript(d) {
+  _voTpl   = d.props?.template_type || '';
+  _voProps = d.props || null;
+  const badge = document.getElementById('voiceover-template');
+  if (d.is_new) {
+    badge.textContent = '✨ ' + _voTpl.replace('Props','');
+    badge.style.cssText = 'font-size:.7rem;background:#ffc107;color:#000;padding:2px 6px;border-radius:4px;margin-left:8px';
+  } else {
+    badge.textContent = _voTpl.replace('Props','');
+    badge.style.cssText = '';
+  }
+  document.getElementById('voiceover-text').value = d.voiceover;
+  document.getElementById('voiceover-spinner').style.display = 'none';
+  document.getElementById('voiceover-fields').style.display = 'block';
 }
 
 async function approveAndRender(btn) {

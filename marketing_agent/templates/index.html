@@ -760,10 +760,9 @@ Chargement…</pre>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://npmcdn.to/flatpickr/dist/l10n/fr.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmYGAAAAA5W0F43V9bkr8GqZLi10"
-  crossorigin="anonymous"></script>
+  onerror="var s=document.createElement('script');s.src='https://unpkg.com/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js';document.head.appendChild(s)"></script>
 <script>
 // ── Navigation ──────────────────────────────────────────────────────────────
 function showSection(name, link) {
@@ -790,7 +789,13 @@ function showToast(msg, type = 'success') {
   el.className = `toast align-items-center border-0 text-bg-${type}`;
   document.getElementById('toast-msg').textContent = msg;
   const delay = type === 'danger' ? 8000 : 3500;
-  bootstrap.Toast.getOrCreateInstance(el, {delay}).show();
+  if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+    bootstrap.Toast.getOrCreateInstance(el, {delay}).show();
+  } else {
+    // Fallback : affichage natif sans Bootstrap JS
+    el.style.cssText = 'display:block;opacity:1;position:fixed;top:1rem;right:1rem;z-index:9999;min-width:250px';
+    setTimeout(() => { el.style.display = 'none'; }, delay);
+  }
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
@@ -1030,19 +1035,31 @@ function openReply(id, platform, sender) {
   _replyId = id; _replyPlatform = platform;
   document.getElementById('reply-context').textContent = `Répondre à ${sender} sur ${platform}`;
   document.getElementById('reply-text').value = '';
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('replyModal')).show();
+  const modal = document.getElementById('replyModal');
+  if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+  } else {
+    modal.style.display = 'block';
+    modal.classList.add('show');
+  }
 }
 
 async function sendReply() {
   const text = document.getElementById('reply-text').value.trim();
   if (!text) return;
   try {
-    const res = await fetch(`/api/messages/${encodeURIComponent(_replyId)}/reply`, {
+    await fetch(`/api/messages/${encodeURIComponent(_replyId)}/reply`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({platform: _replyPlatform, reply_text: text})
     });
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('replyModal')).hide();
+    const modal = document.getElementById('replyModal');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+      bootstrap.Modal.getOrCreateInstance(modal).hide();
+    } else {
+      modal.style.display = 'none';
+      modal.classList.remove('show');
+    }
     showToast('Réponse envoyée !', 'success');
     loadMessages();
   } catch(e) {
@@ -1572,6 +1589,7 @@ async function approveAndRender(btn) {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Écriture Root.tsx + rendu…';
   const errBox = document.getElementById('render-error-box');
   if (errBox) errBox.style.display = 'none';
+  let apiOk = false;
   try {
     const res = await fetch('/api/approve-voiceover', {
       method: 'POST',
@@ -1579,18 +1597,23 @@ async function approveAndRender(btn) {
       body: JSON.stringify({composition_id: _voCid}),
     });
     const d = await res.json();
-    if (!res.ok) throw new Error(d.detail || 'Erreur');
+    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
+    apiOk = true;
     btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Vidéo générée !';
     btn.className = btn.className.replace('btn-primary','btn-success');
     showToast(`✅ ${_voCid}.mp4 généré !`, 'success');
   } catch(e) {
+    if (apiOk) {
+      // L'API a réussi mais showToast a planté (bootstrap non chargé) — pas d'erreur réelle
+      return;
+    }
     btn.innerHTML = orig;
     btn.disabled = false;
     if (errBox) {
       errBox.textContent = '❌ Erreur :\n' + e.message;
       errBox.style.display = 'block';
     }
-    showToast('Erreur rendu', 'danger');
+    try { showToast('Erreur rendu', 'danger'); } catch(_) {}
   }
 }
 

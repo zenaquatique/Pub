@@ -546,29 +546,45 @@ def _generate_with_gemini(
 
         vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
         memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-        vault_block  = f"\nCONTEXTE MARQUE :\n{vault[:5000]}\n" if vault else ""
-        memory_block = f"\nCONTRAINTES MÉMOIRE :\n{memory}\n" if memory else ""
+        vault_block  = f"\nCONNAISSANCES MARQUE :\n{vault[:6000]}\n" if vault else ""
+        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory}\n" if memory else ""
         fb_block     = f"\nFEEDBACK : {feedback}\n" if feedback else ""
 
         if is_new:
             cal_entry, template_type = _build_cal_entry(composition_id, context)
-            schema = _VOICEOVER_SCHEMAS[template_type]
-            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
-Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
-{memory_block}{vault_block}
-POST : {cal_entry or composition_id}
-{fb_block}
-Génère un script pour le post {composition_id} avec le template {template_type}.
-TOUS les champs remplis, textes courts mais précis, produits réels ZenAquatique.
-Réponds UNIQUEMENT en JSON selon ce schéma : {schema}"""
         else:
             template_type = existing_props.get("template_type", "EducatifVideoProps")
-            schema = _VOICEOVER_SCHEMAS.get(template_type, "")
-            prompt = f"""Tu es expert en vidéo courte pour ZenAquatique ({STORE_NICHE}).
-{vault_block}{memory_block}
-Script actuel : {generate_voiceover(existing_props)}
+            cal_entry = ""
+
+        schema = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
+
+        if is_new:
+            subject = cal_entry or f"Post ZenAquatique du {composition_id}"
+            prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.
+Voix de marque : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
+{memory_block}{vault_block}
+POST À CRÉER : {subject}
+TEMPLATE : {template_type}
 {fb_block}
-Améliore ce script (template : {template_type}). Réponds en JSON : {schema}"""
+Génère un JSON avec DEUX parties :
+1. "props" : textes courts pour les overlays vidéo (ce qui s'affiche à l'écran) — selon ce schéma : {schema}
+2. "voiceover" : script voix off COMPLET en vraies phrases commerciales percutantes (ce qu'on entend) — minimum 6 phrases, arguments de vente concrets, bénéfices produits réels, CTA clair.
+
+IMPORTANT props : tous les champs remplis, textes accrocheurs mais courts (max 8 mots par champ).
+IMPORTANT voiceover : vraies phrases complètes, pas des mots-clés. Donne envie d'acheter.
+
+Réponds UNIQUEMENT en JSON :
+{{"template_type":"{template_type}","props":{schema},"voiceover":"[ACCROCHE]\\nTexte...\\n\\n[CORPS]\\nTexte...\\n\\n[CTA]\\nTexte..."}}"""
+        else:
+            current_vo = generate_voiceover(existing_props)
+            prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique.
+Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
+{memory_block}{vault_block}
+Script actuel du post {composition_id} (template {template_type}) :
+{current_vo}
+{fb_block}
+Génère une version améliorée. Réponds en JSON :
+{{"template_type":"{template_type}","props":{schema},"voiceover":"Script voix off amélioré avec vraies phrases commerciales."}}"""
 
         client = genai.Client(api_key=GOOGLE_API_KEY)
         resp = client.models.generate_content(
@@ -578,16 +594,25 @@ Améliore ce script (template : {template_type}). Réponds en JSON : {schema}"""
                 response_mime_type="application/json", temperature=0.85
             ),
         )
-        raw = json.loads(resp.text.strip())
-        props = raw if isinstance(raw, dict) else {}
-        props["template_type"]  = template_type
+        raw  = json.loads(resp.text.strip())
+        props     = raw.get("props", raw)
+        voiceover = raw.get("voiceover", "")
+        t_type    = raw.get("template_type", template_type)
+
+        if not isinstance(props, dict):
+            props = {}
+        props["template_type"]  = t_type
         props["composition_id"] = composition_id
+
+        # Fallback mécanique si Gemini n'a pas généré de voiceover
+        if not voiceover:
+            voiceover = generate_voiceover(props)
 
         result = {
             "status": "success",
             "composition_id": composition_id,
             "props": props,
-            "voiceover": generate_voiceover(props),
+            "voiceover": voiceover,
             "is_new": is_new,
             "model": "gemini",
         }

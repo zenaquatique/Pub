@@ -546,9 +546,9 @@ def _generate_with_gemini(
 
         vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
         memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-        vault_block  = f"\nCONNAISSANCES MARQUE :\n{vault[:6000]}\n" if vault else ""
-        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory}\n" if memory else ""
-        fb_block     = f"\nFEEDBACK : {feedback}\n" if feedback else ""
+        vault_block  = f"\nCONNAISSANCES MARQUE (utilise ces infos pour les bénéfices produits) :\n{vault[:6000]}\n" if vault else ""
+        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires, respecte-les toutes) :\n{memory}\n" if memory else ""
+        fb_block     = f"\nRETOUR UTILISATEUR : {feedback}\n" if feedback else ""
 
         if is_new:
             cal_entry, template_type = _build_cal_entry(composition_id, context)
@@ -556,57 +556,78 @@ def _generate_with_gemini(
             template_type = existing_props.get("template_type", "EducatifVideoProps")
             cal_entry = ""
 
-        schema = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
-
-        if is_new:
-            subject = cal_entry or f"Post ZenAquatique du {composition_id}"
-            prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.
-Voix de marque : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
-{memory_block}{vault_block}
-POST À CRÉER : {subject}
-TEMPLATE : {template_type}
-{fb_block}
-Génère un JSON avec DEUX parties :
-1. "props" : textes courts pour les overlays vidéo (ce qui s'affiche à l'écran) — selon ce schéma : {schema}
-2. "voiceover" : script voix off COMPLET en vraies phrases commerciales percutantes (ce qu'on entend) — minimum 6 phrases, arguments de vente concrets, bénéfices produits réels, CTA clair.
-
-IMPORTANT props : tous les champs remplis, textes accrocheurs mais courts (max 8 mots par champ).
-IMPORTANT voiceover : vraies phrases complètes, pas des mots-clés. Donne envie d'acheter.
-
-Réponds UNIQUEMENT en JSON :
-{{"template_type":"{template_type}","props":{schema},"voiceover":"[ACCROCHE]\\nTexte...\\n\\n[CORPS]\\nTexte...\\n\\n[CTA]\\nTexte..."}}"""
-        else:
-            current_vo = generate_voiceover(existing_props)
-            prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique.
-Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
-{memory_block}{vault_block}
-Script actuel du post {composition_id} (template {template_type}) :
-{current_vo}
-{fb_block}
-Génère une version améliorée. Réponds en JSON :
-{{"template_type":"{template_type}","props":{schema},"voiceover":"Script voix off amélioré avec vraies phrases commerciales."}}"""
+        subject = cal_entry or f"Post ZenAquatique du {composition_id}"
+        schema  = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
 
         client = genai.Client(api_key=GOOGLE_API_KEY)
-        resp = client.models.generate_content(
+
+        # ── Appel 1 : props JSON (textes courts pour les overlays visuels) ──
+        props_prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.
+Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
+{memory_block}{vault_block}
+Crée les textes d'OVERLAY VIDÉO pour le post : {subject}
+Template : {template_type}
+{fb_block}
+Règles : textes courts (hookText max 7 mots), accrocheurs, remplis TOUS les champs avec du contenu ZenAquatique réel.
+Réponds UNIQUEMENT en JSON selon ce schéma exact :
+{schema}"""
+
+        resp_props = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=prompt,
+            contents=props_prompt,
             config=gtypes.GenerateContentConfig(
-                response_mime_type="application/json", temperature=0.85
+                response_mime_type="application/json", temperature=0.75
             ),
         )
-        raw  = json.loads(resp.text.strip())
-        props     = raw.get("props", raw)
-        voiceover = raw.get("voiceover", "")
-        t_type    = raw.get("template_type", template_type)
-
-        if not isinstance(props, dict):
+        try:
+            props = json.loads(resp_props.text.strip())
+            if not isinstance(props, dict):
+                props = {}
+        except Exception:
             props = {}
+
+        # ── Appel 2 : voiceover texte libre (vrai script commercial continu) ──
+        vo_prompt = f"""Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique en ligne française spécialisée en plantes aquatiques, crevettes et équipements d'aquariophilie.
+Ton/voix de marque : {BRAND_VOICE}
+Audience cible : {TARGET_AUDIENCE}
+{memory_block}{vault_block}
+Sujet de la vidéo : {subject}
+Type de vidéo : {template_type}
+{fb_block}
+
+MISSION : Écris le SCRIPT VOIX OFF complet pour cette vidéo. Ce texte sera lu par une voix off en studio.
+
+RÈGLES ABSOLUES :
+• Monologue CONTINU — AUCUN titre de section, AUCUN timestamp, AUCUN "Titre affiché :", AUCUNE indication technique
+• VRAIES phrases complètes avec sujet + verbe + bénéfice concret (pas des mots-clés isolés comme "Lumière adaptée" ou "Fer et CO2")
+• Minimum 10 phrases, 80 mots minimum
+• Bénéfices concrets à mentionner : beauté visuelle du produit, facilité d'entretien, qualité des boutures cultivées en France, livraison rapide, passion aquariophile, rapport qualité/prix
+• Ton : enthousiaste, naturel, proche du client — comme si tu parlais à un ami passionné d'aquariophilie
+• Termine TOUJOURS par un CTA clair : "Commande sur zen-aquatique.fr" ou "Découvre notre sélection sur zen-aquatique.fr"
+
+EXEMPLE de voix off correcte :
+"Tu veux un aquarium qui en met plein la vue ? La Ludwigia rouge passion est exactement ce qu'il te faut. Avec ses feuilles rouge sang qui virent à l'orangé selon l'intensité lumineuse, elle devient le point focal de n'importe quel bac. Contrairement à ce qu'on croit, cette plante n'est pas difficile à cultiver. Un bon éclairage, quelques apports en fer, et elle explose littéralement de couleur. Chez ZenAquatique, nos boutures sont cultivées en France dans nos propres bassins — tu reçois des plantes saines, enracinées, prêtes à pousser. Des centaines d'aquariophiles nous font confiance chaque mois pour transformer leur bac. Ne perds pas de temps — commande ta Ludwigia dès maintenant sur zen-aquatique.fr et offre à ton aquarium les couleurs qu'il mérite !"
+
+Écris maintenant le script voix off pour "{subject}", sans aucun titre ni indication technique, uniquement le texte à lire :"""
+
+        resp_vo = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=vo_prompt,
+            config=gtypes.GenerateContentConfig(temperature=0.9),
+        )
+        voiceover = resp_vo.text.strip() if resp_vo.text else ""
+
+        # Nettoyage des éventuelles guillemets ou préfixes parasites
+        if voiceover.startswith('"') and voiceover.endswith('"'):
+            voiceover = voiceover[1:-1]
+
+        # Fallback uniquement si les deux appels ont échoué
+        if not voiceover:
+            voiceover = generate_voiceover(props) if props else ""
+
+        t_type = template_type
         props["template_type"]  = t_type
         props["composition_id"] = composition_id
-
-        # Fallback mécanique si Gemini n'a pas généré de voiceover
-        if not voiceover:
-            voiceover = generate_voiceover(props)
 
         result = {
             "status": "success",

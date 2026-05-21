@@ -40,6 +40,10 @@ POSTING_HOUR = int(os.environ.get("POSTING_HOUR", "9"))
 POSTING_MINUTE = int(os.environ.get("POSTING_MINUTE", "0"))
 POSTING_TIMEZONE = os.environ.get("POSTING_TIMEZONE", "Europe/Paris")
 
+# Claude API (optionnel — priorité sur Gemini si clé fournie)
+ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
+CLAUDE_SCRIPT_MODEL = os.environ.get("CLAUDE_SCRIPT_MODEL", "claude-opus-4-7")
+
 # Ressources locales (vault Obsidian + dossier vidéo)
 OBSIDIAN_VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", r"C:\Users\ec\Desktop\Obsidian\Pub")
 VIDEO_ASSETS_PATH   = os.environ.get("VIDEO_ASSETS_PATH",   r"C:\Users\ec\Desktop\zenaquatique-video")

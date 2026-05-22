@@ -527,13 +527,14 @@ Génère un JSON avec cette structure :
         voiceover = data.get("voiceover", "")
         t_type    = data.get("template_type", template_type)
 
-        # ── Vérification post-génération : mots interdits ──
+        # ── Vérification post-génération : mots-clés interdits ──
         _BANNED = [
-            "pesticide", "traitées avec", "traité avec", "traitement chimique",
-            "mourir en deux semaines", "mourir en 2 semaines",
-            "meurent en deux semaines", "meurent en 2 semaines",
-            "meurent au bout de 2 semaines", "meurent au bout de deux semaines",
-            "die in two weeks", "importées d'asie", "importées d'asie",
+            "pesticide", "traitement", "traitée", "traité",
+            "2 semaines", "deux semaines",
+            "meurent", "mourir", "dépéri",
+            "animalerie", "animaleries",
+            "importées d'asie", "importé d'asie",
+            "concurrent", "concurrente",
         ]
         vo_lower = voiceover.lower()
         violations = [w for w in _BANNED if w in vo_lower]
@@ -541,11 +542,13 @@ Génère un JSON avec cette structure :
             logger.warning("Contenu interdit détecté (%s) — relance forcée", violations)
             retry_msg = (
                 f"{user_msg}\n\n"
-                f"⚠️ ERREUR CRITIQUE : ton précédent script contenait des affirmations interdites "
-                f"({', '.join(violations)}). Ces sujets sont STRICTEMENT INTERDITS. "
-                f"Réécris entièrement le voiceover EN IGNORANT COMPLÈTEMENT ces sujets. "
-                f"Parle uniquement des bénéfices positifs de ZenAquatique : beauté des plantes, "
-                f"prix accessibles, cultivées en France, livraison rapide, passion aquariophile."
+                f"⚠️ TON PRÉCÉDENT SCRIPT ÉTAIT REFUSÉ car il contenait des mots interdits : "
+                f"{', '.join(violations)}.\n\n"
+                f"NOUVELLE CONSIGNE STRICTE : parle UNIQUEMENT des points forts de ZenAquatique. "
+                f"N'évoque PAS les animaleries, PAS les concurrents, PAS les plantes qui meurent, "
+                f"PAS les pesticides ou traitements. "
+                f"Angles autorisés : beauté visuelle, prix à partir de 0,99€, cultivées en France, "
+                f"livraison rapide, facilité d'entretien, passion aquariophile."
             )
             msg2 = _call_claude([{"role": "user", "content": retry_msg}])
             raw2 = next(

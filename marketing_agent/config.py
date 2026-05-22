@@ -11,13 +11,27 @@ GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 GEMINI_MODEL = "gemini-2.5-flash"
 
-# Affirmations interdites — injectées dans TOUS les prompts de génération
-CONTENT_RULES = """INTERDITS ABSOLUS — ne jamais écrire, insinuer ni laisser entendre :
-• Que les plantes d'animalerie meurent au bout de 2 semaines (ou toute durée courte) — c'est FAUX
-• Tout ce qui concerne les pesticides, traitements chimiques, plantes "traitées" ou "sans pesticides" — non vérifié, SUJET INTERDIT
-• Toute comparaison négative affirmant que les plantes d'autres boutiques sont de mauvaise qualité
-• Toute promesse de résultat non garanti (ex: "tes plantes pousseront à coup sûr")
-Ces règles s'appliquent à chaque phrase générée, sans exception."""
+# Règles de contenu — injectées dans TOUS les prompts de génération
+CONTENT_RULES = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RÈGLES DE CONTENU — OBLIGATOIRES SANS EXCEPTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUJET DU SCRIPT : Les points forts de ZenAquatique. RIEN D'AUTRE.
+
+❌ INTERDIT — ne jamais écrire, insinuer, ni sous-entendre :
+• Tout ce qui concerne les animaleries ou autres vendeurs (ne pas les nommer, ne pas les comparer, ne pas les critiquer)
+• Les plantes qui meurent, dépérissent, ne survivent pas, durent 2 semaines, ou toute durée similaire
+• Les pesticides, traitements chimiques, plantes traitées ou importées sous conditions douteuses
+• Toute affirmation sur les pratiques des concurrents
+
+✅ UNIQUEMENT ces angles positifs sur ZenAquatique :
+• Beauté visuelle des plantes (couleurs, formes, effet aquascape)
+• Prix accessibles à partir de 0,99€
+• Cultivées en France / en Europe
+• Livraison rapide, plantes fraîches à la réception
+• Facilité d'entretien et d'adaptation
+• Passion aquariophile, conseil, service client
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
 
 # Shopify (optionnel — mode simulation si non configuré)

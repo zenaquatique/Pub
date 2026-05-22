@@ -8,8 +8,16 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # Google Gemini (agent principal + actions marketing)
-GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 GEMINI_MODEL = "gemini-2.5-flash"
+
+# Affirmations interdites — injectées dans TOUS les prompts de génération
+CONTENT_RULES = """INTERDITS ABSOLUS — ne jamais écrire, insinuer ni laisser entendre :
+• Que les plantes d'animalerie meurent au bout de 2 semaines (ou toute durée courte) — c'est FAUX
+• Tout ce qui concerne les pesticides, traitements chimiques, plantes "traitées" ou "sans pesticides" — non vérifié, SUJET INTERDIT
+• Toute comparaison négative affirmant que les plantes d'autres boutiques sont de mauvaise qualité
+• Toute promesse de résultat non garanti (ex: "tes plantes pousseront à coup sûr")
+Ces règles s'appliquent à chaque phrase générée, sans exception."""
 
 
 # Shopify (optionnel — mode simulation si non configuré)

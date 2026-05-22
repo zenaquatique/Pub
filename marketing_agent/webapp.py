@@ -20,7 +20,7 @@ from config import (
     OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH, GOOGLE_API_KEY, GEMINI_MODEL,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
-    GROQ_API_KEY, GROQ_MODEL,
+    GROQ_API_KEY, GROQ_MODEL, CONTENT_RULES,
 )
 from tools.customer import (
     get_pending_messages,
@@ -569,6 +569,7 @@ def _generate_with_groq(
                     f"Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.\n"
                     f"Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
                     f"{memory_block}{vault_block}"
+                    f"\n{CONTENT_RULES}\n\n"
                     "Réponds UNIQUEMENT en JSON valide selon le schéma fourni. "
                     "Textes courts (hookText max 7 mots), accrocheurs, tous les champs remplis avec du contenu ZenAquatique réel."
                 )},
@@ -598,7 +599,8 @@ def _generate_with_groq(
                     f"Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques et crevettes.\n"
                     f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
                     f"{memory_block}{vault_block}"
-                    "RÈGLES ABSOLUES :\n"
+                    f"\n{CONTENT_RULES}\n\n"
+                    "RÈGLES DE FORMAT :\n"
                     "• Monologue CONTINU — aucun titre, aucun timestamp, aucun 'Titre affiché'\n"
                     "• Vraies phrases complètes (sujet + verbe + bénéfice concret)\n"
                     "• Minimum 10 phrases, 80 mots minimum\n"
@@ -736,6 +738,7 @@ def _text_to_props_sync(script_text: str, composition_id: str, template_type: st
             {"role": "system", "content": (
                 f"Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).\n"
                 f"{memory_block}"
+                f"\n{CONTENT_RULES}\n\n"
                 "Convertis les scripts en JSON selon le schéma exact. "
                 "Textes courts : hookText max 8 mots, items max 6 mots. "
                 "Réponds UNIQUEMENT en JSON valide."
@@ -887,6 +890,7 @@ def _generate_video_script_sync(topic: str, platform: str, duration: str,
                 f"Voix de marque : {BRAND_VOICE}\nCible : {TARGET_AUDIENCE}\n"
                 f"{f'VAULT OBSIDIAN :{chr(10)}{vault_content[:6000]}' if vault_content else ''}\n"
                 f"ASSETS DISPONIBLES :\n{asset_list}\n"
+                f"\n{CONTENT_RULES}\n\n"
                 "Réponds UNIQUEMENT en JSON valide avec les clés demandées."
             )},
             {"role": "user", "content": (

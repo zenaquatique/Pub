@@ -10,6 +10,7 @@ from config import (
     GROQ_API_KEY, GROQ_MODEL, STORE_NAME,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
+    CONTENT_RULES,
 )
 from tools import shopify, social, email_campaigns, customer
 from tools.knowledge import (
@@ -501,6 +502,8 @@ ASSETS VIDÉO / IMAGES DISPONIBLES
 Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
 Boutique : https://{SHOPIFY_SHOP_URL} | Aujourd'hui : {today}
 {memory_section}{vault_section}{assets_section}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{CONTENT_RULES}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE COMPORTEMENT — OBLIGATOIRES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

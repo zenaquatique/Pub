@@ -116,6 +116,20 @@ def _run_agent_sync(task: str) -> None:
 app = FastAPI(title=f"{STORE_NAME} — Marketing Agent")
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
+# Purge les entrées de cache générées depuis Root.tsx (sans IA) au démarrage
+def _purge_root_tsx_cache() -> None:
+    if not SCRIPTS_DIR.exists():
+        return
+    for f in SCRIPTS_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if data.get("source") == "root_tsx":
+                f.unlink()
+        except Exception:
+            pass
+
+_purge_root_tsx_cache()
+
 _HTML_FILE = Path(__file__).parent / "templates" / "index.html"
 
 
@@ -682,26 +696,11 @@ async def api_script(request: Request):
 
 @app.get("/api/script/{composition_id}")
 async def api_get_script(composition_id: str):
-    """Charge le script depuis le cache, Root.tsx, ou génère via IA."""
-    # 1. Cache
+    """Charge le script depuis le cache ou génère via IA."""
     cached = _load_script(composition_id)
     if cached.get("status") == "success":
         return cached
-    # 2. Root.tsx
-    props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
-    if props:
-        voiceover = generate_voiceover(props)
-        data = {
-            "status": "success",
-            "composition_id": composition_id,
-            "props": props,
-            "voiceover": voiceover,
-            "is_new": False,
-            "source": "root_tsx",
-        }
-        _save_script(composition_id, data)
-        return data
-    # 3. Génération IA (nouveau post)
+    # Aucun cache → génération IA
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         _executor, _generate_voiceover_ai_sync, composition_id, "", False

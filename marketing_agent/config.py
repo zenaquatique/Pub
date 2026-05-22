@@ -3,6 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Groq (script voix off + vidéo — priorité sur Gemini)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
 # Google Gemini (agent principal + actions marketing)
 GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
 GEMINI_MODEL = "gemini-2.5-flash"

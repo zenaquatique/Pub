@@ -20,6 +20,7 @@ from config import (
     OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH, GOOGLE_API_KEY, GEMINI_MODEL,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
+    GROQ_API_KEY, GROQ_MODEL,
 )
 from tools.customer import (
     get_pending_messages,
@@ -369,12 +370,13 @@ def _generate_voiceover_ai_sync(
     composition_id: str,
     feedback: str = "",
     force_reset: bool = False,
-    context: str = "",      # ligne du calendrier envoyée par le frontend
+    context: str = "",
 ) -> dict:
-    """Génère le script avec Claude (priorité) ou Gemini (fallback)."""
     if ANTHROPIC_API_KEY:
         return _generate_with_claude(composition_id, feedback, force_reset, context)
-    return _generate_with_gemini(composition_id, feedback, force_reset, context)
+    if GROQ_API_KEY:
+        return _generate_with_groq(composition_id, feedback, force_reset, context)
+    return {"status": "error", "error": "Aucune clé API configurée. Ajoutez GROQ_API_KEY dans le fichier .env"}
 
 
 def _build_cal_entry(composition_id: str, context: str) -> tuple[str, str]:
@@ -528,15 +530,14 @@ Génère un JSON avec cette structure :
         return _generate_with_gemini(composition_id, feedback, force_reset, context)
 
 
-def _generate_with_gemini(
+def _generate_with_groq(
     composition_id: str,
     feedback: str,
     force_reset: bool,
     context: str,
 ) -> dict:
     try:
-        from google import genai
-        from google.genai import types as gtypes
+        from groq import Groq
 
         if feedback or force_reset or context:
             existing_props = {}
@@ -546,8 +547,8 @@ def _generate_with_gemini(
 
         vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
         memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-        vault_block  = f"\nCONNAISSANCES MARQUE (utilise ces infos pour les bénéfices produits) :\n{vault[:6000]}\n" if vault else ""
-        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires, respecte-les toutes) :\n{memory}\n" if memory else ""
+        vault_block  = f"\nCONNAISSANCES MARQUE :\n{vault[:6000]}\n" if vault else ""
+        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory}\n" if memory else ""
         fb_block     = f"\nRETOUR UTILISATEUR : {feedback}\n" if feedback else ""
 
         if is_new:
@@ -558,75 +559,71 @@ def _generate_with_gemini(
 
         subject = cal_entry or f"Post ZenAquatique du {composition_id}"
         schema  = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
+        client  = Groq(api_key=GROQ_API_KEY)
 
-        client = genai.Client(api_key=GOOGLE_API_KEY)
-
-        # ── Appel 1 : props JSON (textes courts pour les overlays visuels) ──
-        props_prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.
-Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}
-{memory_block}{vault_block}
-Crée les textes d'OVERLAY VIDÉO pour le post : {subject}
-Template : {template_type}
-{fb_block}
-Règles : textes courts (hookText max 7 mots), accrocheurs, remplis TOUS les champs avec du contenu ZenAquatique réel.
-Réponds UNIQUEMENT en JSON selon ce schéma exact :
-{schema}"""
-
-        resp_props = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=props_prompt,
-            config=gtypes.GenerateContentConfig(
-                response_mime_type="application/json", temperature=0.75
-            ),
+        # ── Appel 1 : props JSON (overlays visuels courts) ──
+        resp_props = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": (
+                    f"Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.\n"
+                    f"Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
+                    f"{memory_block}{vault_block}"
+                    "Réponds UNIQUEMENT en JSON valide selon le schéma fourni. "
+                    "Textes courts (hookText max 7 mots), accrocheurs, tous les champs remplis avec du contenu ZenAquatique réel."
+                )},
+                {"role": "user", "content": (
+                    f"Crée les textes d'overlay vidéo pour : {subject}\n"
+                    f"Template : {template_type}\n"
+                    f"{fb_block}\n"
+                    f"Schéma JSON exact :\n{schema}"
+                )},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.75,
+            max_tokens=2048,
         )
         try:
-            props = json.loads(resp_props.text.strip())
+            props = json.loads(resp_props.choices[0].message.content)
             if not isinstance(props, dict):
                 props = {}
         except Exception:
             props = {}
 
-        # ── Appel 2 : voiceover texte libre (vrai script commercial continu) ──
-        vo_prompt = f"""Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique en ligne française spécialisée en plantes aquatiques, crevettes et équipements d'aquariophilie.
-Ton/voix de marque : {BRAND_VOICE}
-Audience cible : {TARGET_AUDIENCE}
-{memory_block}{vault_block}
-Sujet de la vidéo : {subject}
-Type de vidéo : {template_type}
-{fb_block}
-
-MISSION : Écris le SCRIPT VOIX OFF complet pour cette vidéo. Ce texte sera lu par une voix off en studio.
-
-RÈGLES ABSOLUES :
-• Monologue CONTINU — AUCUN titre de section, AUCUN timestamp, AUCUN "Titre affiché :", AUCUNE indication technique
-• VRAIES phrases complètes avec sujet + verbe + bénéfice concret (pas des mots-clés isolés comme "Lumière adaptée" ou "Fer et CO2")
-• Minimum 10 phrases, 80 mots minimum
-• Bénéfices concrets à mentionner : beauté visuelle du produit, facilité d'entretien, qualité des boutures cultivées en France, livraison rapide, passion aquariophile, rapport qualité/prix
-• Ton : enthousiaste, naturel, proche du client — comme si tu parlais à un ami passionné d'aquariophilie
-• Termine TOUJOURS par un CTA clair : "Commande sur zen-aquatique.fr" ou "Découvre notre sélection sur zen-aquatique.fr"
-
-EXEMPLE de voix off correcte :
-"Tu veux un aquarium qui en met plein la vue ? La Ludwigia rouge passion est exactement ce qu'il te faut. Avec ses feuilles rouge sang qui virent à l'orangé selon l'intensité lumineuse, elle devient le point focal de n'importe quel bac. Contrairement à ce qu'on croit, cette plante n'est pas difficile à cultiver. Un bon éclairage, quelques apports en fer, et elle explose littéralement de couleur. Chez ZenAquatique, nos boutures sont cultivées en France dans nos propres bassins — tu reçois des plantes saines, enracinées, prêtes à pousser. Des centaines d'aquariophiles nous font confiance chaque mois pour transformer leur bac. Ne perds pas de temps — commande ta Ludwigia dès maintenant sur zen-aquatique.fr et offre à ton aquarium les couleurs qu'il mérite !"
-
-Écris maintenant le script voix off pour "{subject}", sans aucun titre ni indication technique, uniquement le texte à lire :"""
-
-        resp_vo = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=vo_prompt,
-            config=gtypes.GenerateContentConfig(temperature=0.9),
+        # ── Appel 2 : voiceover texte libre (monologue commercial continu) ──
+        resp_vo = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": (
+                    f"Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques et crevettes.\n"
+                    f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
+                    f"{memory_block}{vault_block}"
+                    "RÈGLES ABSOLUES :\n"
+                    "• Monologue CONTINU — aucun titre, aucun timestamp, aucun 'Titre affiché'\n"
+                    "• Vraies phrases complètes (sujet + verbe + bénéfice concret)\n"
+                    "• Minimum 10 phrases, 80 mots minimum\n"
+                    "• Mentionne : beauté visuelle, facilité d'entretien, qualité française, livraison rapide\n"
+                    "• Ton enthousiaste et naturel\n"
+                    "• Termine par un CTA : 'Commande sur zen-aquatique.fr'\n"
+                    "Écris UNIQUEMENT le texte à lire, sans titre ni explication."
+                )},
+                {"role": "user", "content": (
+                    f"Écris le script voix off pour : {subject}\n"
+                    f"Type : {template_type}\n"
+                    f"{fb_block}"
+                )},
+            ],
+            temperature=0.9,
+            max_tokens=2048,
         )
-        voiceover = resp_vo.text.strip() if resp_vo.text else ""
+        voiceover = resp_vo.choices[0].message.content.strip() if resp_vo.choices else ""
 
-        # Nettoyage des éventuelles guillemets ou préfixes parasites
         if voiceover.startswith('"') and voiceover.endswith('"'):
             voiceover = voiceover[1:-1]
-
-        # Fallback uniquement si les deux appels ont échoué
         if not voiceover:
             voiceover = generate_voiceover(props) if props else ""
 
-        t_type = template_type
-        props["template_type"]  = t_type
+        props["template_type"]  = template_type
         props["composition_id"] = composition_id
 
         result = {
@@ -635,13 +632,13 @@ EXEMPLE de voix off correcte :
             "props": props,
             "voiceover": voiceover,
             "is_new": is_new,
-            "model": "gemini",
+            "model": "groq",
         }
         _save_script(composition_id, result)
         return result
 
     except Exception as exc:
-        logger.exception("Erreur _generate_with_gemini")
+        logger.exception("Erreur _generate_with_groq")
         return {"status": "error", "error": str(exc)}
 
 
@@ -722,9 +719,8 @@ async def api_delete_script(composition_id: str):
 
 
 def _text_to_props_sync(script_text: str, composition_id: str, template_type: str) -> dict:
-    """Convertit un script texte libre en props structurés via Gemini."""
-    from google import genai
-    from google.genai import types as gtypes
+    """Convertit un script texte libre en props structurés via Groq."""
+    from groq import Groq
 
     schema = _VOICEOVER_SCHEMAS.get(template_type, "")
     if not schema:
@@ -733,36 +729,35 @@ def _text_to_props_sync(script_text: str, composition_id: str, template_type: st
     memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
     memory_block = f"\nCONTRAINTES MÉMOIRE (respecte-les) :\n{memory}\n" if memory else ""
 
-    prompt = f"""Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).
-{memory_block}
-Voici un script rédigé par l'utilisateur pour la vidéo {composition_id} (template : {template_type}) :
-
----
-{script_text}
----
-
-Convertis ce script en JSON valide correspondant exactement à ce schéma :
-{schema}
-
-Respecte l'intention et le contenu du script. Textes courts (hookText max 8 mots, items max 6 mots).
-Réponds UNIQUEMENT en JSON valide, sans markdown ni explication."""
-
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    resp = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=gtypes.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.3,
-        ),
+    client = Groq(api_key=GROQ_API_KEY)
+    resp = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": (
+                f"Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).\n"
+                f"{memory_block}"
+                "Convertis les scripts en JSON selon le schéma exact. "
+                "Textes courts : hookText max 8 mots, items max 6 mots. "
+                "Réponds UNIQUEMENT en JSON valide."
+            )},
+            {"role": "user", "content": (
+                f"Script pour la vidéo {composition_id} (template : {template_type}) :\n\n"
+                f"---\n{script_text}\n---\n\n"
+                f"Convertis en JSON selon ce schéma :\n{schema}"
+            )},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.3,
+        max_tokens=2048,
     )
     try:
-        props = json.loads(resp.text.strip())
+        props = json.loads(resp.choices[0].message.content)
         props["template_type"] = template_type
         props["composition_id"] = composition_id
         return {"status": "success", "props": props}
     except Exception:
-        return {"status": "error", "error": "Réponse Gemini invalide", "raw": resp.text[:500]}
+        raw = resp.choices[0].message.content if resp.choices else ""
+        return {"status": "error", "error": "Réponse invalide", "raw": raw[:500]}
 
 
 @app.post("/api/approve-voiceover")
@@ -869,8 +864,7 @@ _REMOTION_TEMPLATE_HINTS = {
 
 def _generate_video_script_sync(topic: str, platform: str, duration: str,
                                  template: str = "", remotion: str = "") -> dict:
-    from google import genai
-    from google.genai import types as gtypes
+    from groq import Groq
 
     vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
     assets = list_video_assets(VIDEO_ASSETS_PATH)
@@ -883,42 +877,35 @@ def _generate_video_script_sync(topic: str, platform: str, duration: str,
     }
 
     template_hint = _REMOTION_TEMPLATE_HINTS.get(template, "")
-    template_section = f"\n\nTEMPLATE REMOTION SÉLECTIONNÉ — {template} ({remotion}) :\n{template_hint}" if template_hint else ""
-    vault_section = f"\n\nVAULT OBSIDIAN (connaissances marque et calendrier) :\n{vault_content}" if vault_content else ""
-    assets_section = f"\n\nASSETS DISPONIBLES dans le dossier vidéo :\n{asset_list}"
 
-    prompt = f"""Tu es expert en création de contenu vidéo courts pour {STORE_NAME} ({STORE_NICHE}).
-Voix de marque : {BRAND_VOICE}
-Cible : {TARGET_AUDIENCE}
-Plateforme : {platform_tips.get(platform, platform.upper())}
-{template_section}{vault_section}{assets_section}
-
-Crée un script vidéo COMPLET adapté au template ci-dessus (durée : {duration}).
-Sujet / brief : {topic or 'Choisis le produit le plus pertinent depuis le calendrier éditorial ou les analytics'}
-
-Respecte STRICTEMENT la structure du template (nombre de slots, durée, rythme).
-Réponds UNIQUEMENT en JSON valide avec cette structure :
-{{
-  "hook": "Accroche (3 premières secondes — ce qui stoppe le scroll)",
-  "script": "Script complet structuré selon le template — mot à mot, slot par slot",
-  "subtitles": ["sous-titre ligne 1", "sous-titre ligne 2", "..."],
-  "visuals": "Description précise des plans / visuels à filmer ou à insérer dans Remotion",
-  "cta": "Call-to-action final",
-  "caption": "Légende complète du post avec emojis",
-  "hashtags": ["#hashtag1", "#hashtag2"],
-  "remotion_notes": "Notes spécifiques pour configurer le template Remotion (textes des slots, couleurs, musique suggérée…)"
-}}"""
-
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=gtypes.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.8,
-        ),
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": (
+                f"Tu es expert en création de contenu vidéo court pour {STORE_NAME} ({STORE_NICHE}).\n"
+                f"Voix de marque : {BRAND_VOICE}\nCible : {TARGET_AUDIENCE}\n"
+                f"{f'VAULT OBSIDIAN :{chr(10)}{vault_content[:6000]}' if vault_content else ''}\n"
+                f"ASSETS DISPONIBLES :\n{asset_list}\n"
+                "Réponds UNIQUEMENT en JSON valide avec les clés demandées."
+            )},
+            {"role": "user", "content": (
+                f"Plateforme : {platform_tips.get(platform, platform.upper())}\n"
+                f"{f'TEMPLATE — {template} ({remotion}) :{chr(10)}{template_hint}' if template_hint else ''}\n"
+                f"Durée : {duration}\n"
+                f"Sujet : {topic or 'Choisis le produit le plus pertinent depuis le calendrier éditorial'}\n\n"
+                "Génère un script complet en JSON :\n"
+                '{"hook":"accroche 3s","script":"script complet mot à mot",'
+                '"subtitles":["ligne1","ligne2"],"visuals":"plans à filmer",'
+                '"cta":"call-to-action","caption":"légende avec emojis",'
+                '"hashtags":["#tag1"],"remotion_notes":"config Remotion"}'
+            )},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.8,
+        max_tokens=4096,
     )
-    raw = response.text.strip()
+    raw = response.choices[0].message.content if response.choices else ""
     try:
         return json.loads(raw)
     except Exception:

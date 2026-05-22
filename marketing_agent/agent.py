@@ -1,4 +1,4 @@
-"""Agent marketing autonome — cerveau central alimenté par Gemini."""
+"""Agent marketing autonome — alimenté par Groq (llama-3.3-70b-versatile)."""
 import json
 import logging
 import uuid
@@ -6,11 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from google import genai
-from google.genai import types
-
 from config import (
-    GOOGLE_API_KEY, GEMINI_MODEL, STORE_NAME,
+    GROQ_API_KEY, GROQ_MODEL, STORE_NAME,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
 )
@@ -34,326 +31,264 @@ WRITE_TOOLS = {
     "send_abandoned_cart_email",
 }
 
-client = genai.Client(api_key=GOOGLE_API_KEY)
+# ─── Définitions des outils (format OpenAI/Groq) ─────────────────────────────
 
-# ─── Définitions des outils ───────────────────────────────────────────────────
-
-TOOLS = [
-    types.Tool(
-        function_declarations=[
-            types.FunctionDeclaration(
-                name="get_store_analytics",
-                description="Récupère les statistiques actuelles de la boutique Shopify : commandes, chiffre d'affaires, produits populaires, stock faible.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={},
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="get_products",
-                description="Récupère la liste des produits actifs de la boutique avec prix, stock et images.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "limit": types.Schema(
-                            type=types.Type.INTEGER,
-                            description="Nombre de produits à récupérer (défaut 20)",
-                        ),
+TOOLS_GROQ = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_store_analytics",
+            "description": "Récupère les statistiques actuelles de la boutique Shopify : commandes, chiffre d'affaires, produits populaires, stock faible.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_products",
+            "description": "Récupère la liste des produits actifs de la boutique avec prix, stock et images.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Nombre de produits à récupérer (défaut 20)"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_product_description",
+            "description": "Met à jour la description HTML d'un produit Shopify pour améliorer le SEO et la conversion.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "integer", "description": "ID Shopify du produit"},
+                    "new_description": {"type": "string", "description": "Nouvelle description en HTML"},
+                },
+                "required": ["product_id", "new_description"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "post_to_instagram",
+            "description": "Publie un post sur Instagram avec une image et une légende.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caption": {"type": "string", "description": "Légende du post (avec hashtags)"},
+                    "image_url": {"type": "string", "description": "URL publique de l'image"},
+                },
+                "required": ["caption", "image_url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "post_to_facebook",
+            "description": "Publie un post sur la Page Facebook de la boutique.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Texte du post"},
+                    "link": {"type": "string", "description": "URL à partager (optionnel)"},
+                    "image_url": {"type": "string", "description": "URL de l'image (optionnel)"},
+                },
+                "required": ["message"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_newsletter",
+            "description": "Envoie une newsletter à tous les abonnés email de la boutique.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subject": {"type": "string", "description": "Objet de l'email"},
+                    "html_body": {"type": "string", "description": "Corps de l'email en HTML"},
+                    "plain_body": {"type": "string", "description": "Version texte brut (optionnel)"},
+                },
+                "required": ["subject", "html_body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pending_customer_messages",
+            "description": "Récupère les messages et commentaires clients en attente de réponse.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reply_to_customer",
+            "description": "Répond à un message ou commentaire client sur Instagram ou Facebook.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message_id": {"type": "string", "description": "ID du message client"},
+                    "platform": {"type": "string", "description": "Plateforme (instagram ou facebook)"},
+                    "reply_text": {"type": "string", "description": "Réponse à envoyer"},
+                },
+                "required": ["message_id", "platform", "reply_text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_abandoned_cart_email",
+            "description": "Envoie un email de relance à un client qui a abandonné son panier.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_email": {"type": "string"},
+                    "customer_name": {"type": "string"},
+                    "cart_items": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Liste des articles du panier",
                     },
-                ),
+                    "cart_url": {"type": "string", "description": "URL du panier"},
+                },
+                "required": ["customer_email", "customer_name", "cart_items", "cart_url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_brand_knowledge",
+            "description": "Relit la vault Obsidian et le dossier d'assets vidéo pour rafraîchir le contexte de marque, les instructions et les ressources disponibles.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "render_video",
+            "description": (
+                "Lance le rendu d'une vidéo Remotion. "
+                "L'ID de composition suit le format YYYYMMDD (ex: '20260519'). "
+                "La composition DOIT exister dans Root.tsx — utilise create_post_composition d'abord si elle n'existe pas."
             ),
-            types.FunctionDeclaration(
-                name="update_product_description",
-                description="Met à jour la description HTML d'un produit Shopify pour améliorer le SEO et la conversion.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "product_id": types.Schema(
-                            type=types.Type.INTEGER,
-                            description="ID Shopify du produit",
-                        ),
-                        "new_description": types.Schema(
-                            type=types.Type.STRING,
-                            description="Nouvelle description en HTML",
-                        ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "composition_id": {"type": "string", "description": "ID Remotion au format YYYYMMDD"},
+                    "output_filename": {"type": "string", "description": "Nom du fichier MP4 (optionnel)"},
+                },
+                "required": ["composition_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_rendered_videos",
+            "description": "Liste les vidéos MP4 déjà rendues dans le dossier out/ du projet Remotion.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_to_memory",
+            "description": (
+                "Enregistre une note importante dans la mémoire persistante (vault Obsidian). "
+                "Utilise dès que l'utilisateur exprime une préférence, une instruction récurrente, "
+                "un retour sur un contenu, ou toute information à retenir."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note": {"type": "string", "description": "Note claire et concise à mémoriser"},
+                },
+                "required": ["note"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_post_props",
+            "description": "Lit les props actuelles d'un post Remotion dans Root.tsx. À appeler avant toute modification.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "composition_id": {"type": "string", "description": "ID du post au format YYYYMMDD"},
+                },
+                "required": ["composition_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_post_props",
+            "description": (
+                "Écrit directement les nouvelles valeurs d'un post dans Root.tsx. "
+                "Champs modifiables : hookText, verdict, leftItems, rightItems, ctaText, tips, plants, musicTrack. "
+                "Appelle toujours render_video juste après."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "composition_id": {"type": "string", "description": "ID du post au format YYYYMMDD"},
+                    "updates": {
+                        "type": "object",
+                        "description": "Champs à modifier. Ex: {\"hookText\": \"Nouveau texte\"}",
                     },
-                    required=["product_id", "new_description"],
-                ),
+                },
+                "required": ["composition_id", "updates"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_post_composition",
+            "description": (
+                "Crée une NOUVELLE composition dans Root.tsx quand elle n'existe pas encore. "
+                "Ajoute automatiquement le bloc const ET l'enregistrement <Composition>. "
+                "Appelle render_video ensuite."
             ),
-            types.FunctionDeclaration(
-                name="post_to_instagram",
-                description="Publie un post sur Instagram avec une image et une légende.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "caption": types.Schema(
-                            type=types.Type.STRING,
-                            description="Légende du post (avec hashtags)",
-                        ),
-                        "image_url": types.Schema(
-                            type=types.Type.STRING,
-                            description="URL publique de l'image",
-                        ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "composition_id": {"type": "string", "description": "ID du post au format YYYYMMDD"},
+                    "props": {
+                        "type": "object",
+                        "description": "Props complètes incluant template_type et tous les champs du template.",
                     },
-                    required=["caption", "image_url"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="post_to_facebook",
-                description="Publie un post sur la Page Facebook de la boutique.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "message": types.Schema(
-                            type=types.Type.STRING,
-                            description="Texte du post",
-                        ),
-                        "link": types.Schema(
-                            type=types.Type.STRING,
-                            description="URL à partager (optionnel)",
-                        ),
-                        "image_url": types.Schema(
-                            type=types.Type.STRING,
-                            description="URL de l'image (optionnel)",
-                        ),
-                    },
-                    required=["message"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="send_newsletter",
-                description="Envoie une newsletter à tous les abonnés email de la boutique.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "subject": types.Schema(
-                            type=types.Type.STRING,
-                            description="Objet de l'email",
-                        ),
-                        "html_body": types.Schema(
-                            type=types.Type.STRING,
-                            description="Corps de l'email en HTML",
-                        ),
-                        "plain_body": types.Schema(
-                            type=types.Type.STRING,
-                            description="Version texte brut (optionnel)",
-                        ),
-                    },
-                    required=["subject", "html_body"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="get_pending_customer_messages",
-                description="Récupère les messages et commentaires clients en attente de réponse.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={},
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="reply_to_customer",
-                description="Répond à un message ou commentaire client sur Instagram ou Facebook.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "message_id": types.Schema(
-                            type=types.Type.STRING,
-                            description="ID du message client",
-                        ),
-                        "platform": types.Schema(
-                            type=types.Type.STRING,
-                            description="Plateforme (instagram ou facebook)",
-                        ),
-                        "reply_text": types.Schema(
-                            type=types.Type.STRING,
-                            description="Réponse à envoyer",
-                        ),
-                    },
-                    required=["message_id", "platform", "reply_text"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="send_abandoned_cart_email",
-                description="Envoie un email de relance à un client qui a abandonné son panier.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "customer_email": types.Schema(
-                            type=types.Type.STRING,
-                        ),
-                        "customer_name": types.Schema(
-                            type=types.Type.STRING,
-                        ),
-                        "cart_items": types.Schema(
-                            type=types.Type.ARRAY,
-                            items=types.Schema(type=types.Type.STRING),
-                            description="Liste des articles du panier",
-                        ),
-                        "cart_url": types.Schema(
-                            type=types.Type.STRING,
-                            description="URL du panier",
-                        ),
-                    },
-                    required=["customer_email", "customer_name", "cart_items", "cart_url"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="get_brand_knowledge",
-                description=(
-                    "Relit la vault Obsidian et le dossier d'assets vidéo pour rafraîchir "
-                    "le contexte de marque, les instructions et les ressources disponibles."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={},
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="render_video",
-                description=(
-                    "Lance le rendu d'une vidéo Remotion. "
-                    "L'ID de composition suit le format YYYYMMDD (ex: '20260519' pour le 19 mai 2026). "
-                    "La composition DOIT exister dans Root.tsx — utilise create_post_composition d'abord si elle n'existe pas encore. "
-                    "Génère le fichier MP4 dans le dossier out/ du projet."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "composition_id": types.Schema(
-                            type=types.Type.STRING,
-                            description="ID Remotion de la composition (format YYYYMMDD, ex: '20260519')",
-                        ),
-                        "output_filename": types.Schema(
-                            type=types.Type.STRING,
-                            description="Nom du fichier MP4 de sortie (optionnel, défaut: <composition_id>.mp4)",
-                        ),
-                    },
-                    required=["composition_id"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="list_rendered_videos",
-                description="Liste les vidéos MP4 déjà rendues dans le dossier out/ du projet Remotion.",
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={},
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="save_to_memory",
-                description=(
-                    "Enregistre une note importante dans ta mémoire persistante (vault Obsidian). "
-                    "Utilise dès que l'utilisateur exprime une préférence, une instruction récurrente, "
-                    "un retour sur un contenu, ou toute information à retenir pour les prochaines sessions. "
-                    "Exemples : préférences de format, sujets à éviter, ton souhaité, feedback sur des vidéos."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "note": types.Schema(
-                            type=types.Type.STRING,
-                            description="Note claire et concise à mémoriser (instruction, préférence, feedback)",
-                        ),
-                    },
-                    required=["note"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="get_post_props",
-                description=(
-                    "Lit les props actuelles d'un post Remotion dans Root.tsx "
-                    "(hookText, leftItems, rightItems, verdict, tips, plants, etc.). "
-                    "À appeler avant de modifier un post pour voir son contenu actuel."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "composition_id": types.Schema(
-                            type=types.Type.STRING,
-                            description="ID du post au format YYYYMMDD (ex: '20260519')",
-                        ),
-                    },
-                    required=["composition_id"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="update_post_props",
-                description=(
-                    "Écrit directement les nouvelles valeurs d'un post dans Root.tsx. "
-                    "Tu AS le droit et le DEVOIR de modifier Root.tsx avec cet outil. "
-                    "Champs modifiables : hookText, verdict, leftItems, rightItems, ctaText, tips, plants, musicTrack. "
-                    "Appelle TOUJOURS render_video juste après pour regénérer la vidéo MP4."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "composition_id": types.Schema(
-                            type=types.Type.STRING,
-                            description="ID du post au format YYYYMMDD (ex: '20260519')",
-                        ),
-                        "updates": types.Schema(
-                            type=types.Type.OBJECT,
-                            description=(
-                                "Champs à modifier. Clés = noms des props TypeScript. "
-                                "Ex: {\"hookText\": \"Nouveau texte\", \"verdict\": \"Nouveau verdict\"} "
-                                "ou {\"leftItems\": [\"item1\", \"item2\", \"item3\"]}"
-                            ),
-                        ),
-                    },
-                    required=["composition_id", "updates"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="create_post_composition",
-                description=(
-                    "Crée une NOUVELLE composition dans Root.tsx quand elle n'existe pas encore. "
-                    "À appeler quand get_post_props retourne vide ou quand la composition est introuvable. "
-                    "Ajoute automatiquement le bloc const ET l'enregistrement <Composition> dans Root.tsx. "
-                    "Appelle render_video ensuite pour générer la vidéo MP4."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "composition_id": types.Schema(
-                            type=types.Type.STRING,
-                            description="ID du post au format YYYYMMDD (ex: '20260520')",
-                        ),
-                        "props": types.Schema(
-                            type=types.Type.OBJECT,
-                            description=(
-                                "Props complètes du post selon le template choisi. "
-                                "Doit inclure 'template_type' (VersusVideoProps, EducatifVideoProps ou PromoVideoProps) "
-                                "et tous les champs du template."
-                            ),
-                        ),
-                    },
-                    required=["composition_id", "props"],
-                ),
-            ),
-            types.FunctionDeclaration(
-                name="write_calendar_file",
-                description=(
-                    "Crée ou met à jour un fichier markdown de calendrier éditorial dans la vault Obsidian. "
-                    "Utilise pour planifier un nouveau mois de contenu. "
-                    "Le fichier est écrit directement dans le dossier Calendrier Publication."
-                ),
-                parameters=types.Schema(
-                    type=types.Type.OBJECT,
-                    properties={
-                        "filename": types.Schema(
-                            type=types.Type.STRING,
-                            description="Nom du fichier (ex: 'juin-2026.md')",
-                        ),
-                        "content": types.Schema(
-                            type=types.Type.STRING,
-                            description="Contenu markdown complet du calendrier éditorial",
-                        ),
-                    },
-                    required=["filename", "content"],
-                ),
-            ),
-        ]
-    )
+                },
+                "required": ["composition_id", "props"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_calendar_file",
+            "description": "Crée ou met à jour un fichier markdown de calendrier éditorial dans la vault Obsidian.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string", "description": "Nom du fichier (ex: 'juin-2026.md')"},
+                    "content": {"type": "string", "description": "Contenu markdown complet du calendrier"},
+                },
+                "required": ["filename", "content"],
+            },
+        },
+    },
 ]
 
 # ─── Gestion des actions en attente ──────────────────────────────────────────
@@ -407,7 +342,6 @@ def execute_pending_action(action_id: str) -> dict:
 # ─── Exécution des outils ─────────────────────────────────────────────────────
 
 def _execute_tool_directly(name: str, inputs: dict) -> Any:
-    """Execute a tool without going through the approval queue."""
     if name == "get_store_analytics":
         return shopify.get_store_analytics()
 
@@ -502,10 +436,8 @@ def _execute_tool_directly(name: str, inputs: dict) -> Any:
 
 def execute_tool(name: str, inputs: dict) -> Any:
     logger.info("Exécution de l'outil: %s | inputs: %s", name, inputs)
-
     if name in WRITE_TOOLS:
         return _queue_action(name, inputs)
-
     return _execute_tool_directly(name, inputs)
 
 
@@ -518,7 +450,6 @@ def build_system_prompt() -> str:
     assets = list_video_assets(VIDEO_ASSETS_PATH)
     memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
 
-    memory_section = ""
     if memory:
         memory_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -646,75 +577,68 @@ PUBLICATIONS
 
 def run_marketing_session(task: str = None) -> str:
     """Lance une session marketing complète. Retourne le rapport final."""
+    from groq import Groq
+
+    groq_client = Groq(api_key=GROQ_API_KEY)
     system_prompt = build_system_prompt()
     user_message = task or "Lance la routine marketing quotidienne complète."
 
     logger.info("=== Démarrage session marketing | %s ===", datetime.now().isoformat())
 
-    chat = client.chats.create(
-        model=GEMINI_MODEL,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            tools=TOOLS,
-        ),
-    )
-
-    response = chat.send_message(user_message)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
 
     iteration = 0
-    max_iterations = 20  # sécurité anti-boucle infinie
+    max_iterations = 20
 
     while iteration < max_iterations:
         iteration += 1
         logger.info("Tour %d", iteration)
 
-        # Defensive access — Gemini can return None candidates or parts
-        try:
-            parts = response.candidates[0].content.parts or []
-        except (AttributeError, IndexError, TypeError):
-            logger.warning("Réponse invalide à l'itération %d", iteration)
-            break
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=messages,
+            tools=TOOLS_GROQ,
+            tool_choice="auto",
+            temperature=0.6,
+            max_tokens=4096,
+        )
 
-        function_calls = [
-            part.function_call
-            for part in parts
-            if getattr(part, "function_call", None)
-        ]
+        msg = response.choices[0].message
+        tool_calls = msg.tool_calls or []
 
-        if not function_calls:
-            final_text = "".join(
-                part.text
-                for part in parts
-                if getattr(part, "text", None)
-            )
+        # Add assistant message to history
+        assistant_entry: dict = {"role": "assistant", "content": msg.content or ""}
+        if tool_calls:
+            assistant_entry["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in tool_calls
+            ]
+        messages.append(assistant_entry)
+
+        if not tool_calls:
             logger.info("=== Session terminée après %d tours ===", iteration)
-            return final_text or "(aucune réponse)"
+            return msg.content or "(aucune réponse)"
 
-        # Execute every tool called in this turn
-        for fc in function_calls:
+        for tc in tool_calls:
             try:
-                args = dict(fc.args) if fc.args is not None else {}
-                tool_result = execute_tool(fc.name, args)
+                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                tool_result = execute_tool(tc.function.name, args)
             except Exception as exc:
-                logger.warning("Outil %s échoué : %s", fc.name, exc)
+                logger.warning("Outil %s échoué : %s", tc.function.name, exc)
                 tool_result = {"status": "error", "reason": str(exc)}
-            response = chat.send_message(
-                types.Part.from_function_response(
-                    name=fc.name,
-                    response={"result": json.dumps(tool_result, ensure_ascii=False, default=str)},
-                )
-            )
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": json.dumps(tool_result, ensure_ascii=False, default=str),
+            })
 
     logger.warning("Limite d'itérations atteinte (%d)", max_iterations)
     return "Session interrompue : limite d'itérations atteinte."
-
-
-# ─── Point d'entrée direct ────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    rapport = run_marketing_session()
-    print("\n" + "=" * 60)
-    print("RAPPORT MARKETING")
-    print("=" * 60)
-    print(rapport)

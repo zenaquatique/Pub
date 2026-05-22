@@ -629,27 +629,24 @@ def _generate_with_groq(
         schema  = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
         client  = Groq(api_key=GROQ_API_KEY)
 
-        # ── Appel 1 : props JSON (overlays visuels courts) ──
+        sys_base = (
+            f"Tu travailles pour ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques.\n"
+            f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
+            f"{memory_block}{vault_block}"
+            f"\n{CONTENT_RULES}\n"
+        )
+
+        # ── Appel 1 : props JSON (overlays visuels) ──
         resp_props = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
-                {"role": "system", "content": (
-                    f"Tu es le créateur de contenu vidéo de ZenAquatique, boutique spécialisée plantes aquatiques et crevettes.\n"
-                    f"Voix : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
-                    f"{memory_block}{vault_block}"
-                    f"\n{CONTENT_RULES}\n\n"
-                    "Réponds UNIQUEMENT en JSON valide selon le schéma fourni. "
-                    "Textes courts (hookText max 7 mots), accrocheurs, tous les champs remplis avec du contenu ZenAquatique réel."
-                )},
+                {"role": "system", "content": sys_base + "Réponds UNIQUEMENT en JSON valide selon le schéma fourni. Textes courts (hookText max 7 mots)."},
                 {"role": "user", "content": (
-                    f"Crée les textes d'overlay vidéo pour : {subject}\n"
-                    f"Template : {template_type}\n"
-                    f"{fb_block}\n"
-                    f"Schéma JSON exact :\n{schema}"
+                    f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\nSchéma :\n{schema}"
                 )},
             ],
             response_format={"type": "json_object"},
-            temperature=0.75,
+            temperature=0.7,
             max_tokens=2048,
         )
         try:
@@ -659,76 +656,64 @@ def _generate_with_groq(
         except Exception:
             props = {}
 
-        # ── Appel 2 : voiceover texte libre (monologue commercial continu) ──
+        # ── Appel 2 : voiceover via template structuré (empêche le narratif animalerie) ──
+        vo_template_prompt = (
+            f"Sujet de la vidéo : {subject}\n{fb_block}\n"
+            "Remplis ce script JSON en 7 champs. Chaque champ = UNE phrase courte et positive sur ZenAquatique.\n"
+            "NE parle JAMAIS de concurrents, d'animaleries, de plantes qui meurent, de pesticides, de traitements.\n\n"
+            "{\n"
+            '  "accroche": "[question ou exclamation sur la beauté aquatique - 1 phrase]",\n'
+            '  "visuel": "[beauté visuelle de ces plantes spécifiques - 1 phrase]",\n'
+            '  "prix": "[prix accessibles dès 0,99€ chez ZenAquatique - 1 phrase]",\n'
+            '  "origine": "[cultivées en France/Europe avec soin - 1 phrase]",\n'
+            '  "entretien": "[facilité d\'entretien et robustesse - 1 phrase]",\n'
+            '  "livraison": "[livraison rapide, plantes fraîches à réception - 1 phrase]",\n'
+            '  "cta": "[appel à commander sur zen-aquatique.fr - 1 phrase]"\n'
+            "}"
+        )
+
         resp_vo = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
-                {"role": "system", "content": (
-                    f"Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques et crevettes.\n"
-                    f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
-                    f"{memory_block}{vault_block}"
-                    f"\n{CONTENT_RULES}\n\n"
-                    "RÈGLES DE FORMAT :\n"
-                    "• Monologue CONTINU — aucun titre, aucun timestamp, aucun 'Titre affiché'\n"
-                    "• Vraies phrases complètes (sujet + verbe + bénéfice concret)\n"
-                    "• Minimum 10 phrases, 80 mots minimum\n"
-                    "• Mentionne : beauté visuelle, facilité d'entretien, qualité française, livraison rapide\n"
-                    "• Ton enthousiaste et naturel\n"
-                    "• Termine par un CTA : 'Commande sur zen-aquatique.fr'\n"
-                    "Écris UNIQUEMENT le texte à lire, sans titre ni explication."
-                )},
-                {"role": "user", "content": (
-                    f"Écris le script voix off pour : {subject}\n"
-                    f"Type : {template_type}\n"
-                    f"{fb_block}"
-                )},
+                {"role": "system", "content": sys_base + "Réponds UNIQUEMENT en JSON valide."},
+                {"role": "user", "content": vo_template_prompt},
             ],
-            temperature=0.9,
-            max_tokens=2048,
+            response_format={"type": "json_object"},
+            temperature=0.8,
+            max_tokens=1024,
         )
-        vo_user_msg = (
-            f"Écris le script voix off pour : {subject}\n"
-            f"Type : {template_type}\n"
-            f"{fb_block}"
-        )
-        vo_messages = [
-            {"role": "system", "content": (
-                f"Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques et crevettes.\n"
-                f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
-                f"{memory_block}{vault_block}"
-                f"\n{CONTENT_RULES}\n\n"
-                "RÈGLES DE FORMAT :\n"
-                "• Monologue CONTINU — aucun titre, aucun timestamp\n"
-                "• Vraies phrases complètes, minimum 10 phrases, 80 mots minimum\n"
-                "• Ton enthousiaste et naturel\n"
-                "• Termine par un CTA : 'Commande sur zen-aquatique.fr'\n"
-                "Écris UNIQUEMENT le texte à lire, sans titre ni explication."
-            )},
-            {"role": "user", "content": vo_user_msg},
-        ]
 
-        resp_vo = client.chat.completions.create(
-            model=GROQ_MODEL, messages=vo_messages, temperature=0.9, max_tokens=2048,
-        )
-        voiceover = resp_vo.choices[0].message.content.strip() if resp_vo.choices else ""
+        # Assemble le voiceover depuis les slots JSON
+        try:
+            vo_data = json.loads(resp_vo.choices[0].message.content)
+            slots = ["accroche", "visuel", "prix", "origine", "entretien", "livraison", "cta"]
+            voiceover = " ".join(vo_data.get(s, "").strip() for s in slots if vo_data.get(s))
+        except Exception:
+            voiceover = ""
 
-        # ── Filtre : retry si mots interdits détectés ──
+        # ── Filtre de sécurité : retry si mots interdits détectés ──
         for _attempt in range(3):
             violations = _check_voiceover(voiceover)
             if not violations:
                 break
-            logger.warning("[Groq] Mots interdits détectés (%s) — retry %d/3", violations, _attempt + 1)
-            retry_messages = vo_messages + [
-                {"role": "assistant", "content": voiceover},
-                {"role": "user", "content": _retry_prompt(vo_user_msg, violations)},
-            ]
-            resp_retry = client.chat.completions.create(
-                model=GROQ_MODEL, messages=retry_messages, temperature=0.7, max_tokens=2048,
+            logger.warning("[Groq] Mots interdits (%s) — retry %d/3", violations, _attempt + 1)
+            retry_resp = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": sys_base + "Réponds UNIQUEMENT en JSON valide."},
+                    {"role": "user", "content": _retry_prompt(vo_template_prompt, violations)},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.6,
+                max_tokens=1024,
             )
-            voiceover = resp_retry.choices[0].message.content.strip() if resp_retry.choices else voiceover
+            try:
+                vo_data2 = json.loads(retry_resp.choices[0].message.content)
+                slots = ["accroche", "visuel", "prix", "origine", "entretien", "livraison", "cta"]
+                voiceover = " ".join(vo_data2.get(s, "").strip() for s in slots if vo_data2.get(s))
+            except Exception:
+                break
 
-        if voiceover.startswith('"') and voiceover.endswith('"'):
-            voiceover = voiceover[1:-1]
         if not voiceover:
             voiceover = generate_voiceover(props) if props else ""
 

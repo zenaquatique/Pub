@@ -445,12 +445,14 @@ AUDIENCE : {TARGET_AUDIENCE}
 
 {f"CONTRAINTES MÉMOIRE — OBLIGATOIRES :{chr(10)}{memory}" if memory else ""}
 
+{CONTENT_RULES}
+
 MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts doivent :
 - Mettre en avant les vrais bénéfices des produits ZenAquatique (plantes, crevettes, équipements…)
 - Utiliser un langage naturel, dynamique, proche du client — pas du jargon marketing creux
 - Contenir de vraies phrases complètes pour la voix off (pas juste des mots-clés)
 - Donner envie d'acheter ou de suivre la boutique
-- Respecter TOUTES les contraintes mémoire ci-dessus"""
+- Respecter TOUTES les contraintes mémoire et les interdits ci-dessus"""
 
         if is_new:
             user_msg = f"""Crée le script vidéo pour le post {composition_id}.
@@ -474,7 +476,8 @@ RÈGLES props :
 RÈGLES voiceover :
 - Vraies phrases, pas juste des mots-clés
 - Minimum 5-8 phrases en tout
-- Arguments de vente concrets : prix, facilité d'entretien, beauté, livraison, etc."""
+- Arguments de vente concrets : prix, facilité d'entretien, beauté, livraison, etc.
+- RAPPEL : respecte les INTERDITS ABSOLUS du system prompt — aucune mention de pesticides, aucune allégation sur la durée de vie des plantes concurrentes"""
         else:
             current_vo = generate_voiceover(existing_props)
             user_msg = f"""Améliore le script du post {composition_id} (template : {template_type}).

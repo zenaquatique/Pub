@@ -369,6 +369,36 @@ _VOICEOVER_SCHEMAS = {
 }""",
 }
 
+# ── Filtre post-génération partagé ────────────────────────────────────────────
+
+_BANNED_WORDS = [
+    "pesticide", "traitement", "traitée", "traitées", "traité", "traités",
+    "2 semaines", "deux semaines",
+    "meurent", "mourir", "condamné", "dépéri",
+    "animalerie", "animaleries",
+    "importées d'asie", "importé d'asie", "importées d'asie",
+    "concurrent", "concurrente",
+]
+
+def _check_voiceover(text: str) -> list[str]:
+    """Retourne la liste des mots interdits trouvés dans le texte."""
+    low = text.lower()
+    return [w for w in _BANNED_WORDS if w in low]
+
+def _retry_prompt(original_user_msg: str, violations: list[str]) -> str:
+    return (
+        f"{original_user_msg}\n\n"
+        f"⛔ SCRIPT REFUSÉ — mots interdits détectés : {', '.join(violations)}\n"
+        f"Ces mots sont BANNIS même en contexte positif (même 'sans pesticides' est interdit).\n\n"
+        f"NOUVELLE TENTATIVE — Structure imposée :\n"
+        f"1. Accroche sur la beauté visuelle des plantes ZenAquatique\n"
+        f"2. Argument prix (à partir de 0,99€)\n"
+        f"3. Cultivées en France, livraison rapide\n"
+        f"4. Facilité d'entretien / passion aquariophile\n"
+        f"5. CTA : commande sur zen-aquatique.fr\n\n"
+        f"N'écris QUE ces 5 points. Zéro comparaison, zéro mention de concurrents, "
+        f"zéro mention de plantes qui meurent ou de traitements chimiques."
+    )
 
 def _detect_template(text: str) -> str:
     """Déduit le template Remotion depuis un texte (ligne calendrier ou context)."""
@@ -527,29 +557,13 @@ Génère un JSON avec cette structure :
         voiceover = data.get("voiceover", "")
         t_type    = data.get("template_type", template_type)
 
-        # ── Vérification post-génération : mots-clés interdits ──
-        _BANNED = [
-            "pesticide", "traitement", "traitée", "traité",
-            "2 semaines", "deux semaines",
-            "meurent", "mourir", "dépéri",
-            "animalerie", "animaleries",
-            "importées d'asie", "importé d'asie",
-            "concurrent", "concurrente",
-        ]
-        vo_lower = voiceover.lower()
-        violations = [w for w in _BANNED if w in vo_lower]
-        if violations:
-            logger.warning("Contenu interdit détecté (%s) — relance forcée", violations)
-            retry_msg = (
-                f"{user_msg}\n\n"
-                f"⚠️ TON PRÉCÉDENT SCRIPT ÉTAIT REFUSÉ car il contenait des mots interdits : "
-                f"{', '.join(violations)}.\n\n"
-                f"NOUVELLE CONSIGNE STRICTE : parle UNIQUEMENT des points forts de ZenAquatique. "
-                f"N'évoque PAS les animaleries, PAS les concurrents, PAS les plantes qui meurent, "
-                f"PAS les pesticides ou traitements. "
-                f"Angles autorisés : beauté visuelle, prix à partir de 0,99€, cultivées en France, "
-                f"livraison rapide, facilité d'entretien, passion aquariophile."
-            )
+        # ── Filtre : retry si mots interdits détectés (jusqu'à 3 fois) ──
+        for _attempt in range(3):
+            violations = _check_voiceover(voiceover)
+            if not violations:
+                break
+            logger.warning("[Claude] Mots interdits (%s) — retry %d/3", violations, _attempt + 1)
+            retry_msg = _retry_prompt(user_msg, violations)
             msg2 = _call_claude([{"role": "user", "content": retry_msg}])
             raw2 = next(
                 (b.text for b in msg2.content if getattr(b, "type", "") == "text"), ""
@@ -672,7 +686,46 @@ def _generate_with_groq(
             temperature=0.9,
             max_tokens=2048,
         )
+        vo_user_msg = (
+            f"Écris le script voix off pour : {subject}\n"
+            f"Type : {template_type}\n"
+            f"{fb_block}"
+        )
+        vo_messages = [
+            {"role": "system", "content": (
+                f"Tu es la voix off de ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques et crevettes.\n"
+                f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
+                f"{memory_block}{vault_block}"
+                f"\n{CONTENT_RULES}\n\n"
+                "RÈGLES DE FORMAT :\n"
+                "• Monologue CONTINU — aucun titre, aucun timestamp\n"
+                "• Vraies phrases complètes, minimum 10 phrases, 80 mots minimum\n"
+                "• Ton enthousiaste et naturel\n"
+                "• Termine par un CTA : 'Commande sur zen-aquatique.fr'\n"
+                "Écris UNIQUEMENT le texte à lire, sans titre ni explication."
+            )},
+            {"role": "user", "content": vo_user_msg},
+        ]
+
+        resp_vo = client.chat.completions.create(
+            model=GROQ_MODEL, messages=vo_messages, temperature=0.9, max_tokens=2048,
+        )
         voiceover = resp_vo.choices[0].message.content.strip() if resp_vo.choices else ""
+
+        # ── Filtre : retry si mots interdits détectés ──
+        for _attempt in range(3):
+            violations = _check_voiceover(voiceover)
+            if not violations:
+                break
+            logger.warning("[Groq] Mots interdits détectés (%s) — retry %d/3", violations, _attempt + 1)
+            retry_messages = vo_messages + [
+                {"role": "assistant", "content": voiceover},
+                {"role": "user", "content": _retry_prompt(vo_user_msg, violations)},
+            ]
+            resp_retry = client.chat.completions.create(
+                model=GROQ_MODEL, messages=retry_messages, temperature=0.7, max_tokens=2048,
+            )
+            voiceover = resp_retry.choices[0].message.content.strip() if resp_retry.choices else voiceover
 
         if voiceover.startswith('"') and voiceover.endswith('"'):
             voiceover = voiceover[1:-1]

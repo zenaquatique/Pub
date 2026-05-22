@@ -1477,15 +1477,33 @@ function _getRowContext(compositionId) {
 async function calendarVoiceover(compositionId) {
   if (!compositionId) { showToast('Date non reconnue', 'warning'); return; }
   _voCid    = compositionId;
-  _voRowCtx = _getRowContext(compositionId);   // capture la ligne du calendrier
+  _voRowCtx = _getRowContext(compositionId);
   document.getElementById('voiceover-id').textContent = compositionId;
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
   document.getElementById('voiceover-error').style.display = 'none';
   const panel = document.getElementById('voiceover-panel');
+  const spinnerText = document.querySelector('#voiceover-spinner span');
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
-  await _fetchVoiceover(compositionId);
+
+  // Toujours générer un nouveau script — pas de cache
+  if (spinnerText) spinnerText.textContent = 'Génération du script IA…';
+  try {
+    const res = await fetch('/api/script', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: compositionId, feedback: '', context: _voRowCtx}),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || 'Erreur génération');
+    _applyScript(d);
+  } catch(e) {
+    document.getElementById('voiceover-spinner').style.display = 'none';
+    const errDiv = document.getElementById('voiceover-error');
+    errDiv.textContent = '❌ ' + e.message;
+    errDiv.style.display = 'block';
+  }
 }
 
 async function regenVoiceover() {

@@ -435,7 +435,10 @@ def _generate_with_claude(
 
         schema = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
 
-        system_prompt = f"""Tu es le créateur de contenu vidéo de ZenAquatique, boutique en ligne spécialisée dans les plantes aquatiques, crevettes et équipements d'aquariophilie.
+        system_prompt = f"""{CONTENT_RULES}
+
+---
+Tu es le créateur de contenu vidéo de ZenAquatique, boutique en ligne spécialisée dans les plantes aquatiques, crevettes et équipements d'aquariophilie.
 
 MARQUE : {STORE_NAME} | NICHE : {STORE_NICHE}
 VOIX : {BRAND_VOICE}
@@ -445,14 +448,12 @@ AUDIENCE : {TARGET_AUDIENCE}
 
 {f"CONTRAINTES MÉMOIRE — OBLIGATOIRES :{chr(10)}{memory}" if memory else ""}
 
-{CONTENT_RULES}
-
 MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts doivent :
 - Mettre en avant les vrais bénéfices des produits ZenAquatique (plantes, crevettes, équipements…)
 - Utiliser un langage naturel, dynamique, proche du client — pas du jargon marketing creux
 - Contenir de vraies phrases complètes pour la voix off (pas juste des mots-clés)
 - Donner envie d'acheter ou de suivre la boutique
-- Respecter TOUTES les contraintes mémoire et les interdits ci-dessus"""
+- Respecter TOUTES les contraintes mémoire et les interdits listés en début de prompt"""
 
         if is_new:
             user_msg = f"""Crée le script vidéo pour le post {composition_id}.
@@ -495,39 +496,72 @@ Génère un JSON avec cette structure :
 }}"""
 
         ai_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        with ai_client.messages.stream(
-            model=CLAUDE_SCRIPT_MODEL,
-            max_tokens=3000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_msg}],
-        ) as stream:
-            msg = stream.get_final_message()
 
+        def _call_claude(messages_list):
+            with ai_client.messages.stream(
+                model=CLAUDE_SCRIPT_MODEL,
+                max_tokens=3000,
+                system=system_prompt,
+                messages=messages_list,
+            ) as stream:
+                return stream.get_final_message()
+
+        def _parse_raw(raw: str):
+            if "```" in raw:
+                for part in raw.split("```"):
+                    s = part.strip()
+                    if s.startswith("json"):
+                        s = s[4:].strip()
+                    if s.startswith("{"):
+                        raw = s
+                        break
+            return json.loads(raw)
+
+        msg = _call_claude([{"role": "user", "content": user_msg}])
         raw_text = next(
-            (b.text for b in msg.content if getattr(b, "type", "") == "text"),
-            "",
+            (b.text for b in msg.content if getattr(b, "type", "") == "text"), ""
         ).strip()
 
-        # Nettoie les blocs markdown éventuels
-        if "```" in raw_text:
-            parts = raw_text.split("```")
-            for part in parts:
-                stripped = part.strip()
-                if stripped.startswith("json"):
-                    stripped = stripped[4:].strip()
-                if stripped.startswith("{"):
-                    raw_text = stripped
-                    break
+        data      = _parse_raw(raw_text)
+        props     = data.get("props", data)
+        voiceover = data.get("voiceover", "")
+        t_type    = data.get("template_type", template_type)
 
-        data       = json.loads(raw_text)
-        props      = data.get("props", data)
-        voiceover  = data.get("voiceover", "")
-        t_type     = data.get("template_type", template_type)
+        # ── Vérification post-génération : mots interdits ──
+        _BANNED = [
+            "pesticide", "traitées avec", "traité avec", "traitement chimique",
+            "mourir en deux semaines", "mourir en 2 semaines",
+            "meurent en deux semaines", "meurent en 2 semaines",
+            "meurent au bout de 2 semaines", "meurent au bout de deux semaines",
+            "die in two weeks", "importées d'asie", "importées d'asie",
+        ]
+        vo_lower = voiceover.lower()
+        violations = [w for w in _BANNED if w in vo_lower]
+        if violations:
+            logger.warning("Contenu interdit détecté (%s) — relance forcée", violations)
+            retry_msg = (
+                f"{user_msg}\n\n"
+                f"⚠️ ERREUR CRITIQUE : ton précédent script contenait des affirmations interdites "
+                f"({', '.join(violations)}). Ces sujets sont STRICTEMENT INTERDITS. "
+                f"Réécris entièrement le voiceover EN IGNORANT COMPLÈTEMENT ces sujets. "
+                f"Parle uniquement des bénéfices positifs de ZenAquatique : beauté des plantes, "
+                f"prix accessibles, cultivées en France, livraison rapide, passion aquariophile."
+            )
+            msg2 = _call_claude([{"role": "user", "content": retry_msg}])
+            raw2 = next(
+                (b.text for b in msg2.content if getattr(b, "type", "") == "text"), ""
+            ).strip()
+            try:
+                data2     = _parse_raw(raw2)
+                props     = data2.get("props", props)
+                voiceover = data2.get("voiceover", voiceover)
+                t_type    = data2.get("template_type", t_type)
+            except Exception:
+                pass
 
-        props["template_type"]   = t_type
-        props["composition_id"]  = composition_id
+        props["template_type"]  = t_type
+        props["composition_id"] = composition_id
 
-        # Voiceover de secours si Claude n'en a pas généré
         if not voiceover:
             voiceover = generate_voiceover(props)
 
@@ -543,8 +577,8 @@ Génère un JSON avec cette structure :
         return result
 
     except Exception as exc:
-        logger.exception("Erreur génération Claude — fallback Gemini")
-        return _generate_with_gemini(composition_id, feedback, force_reset, context)
+        logger.exception("Erreur génération Claude — fallback Groq")
+        return _generate_with_groq(composition_id, feedback, force_reset, context)
 
 
 def _generate_with_groq(

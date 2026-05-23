@@ -485,52 +485,22 @@ MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts d
 - Donner envie d'acheter ou de suivre la boutique
 - Respecter TOUTES les contraintes mémoire et les interdits listés en début de prompt"""
 
-        if is_new:
-            user_msg = f"""Crée le script vidéo pour le post {composition_id}.
-
-POST DU CALENDRIER : {cal_entry or f"Post ZenAquatique du {composition_id}"}
-TEMPLATE : {template_type}
-{f"FEEDBACK : {feedback}" if feedback else ""}
-
-Génère un JSON avec cette structure exacte :
-{{
-  "template_type": "{template_type}",
-  "props": {schema},
-  "voiceover": "Script voix off COMPLET en vraies phrases commerciales.\\nStructuré par section : [ACCROCHE] ... [CORPS] ... [CTA] ...\\nPhrases entières, bénéfices concrets, ton dynamique."
-}}
-
-RÈGLES props :
-- hookText : accroche percutante max 8 mots qui stoppe le scroll
-- Tous les champs remplis avec du vrai contenu ZenAquatique (plantes, crevettes, aquarium)
-- items/tips/desc : phrases courtes mais complètes (sujet + verbe + bénéfice)
-
-RÈGLES voiceover :
-- Vraies phrases, pas juste des mots-clés
-- Minimum 5-8 phrases en tout
-- Arguments de vente concrets : prix, facilité d'entretien, beauté, livraison, etc.
-- RAPPEL : respecte les INTERDITS ABSOLUS du system prompt — aucune mention de pesticides, aucune allégation sur la durée de vie des plantes concurrentes"""
-        else:
-            current_vo = generate_voiceover(existing_props)
-            user_msg = f"""Améliore le script du post {composition_id} (template : {template_type}).
-
-SCRIPT ACTUEL :
-{current_vo}
-
-{f"FEEDBACK : {feedback}" if feedback else "Génère une nouvelle version plus percutante."}
-
-Génère un JSON avec cette structure :
-{{
-  "template_type": "{template_type}",
-  "props": {schema},
-  "voiceover": "Nouveau script voix off COMPLET avec vraies phrases commerciales."
-}}"""
+        user_msg = (
+            f"Sujet : {cal_entry or f'Post ZenAquatique du {composition_id}'}\n"
+            f"Template : {template_type}\n"
+            f"{f'FEEDBACK : {feedback}' if feedback else ''}\n\n"
+            f"Génère les overlays visuels selon ce schéma exact :\n{schema}\n\n"
+            f"hookText : accroche percutante max 7 mots.\n"
+            f"tips/items/desc : phrases courtes, concrètes, positives sur ZenAquatique.\n"
+            f"NE mentionne JAMAIS concurrents, animaleries, pesticides, plantes qui meurent."
+        )
 
         ai_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         def _call_claude(messages_list):
             with ai_client.messages.stream(
                 model=CLAUDE_SCRIPT_MODEL,
-                max_tokens=3000,
+                max_tokens=2000,
                 system=system_prompt,
                 messages=messages_list,
             ) as stream:
@@ -547,40 +517,35 @@ Génère un JSON avec cette structure :
                         break
             return json.loads(raw)
 
-        msg = _call_claude([{"role": "user", "content": user_msg}])
-        raw_text = next(
-            (b.text for b in msg.content if getattr(b, "type", "") == "text"), ""
-        ).strip()
+        msg      = _call_claude([{"role": "user", "content": user_msg}])
+        raw_text = next((b.text for b in msg.content if getattr(b, "type", "") == "text"), "").strip()
+        props    = _parse_raw(raw_text)
+        if not isinstance(props, dict):
+            props = {}
+        t_type   = props.pop("template_type", template_type)
 
-        data      = _parse_raw(raw_text)
-        props     = data.get("props", data)
-        voiceover = data.get("voiceover", "")
-        t_type    = data.get("template_type", template_type)
-
-        # ── Filtre : retry si mots interdits détectés (jusqu'à 3 fois) ──
+        # Filtre : retry si mots interdits dans les props
+        props_text = json.dumps(props, ensure_ascii=False)
         for _attempt in range(3):
-            violations = _check_voiceover(voiceover)
+            violations = _check_voiceover(props_text)
             if not violations:
                 break
-            logger.warning("[Claude] Mots interdits (%s) — retry %d/3", violations, _attempt + 1)
-            retry_msg = _retry_prompt(user_msg, violations)
-            msg2 = _call_claude([{"role": "user", "content": retry_msg}])
-            raw2 = next(
-                (b.text for b in msg2.content if getattr(b, "type", "") == "text"), ""
-            ).strip()
+            logger.warning("[Claude] Mots interdits dans props (%s) — retry %d/3", violations, _attempt + 1)
+            msg2 = _call_claude([{"role": "user", "content": _retry_prompt(user_msg, violations)}])
+            raw2 = next((b.text for b in msg2.content if getattr(b, "type", "") == "text"), "").strip()
             try:
-                data2     = _parse_raw(raw2)
-                props     = data2.get("props", props)
-                voiceover = data2.get("voiceover", voiceover)
-                t_type    = data2.get("template_type", t_type)
+                props2 = _parse_raw(raw2)
+                if isinstance(props2, dict) and props2:
+                    props      = props2
+                    props_text = json.dumps(props, ensure_ascii=False)
             except Exception:
                 pass
 
         props["template_type"]  = t_type
         props["composition_id"] = composition_id
 
-        if not voiceover:
-            voiceover = generate_voiceover(props)
+        # Voiceover = lecture synchronisée des props (toujours en accord avec la vidéo)
+        voiceover = generate_voiceover(props)
 
         result = {
             "status": "success",
@@ -636,111 +601,61 @@ def _generate_with_groq(
             f"\n{CONTENT_RULES}\n"
         )
 
-        # ── Appel 1 : voiceover d'abord ──────────────────────────────────────────
-        vo_prompt = (
-            f"Sujet de la vidéo : {subject}\n{fb_block}\n"
-            "Remplis ce script JSON en 7 phrases parlées, positives, sur ZenAquatique.\n"
-            "NE mentionne JAMAIS concurrents, animaleries, pesticides, plantes qui meurent.\n\n"
-            '{"accroche":"[question/exclamation aquatique percutante]",'
-            '"visuel":"[beauté visuelle de ces plantes]",'
-            '"prix":"[prix dès 0,99€ chez ZenAquatique]",'
-            '"origine":"[cultivées en France/Europe]",'
-            '"entretien":"[faciles à entretenir]",'
-            '"livraison":"[livraison rapide, fraîches à réception]",'
-            '"cta":"[commande sur zen-aquatique.fr]"}'
-        )
-
-        resp_vo = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
-                {"role": "user",   "content": vo_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.8, max_tokens=1024,
-        )
-
-        def _assemble_vo(vd: dict) -> str:
-            def _s(k): return (vd.get(k) or "").strip()
-            corps = " ".join(filter(None, [_s("visuel"), _s("prix"), _s("origine"), _s("entretien"), _s("livraison")]))
-            parts = []
-            if _s("accroche"): parts.append(f"[ACCROCHE]\n{_s('accroche')}")
-            if corps:          parts.append(f"[CORPS]\n{corps}")
-            if _s("cta"):      parts.append(f"[CTA]\n{_s('cta')}")
-            return "\n\n".join(parts)
-
-        try:
-            vo_data = json.loads(resp_vo.choices[0].message.content)
-            voiceover = _assemble_vo(vo_data if isinstance(vo_data, dict) else {})
-        except Exception:
-            vo_data, voiceover = {}, ""
-
-        # ── Filtre : retry voiceover si mots interdits ────────────────────────────
-        for _attempt in range(3):
-            violations = _check_voiceover(voiceover)
-            if not violations:
-                break
-            logger.warning("[Groq] Mots interdits (%s) — retry %d/3", violations, _attempt + 1)
-            retry_resp = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
-                    {"role": "user",   "content": _retry_prompt(vo_prompt, violations)},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.6, max_tokens=1024,
-            )
-            try:
-                vo_data2  = json.loads(retry_resp.choices[0].message.content)
-                voiceover = _assemble_vo(vo_data2 if isinstance(vo_data2, dict) else {})
-                vo_data   = vo_data2
-            except Exception:
-                break
-
-        if _check_voiceover(voiceover):
-            logger.error("[Groq] Contenu interdit persistant après retries — fallback hardcodé")
-            voiceover = (
-                "[ACCROCHE]\n"
-                "Tu cherches des plantes aquatiques magnifiques pour ton aquarium ?\n\n"
-                "[CORPS]\n"
-                "Chez ZenAquatique, on te propose une sélection exceptionnelle cultivée avec passion en France. "
-                "Des boutures disponibles à partir de 0,99€ seulement — de quoi créer un aquascape luxuriant sans te ruiner. "
-                "Nos plantes sont fraîches, robustes et prêtes à prospérer dès leur arrivée chez toi. "
-                "Faciles à entretenir, elles s'adaptent parfaitement à ton aquarium. "
-                "La livraison est rapide et soignée — tes plantes arrivent en parfait état.\n\n"
-                "[CTA]\n"
-                "Commande maintenant sur zen-aquatique.fr !"
-            )
-
-        # ── Appel 2 : props dérivés du voiceover ─────────────────────────────────
+        # ── Appel unique : génère les props visuels (contenu de la vidéo) ──────────
         props_prompt = (
-            f"Voici le script voix off de la vidéo :\n\"\"\"\n{voiceover}\n\"\"\"\n\n"
-            f"Génère les overlays visuels (props) pour ce template : {template_type}\n"
-            f"Les props DOIVENT illustrer exactement ce script — mêmes plantes, même angle, même CTA.\n"
-            f"Schéma à respecter (hookText max 7 mots, extraits du script) :\n{schema}"
+            f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
+            f"Génère les overlays visuels selon ce schéma exact.\n"
+            f"hookText : accroche percutante max 7 mots.\n"
+            f"Chaque tip/item : texte court, concret, positif sur ZenAquatique.\n"
+            f"NE mentionne JAMAIS concurrents, animaleries, pesticides, plantes qui meurent.\n\n"
+            f"Schéma :\n{schema}"
         )
 
-        resp_props = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
-                {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide selon le schéma. Textes courts."},
+                {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide selon le schéma."},
                 {"role": "user",   "content": props_prompt},
             ],
             response_format={"type": "json_object"},
-            temperature=0.5, max_tokens=2048,
+            temperature=0.7, max_tokens=2048,
         )
         try:
-            props = json.loads(resp_props.choices[0].message.content)
+            props = json.loads(resp.choices[0].message.content)
             if not isinstance(props, dict):
                 props = {}
         except Exception:
             props = {}
 
-        if not voiceover:
-            voiceover = generate_voiceover(props) if props else ""
+        # ── Filtre : retry si mots interdits dans les props ───────────────────────
+        props_text = json.dumps(props, ensure_ascii=False)
+        for _attempt in range(3):
+            violations = _check_voiceover(props_text)
+            if not violations:
+                break
+            logger.warning("[Groq] Mots interdits dans props (%s) — retry %d/3", violations, _attempt + 1)
+            retry_resp = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
+                    {"role": "user",   "content": _retry_prompt(props_prompt, violations)},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.5, max_tokens=2048,
+            )
+            try:
+                props2 = json.loads(retry_resp.choices[0].message.content)
+                if isinstance(props2, dict) and props2:
+                    props      = props2
+                    props_text = json.dumps(props, ensure_ascii=False)
+            except Exception:
+                break
 
         props["template_type"]  = template_type
         props["composition_id"] = composition_id
+
+        # Voiceover = lecture synchronisée des props (toujours en accord avec la vidéo)
+        voiceover = generate_voiceover(props)
 
         result = {
             "status": "success",

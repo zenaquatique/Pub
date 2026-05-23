@@ -1065,7 +1065,22 @@ async def api_render_video(request: Request):
     return result
 
 
-@app.get("/api/caption/{composition_id}")
+@app.get("/api/debug-video/{composition_id}")
+async def api_debug_video(composition_id: str):
+    out_dir = Path(VIDEO_ASSETS_PATH) / "out"
+    day, month = composition_id[6:8], composition_id[4:6]
+    files_in_out = []
+    if out_dir.exists():
+        files_in_out = [f.name for f in out_dir.iterdir() if f.is_file()]
+    selected = _find_video(composition_id)
+    return {
+        "VIDEO_ASSETS_PATH": VIDEO_ASSETS_PATH,
+        "out_dir": str(out_dir),
+        "out_dir_exists": out_dir.exists(),
+        "files_in_out": sorted(files_in_out),
+        "looking_for": [f"{day}-{month}.mp4", f"{day}-{month}.MP4", f"{day}-{month}.mov"],
+        "selected_video": selected,
+    }
 async def api_caption(composition_id: str):
     """Génère les légendes IA pour Facebook, Instagram et TikTok."""
     loop       = asyncio.get_event_loop()

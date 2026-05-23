@@ -967,8 +967,16 @@ def _get_post_schedule(composition_id: str):
 
 def _generate_social_captions_sync(composition_id: str) -> dict:
     """Génère des légendes IA pour Facebook, Instagram et TikTok depuis les props."""
-    cached = _load_script(composition_id)
-    props  = cached.get("props") or extract_post_props(composition_id, VIDEO_ASSETS_PATH) or {}
+    try:
+        cached = _load_script(composition_id)
+        props  = cached.get("props") or {}
+        if not props:
+            try:
+                props = extract_post_props(composition_id, VIDEO_ASSETS_PATH) or {}
+            except Exception:
+                props = {}
+    except Exception:
+        props = {}
 
     hook   = props.get("hookText", "")
     tips   = props.get("tips", [])

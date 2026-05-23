@@ -1869,18 +1869,26 @@ async function openPublishPanel(platform) {
     const res  = await fetch(`/api/caption/${_voCid}`);
     const data = await res.json();
 
-    document.getElementById('publish-caption').value = data.captions?.[platform] || '';
-
-    if (data.scheduled_at) {
-      const dt = new Date(data.scheduled_at);
-      const fmt = dt.toLocaleString('fr-FR', {day:'2-digit', month:'long', hour:'2-digit', minute:'2-digit'});
-      badge.innerHTML = `<span class="badge" style="background:#e8f4fd;color:#1877f2;font-size:.78rem">📅 Programmé le ${fmt}</span>`;
+    if (!res.ok) {
+      const msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data);
+      document.getElementById('publish-caption').value = '';
+      badge.innerHTML = `<span class="badge bg-danger" style="font-size:.78rem">⚠ Erreur serveur : ${msg.slice(0,120)}</span>`;
       badge.style.display = 'block';
     } else {
-      badge.innerHTML = `<span class="badge bg-success" style="font-size:.78rem">⚡ Publication immédiate (date passée)</span>`;
+      document.getElementById('publish-caption').value = data.captions?.[platform] || '';
+
+      if (data.scheduled_at) {
+        const dt  = new Date(data.scheduled_at);
+        const fmt = dt.toLocaleString('fr-FR', {day:'2-digit', month:'long', hour:'2-digit', minute:'2-digit'});
+        badge.innerHTML = `<span class="badge" style="background:#e8f4fd;color:#1877f2;font-size:.78rem">📅 Programmé le ${fmt}</span>`;
+      } else {
+        badge.innerHTML = `<span class="badge bg-success" style="font-size:.78rem">⚡ Publication immédiate (date passée)</span>`;
+      }
       badge.style.display = 'block';
     }
   } catch(e) {
+    badge.innerHTML = `<span class="badge bg-danger" style="font-size:.78rem">⚠ Erreur réseau : ${e.message}</span>`;
+    badge.style.display = 'block';
     document.getElementById('publish-caption').value = '';
   } finally {
     loading.style.display = 'none';

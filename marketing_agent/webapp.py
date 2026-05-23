@@ -862,36 +862,93 @@ def _text_to_props_sync(script_text: str, composition_id: str, template_type: st
         return {"status": "error", "error": "Réponse invalide", "raw": raw[:500]}
 
 
+def _voiceover_to_props_sync(composition_id: str, voiceover: str, template_type: str) -> dict:
+    """Génère les props visuels depuis le texte voix off affiché dans l'UI."""
+    schema = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
+    prompt_sys = (
+        f"Tu extrais les overlays visuels d'une vidéo ZenAquatique depuis un script voix off.\n"
+        f"{CONTENT_RULES}\n"
+        "Réponds UNIQUEMENT en JSON valide selon le schéma. Textes courts (hookText max 7 mots tirés du script)."
+    )
+    prompt_user = (
+        f"Script voix off :\n\"\"\"\n{voiceover}\n\"\"\"\n\n"
+        f"Template : {template_type}\n"
+        "Génère les props visuels qui illustrent EXACTEMENT ce script "
+        "(mêmes plantes, même accroche, même CTA).\n"
+        f"Schéma :\n{schema}"
+    )
+    try:
+        if ANTHROPIC_API_KEY:
+            import anthropic
+            msg = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY).messages.create(
+                model=CLAUDE_SCRIPT_MODEL, max_tokens=2000,
+                system=prompt_sys,
+                messages=[{"role": "user", "content": prompt_user}],
+            )
+            raw = next((b.text for b in msg.content if getattr(b, "type", "") == "text"), "").strip()
+            if "```" in raw:
+                for part in raw.split("```"):
+                    s = part.strip().lstrip("json").strip()
+                    if s.startswith("{"):
+                        raw = s; break
+            props = json.loads(raw)
+        else:
+            from groq import Groq
+            resp = Groq(api_key=GROQ_API_KEY).chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": prompt_sys},
+                    {"role": "user",   "content": prompt_user},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3, max_tokens=2048,
+            )
+            props = json.loads(resp.choices[0].message.content)
+        props["template_type"]  = template_type
+        props["composition_id"] = composition_id
+        return {"status": "success", "props": props}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 @app.post("/api/approve-voiceover")
 async def api_approve_voiceover(request: Request):
-    """Écrit Root.tsx depuis le cache de script et génère la vidéo."""
+    """Dérive les props depuis le voiceover affiché, écrit Root.tsx et rend la vidéo."""
     body = await request.json()
     composition_id = body.get("composition_id", "").strip()
+    voiceover_text = body.get("voiceover", "").strip()
     if not composition_id:
         raise HTTPException(400, "composition_id manquant")
 
-    # 1. Props depuis le cache
     cached = _load_script(composition_id)
-    props = cached.get("props")
 
-    # 2. Fallback : Root.tsx
-    if not props:
-        props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
-
-    if not props:
-        raise HTTPException(
-            400,
-            f"Aucun script pour '{composition_id}'. Clique d'abord sur 'Script IA'."
+    # Si le voiceover est fourni (texte affiché dans l'UI), on re-dérive les props depuis lui
+    if voiceover_text:
+        template_type = (cached.get("props") or {}).get("template_type", "EducatifVideoProps")
+        loop = asyncio.get_event_loop()
+        pres = await loop.run_in_executor(
+            _executor, _voiceover_to_props_sync, composition_id, voiceover_text, template_type
         )
+        if pres.get("status") == "error":
+            raise HTTPException(500, f"Erreur génération props : {pres['error']}")
+        props = pres["props"]
+        # Met à jour le cache avec les nouveaux props + voiceover
+        _save_script(composition_id, {**cached, "props": props, "voiceover": voiceover_text, "status": "success"})
+    else:
+        props = cached.get("props")
+        if not props:
+            props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+        if not props:
+            raise HTTPException(400, f"Aucun script pour '{composition_id}'. Clique d'abord sur 'Script IA'.")
 
-    # 3. Écriture Root.tsx
+    # Écriture Root.tsx
     result = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
     if result.get("status") == "error" and "introuvable" in result.get("error", ""):
         result = create_post_composition(composition_id, VIDEO_ASSETS_PATH, props)
     if result.get("status") not in ("success", "created"):
         raise HTTPException(500, result.get("error", "Erreur écriture Root.tsx"))
 
-    # 4. Rendu vidéo
+    # Rendu vidéo
     loop = asyncio.get_event_loop()
     render_result = await loop.run_in_executor(_executor, _render_sync, composition_id)
     if render_result.get("status") == "error":

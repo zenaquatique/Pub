@@ -1656,10 +1656,11 @@ async function approveAndRender(btn) {
   const errBox = document.getElementById('render-error-box');
   if (errBox) errBox.style.display = 'none';
   try {
+    const voiceover = document.getElementById('voiceover-text')?.value || '';
     const res = await fetch('/api/approve-voiceover', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({composition_id: _voCid}),
+      body: JSON.stringify({composition_id: _voCid, voiceover}),
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.detail || JSON.stringify(d));

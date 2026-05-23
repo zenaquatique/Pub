@@ -1008,7 +1008,7 @@ def _regen_props_sync(composition_id: str, feedback: str) -> dict:
     return {"status": "success", "props": new_props, "voiceover": cached.get("voiceover", "")}
 
 
-@app.post("/api/script/{composition_id}/props")
+@app.post("/api/props/{composition_id}")
 async def api_regen_props(composition_id: str, request: Request):
     """Regénère les overlays visuels sans toucher au voiceover."""
     body = await request.json()

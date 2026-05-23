@@ -1766,7 +1766,7 @@ async function regenProps() {
   if (errBox) errBox.style.display = 'none';
 
   try {
-    const res = await fetch(`/api/script/${_voCid}/props`, {
+    const res = await fetch(`/api/props/${_voCid}`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({feedback}),

@@ -1107,14 +1107,13 @@ async def api_debug_env():
 
 
 def _find_video(composition_id: str) -> str | None:
+    """Cherche uniquement la vidéo finale montée (DD-MM). Jamais le rendu Remotion brut."""
     out_dir = Path(VIDEO_ASSETS_PATH) / "out"
     day, month = composition_id[6:8], composition_id[4:6]
-    # La vidéo montée DD-MM est prioritaire sur le rendu Remotion brut
     for p in [
         out_dir / f"{day}-{month}.mp4",
         out_dir / f"{day}-{month}.MP4",
         out_dir / f"{day}-{month}.mov",
-        out_dir / f"{composition_id}.mp4",
     ]:
         if p.exists():
             return str(p)

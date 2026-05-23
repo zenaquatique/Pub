@@ -1163,4 +1163,5 @@ logger.info("Planificateur démarré — routine automatique à %02d:%02d", POST
 if __name__ == "__main__":
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logger.info("=== DÉMARRAGE v2.1 — endpoint props: /api/props/{id} ===")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

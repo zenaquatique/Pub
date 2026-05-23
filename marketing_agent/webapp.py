@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from agent import execute_pending_action, _load_pending_actions, PENDING_ACTIONS_FILE
 from config import (
     META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE,
-    OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH, GOOGLE_API_KEY, GEMINI_MODEL,
+    OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
     GROQ_API_KEY, GROQ_MODEL, CONTENT_RULES,
@@ -349,23 +349,23 @@ _VOICEOVER_SCHEMAS = {
   "ctaText": "call-to-action"
 }""",
     "EducatifVideoProps": """{
-  "hookText": "question ou affirmation courte",
-  "hookEmoji": "1 emoji",
+  "hookText": "question ou affirmation courte (max 8 mots)",
+  "hookEmoji": "1 emoji aquatique",
   "tips": [
-    {"num": "01", "title": "titre court", "desc": "description 1 phrase"},
-    {"num": "02", "title": "titre court", "desc": "description 1 phrase"},
-    {"num": "03", "title": "titre court", "desc": "description 1 phrase"}
+    {"num": "01", "title": "titre accrocheur (3-5 mots)", "desc": "2-3 phrases complètes qui développent le bénéfice avec des détails concrets et des arguments de vente"},
+    {"num": "02", "title": "titre accrocheur (3-5 mots)", "desc": "2-3 phrases complètes qui développent le bénéfice avec des détails concrets et des arguments de vente"},
+    {"num": "03", "title": "titre accrocheur (3-5 mots)", "desc": "2-3 phrases complètes qui développent le bénéfice avec des détails concrets et des arguments de vente"}
   ],
-  "ctaText": "call-to-action"
+  "ctaText": "appel à l'action complet (1-2 phrases)"
 }""",
     "PromoVideoProps": """{
-  "hookText": "accroche promo courte",
+  "hookText": "accroche promo courte (max 8 mots)",
   "plants": [
-    {"emoji": "🌿", "name": "Nom plante", "description": "1 bénéfice", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom plante", "description": "1 bénéfice", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom plante", "description": "1 bénéfice", "price": "X,XX€"}
+    {"emoji": "🌿", "name": "Nom plante", "description": "2 phrases : bénéfice principal + argument achat", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom plante", "description": "2 phrases : bénéfice principal + argument achat", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom plante", "description": "2 phrases : bénéfice principal + argument achat", "price": "X,XX€"}
   ],
-  "ctaText": "call-to-action urgence"
+  "ctaText": "appel à l'action avec urgence (1-2 phrases)"
 }""",
 }
 

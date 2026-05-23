@@ -3,13 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Groq (script voix off + vidéo — priorité sur Gemini)
+# Groq (génération scripts vidéo)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-
-# Google Gemini (agent principal + actions marketing)
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-GEMINI_MODEL = "gemini-2.5-flash"
 
 # Règles de contenu — injectées dans TOUS les prompts de génération
 CONTENT_RULES = """
@@ -66,7 +62,7 @@ POSTING_HOUR = int(os.environ.get("POSTING_HOUR", "9"))
 POSTING_MINUTE = int(os.environ.get("POSTING_MINUTE", "0"))
 POSTING_TIMEZONE = os.environ.get("POSTING_TIMEZONE", "Europe/Paris")
 
-# Claude API (optionnel — priorité sur Gemini si clé fournie)
+# Claude API (optionnel — priorité sur Groq si clé fournie)
 ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_SCRIPT_MODEL = os.environ.get("CLAUDE_SCRIPT_MODEL", "claude-opus-4-7")
 

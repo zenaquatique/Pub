@@ -1007,30 +1007,19 @@ def _generate_social_captions_sync(composition_id: str) -> dict:
 
 Tu es le social media manager de ZenAquatique (zen-aquatique.fr).
 
-Voici le script de la vidéo du jour (contexte uniquement — NE PAS copier) :
+Script de la vidéo (source) :
 {content_summary}
 
-Ta mission : écrire 3 légendes de post qui DÉCRIVENT le sujet de cette vidéo en langage social media.
-⚠ INTERDIT : copier ou paraphraser le script. Tu dois RÉÉCRIRE en style post Instagram/Facebook/TikTok.
-✅ OBLIGATOIRE : nommer les plantes/conseils/sujets spécifiques de cette vidéo. Zéro phrase générique.
+Écris 3 légendes courtes, directes, qui décrivent précisément ce que montre cette vidéo.
+NE COPIE PAS le script — reformule en 2-4 phrases maximum par plateforme.
+Chaque légende doit répondre à : "De quoi parle cette vidéo ?"
 
-FACEBOOK (150-200 mots) :
-- Présente le sujet de la vidéo comme une découverte utile pour l'aquariophile
-- Développe les avantages concrets (prix, origine FR, facilité d'entretien…)
-- Ton naturel et expert, 5-8 emojis bien placés
-- Se termine par "👉 zen-aquatique.fr"
+FACEBOOK : 2-4 phrases + quelques emojis + "👉 zen-aquatique.fr"
+INSTAGRAM : 2-3 phrases + emojis + 15 hashtags + "🔗 Lien en bio — zen-aquatique.fr"
+TIKTOK : 1-2 phrases percutantes + 8 hashtags + "👉 zen-aquatique.fr"
 
-INSTAGRAM (80-120 mots + hashtags) :
-- Accroche courte et punchy sur le sujet de la vidéo
-- Phrases courtes, emojis, rythme visuel
-- 15 hashtags : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
-- Se termine par "🔗 Lien en bio — zen-aquatique.fr"
-
-TIKTOK (50-80 mots + hashtags) :
-- Interpelle directement ("Tu veux…", "Sais-tu que…", "Voici pourquoi…")
-- Ultra concis, langage parlé, 1 idée forte tirée de la vidéo
-- 8 hashtags : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
-- Se termine par "👉 zen-aquatique.fr"
+Hashtags Instagram : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
+Hashtags TikTok : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
 
 Réponds UNIQUEMENT en JSON valide :
 {{"facebook": "...", "instagram": "...", "tiktok": "..."}}"""

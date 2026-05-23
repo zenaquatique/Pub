@@ -714,6 +714,20 @@ def _generate_with_groq(
             except Exception:
                 break
 
+        # Fallback garanti si toutes les tentatives produisent du contenu interdit
+        if _check_voiceover(voiceover):
+            logger.error("[Groq] Contenu interdit persistant après retries — fallback hardcodé")
+            voiceover = (
+                "Tu cherches des plantes aquatiques magnifiques pour ton aquarium ? "
+                "Chez ZenAquatique, on te propose une sélection exceptionnelle cultivée avec passion en France. "
+                "Des boutures disponibles à partir de 0,99€ seulement — "
+                "de quoi créer un aquascape luxuriant sans te ruiner. "
+                "Nos plantes sont fraîches, robustes et prêtes à prospérer dès leur arrivée chez toi. "
+                "Faciles à entretenir, elles s'adaptent parfaitement à ton aquarium. "
+                "La livraison est rapide et soignée — tes plantes arrivent en parfait état. "
+                "Commande maintenant sur zen-aquatique.fr !"
+            )
+
         if not voiceover:
             voiceover = generate_voiceover(props) if props else ""
 

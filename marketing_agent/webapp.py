@@ -976,52 +976,66 @@ def _generate_social_captions_sync(composition_id: str) -> dict:
             except Exception:
                 props = {}
     except Exception:
-        props = {}
+        cached = {}
+        props  = {}
 
-    hook   = props.get("hookText", "")
-    tips   = props.get("tips", [])
-    plants = props.get("plants", [])
-    cta    = props.get("ctaText", "")
+    voiceover = cached.get("voiceover", "").strip()
+    hook      = props.get("hookText", "")
+    tips      = props.get("tips", [])
+    plants    = props.get("plants", [])
+    cta       = props.get("ctaText", "")
 
+    # Construit un résumé structuré de la vidéo
     content_parts = []
+    if voiceover:
+        content_parts.append(f"=== NARRATION COMPLÈTE DE LA VIDÉO ===\n{voiceover}\n=== FIN NARRATION ===")
     if hook:
-        content_parts.append(f"Accroche vidéo : {hook}")
+        content_parts.append(f"Accroche visuelle : {hook}")
     for t in tips:
-        content_parts.append(f"Point {t.get('num','')} « {t.get('title','')} » : {t.get('desc','')}")
+        content_parts.append(f"Conseil {t.get('num','')} — {t.get('title','')} : {t.get('desc','')}")
     for p in plants:
-        content_parts.append(f"Plante {p.get('name','')} — {p.get('description','')} à {p.get('price','')}")
+        content_parts.append(f"Plante mise en avant : {p.get('name','')} — {p.get('description','')} — {p.get('price','')}")
     if cta:
-        content_parts.append(f"CTA : {cta}")
-    content_summary = "\n".join(content_parts) if content_parts else "Plantes aquatiques ZenAquatique — cultivées en France, dès 0,99€"
+        content_parts.append(f"Appel à l'action : {cta}")
+
+    if not content_parts:
+        content_parts.append("Plantes aquatiques ZenAquatique — cultivées en France, dès 0,99€")
+
+    content_summary = "\n\n".join(content_parts)
 
     prompt = f"""{CONTENT_RULES}
 
 Tu es le social media manager de ZenAquatique (zen-aquatique.fr).
-Voici le contenu de la vidéo du jour :
+
+Voici le contenu EXACT de la vidéo du jour — tu dois t'en inspirer précisément :
 {content_summary}
 
-Génère 3 légendes de publication en JSON, une par plateforme :
+RÈGLE ABSOLUE : les légendes doivent reprendre les éléments SPÉCIFIQUES de cette vidéo (plantes citées, conseils donnés, chiffres mentionnés). Aucune phrase générique qui pourrait s'appliquer à n'importe quelle vidéo.
 
-FACEBOOK (150-250 mots) :
-- Storytelling engageant qui reprend et développe les arguments de la vidéo
-- 5-8 emojis bien placés
-- Mentionne : prix dès 0,99€, cultivées en France, livraison fraîche
-- CTA final : "👉 Découvrez toute la sélection sur zen-aquatique.fr"
+Génère 3 légendes adaptées à chaque plateforme :
 
-INSTAGRAM (100-150 mots + hashtags) :
-- Accroche visuelle, emojis, phrases courtes et percutantes
-- 15 hashtags FR aquariophilie : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
+FACEBOOK (150-200 mots) :
+- Reprend et développe les points clés de la narration vidéo
+- Ton chaleureux et expert, emojis naturels (5-8 max)
+- Arguments concrets : prix exact, origine FR, livraison fraîche
+- Se termine par "👉 zen-aquatique.fr"
+
+INSTAGRAM (80-120 mots + hashtags) :
+- Accroche percutante tirée du hook vidéo
+- Phrases courtes, emojis, éléments spécifiques de la vidéo
+- 15 hashtags : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
 - Se termine par "🔗 Lien en bio — zen-aquatique.fr"
 
-TIKTOK (60-90 mots + hashtags) :
-- Ton direct, dynamique, parle à la 2e personne
-- 8 hashtags viraux : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
+TIKTOK (50-80 mots + hashtags) :
+- Très direct, parle à la 2e personne, langage naturel
+- Reprend l'accroche ou un conseil spécifique de la vidéo
+- 8 hashtags : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
 - Se termine par "👉 zen-aquatique.fr"
 
 Réponds UNIQUEMENT en JSON valide :
 {{"facebook": "...", "instagram": "...", "tiktok": "..."}}"""
 
-    fallback_fb = f"🌿 {hook}\n\n{cta or 'Découvrez nos plantes sur zen-aquatique.fr !'}\n\n👉 zen-aquatique.fr"
+    fallback_fb = voiceover or f"🌿 {hook}\n\n{cta or 'Découvrez nos plantes sur zen-aquatique.fr !'}\n\n👉 zen-aquatique.fr"
     fallback_ig = fallback_fb + "\n\n#aquarium #aquascape #plantesaquatiques #zenaquatique #aquariophilie"
     fallback_tt = f"🌿 {hook or 'Plantes aquatiques dès 0,99€'} 👉 zen-aquatique.fr\n#aquarium #aquascape #zenaquatique"
 
@@ -1032,7 +1046,8 @@ Réponds UNIQUEMENT en JSON valide :
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.7, max_tokens=2000,
+            temperature=0.6,
+            max_tokens=2000,
         )
         data = json.loads(resp.choices[0].message.content)
         if all(k in data for k in ("facebook", "instagram", "tiktok")):

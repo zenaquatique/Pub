@@ -683,11 +683,25 @@ def _generate_with_groq(
             max_tokens=1024,
         )
 
-        # Assemble le voiceover depuis les slots JSON
+        # Assemble le voiceover en sections depuis les slots JSON
         try:
             vo_data = json.loads(resp_vo.choices[0].message.content)
-            slots = ["accroche", "visuel", "prix", "origine", "entretien", "livraison", "cta"]
-            voiceover = " ".join(vo_data.get(s, "").strip() for s in slots if vo_data.get(s))
+
+            def _slot(key):
+                return vo_data.get(key, "").strip()
+
+            corps = " ".join(filter(None, [
+                _slot("visuel"), _slot("prix"), _slot("origine"),
+                _slot("entretien"), _slot("livraison"),
+            ]))
+            sections = []
+            if _slot("accroche"):
+                sections.append(f"[ACCROCHE]\n{_slot('accroche')}")
+            if corps:
+                sections.append(f"[CORPS]\n{corps}")
+            if _slot("cta"):
+                sections.append(f"[CTA]\n{_slot('cta')}")
+            voiceover = "\n\n".join(sections)
         except Exception:
             voiceover = ""
 
@@ -709,8 +723,13 @@ def _generate_with_groq(
             )
             try:
                 vo_data2 = json.loads(retry_resp.choices[0].message.content)
-                slots = ["accroche", "visuel", "prix", "origine", "entretien", "livraison", "cta"]
-                voiceover = " ".join(vo_data2.get(s, "").strip() for s in slots if vo_data2.get(s))
+                def _slot2(k): return vo_data2.get(k, "").strip()
+                corps2 = " ".join(filter(None, [_slot2("visuel"), _slot2("prix"), _slot2("origine"), _slot2("entretien"), _slot2("livraison")]))
+                sections2 = []
+                if _slot2("accroche"): sections2.append(f"[ACCROCHE]\n{_slot2('accroche')}")
+                if corps2: sections2.append(f"[CORPS]\n{corps2}")
+                if _slot2("cta"): sections2.append(f"[CTA]\n{_slot2('cta')}")
+                voiceover = "\n\n".join(sections2)
             except Exception:
                 break
 
@@ -718,13 +737,15 @@ def _generate_with_groq(
         if _check_voiceover(voiceover):
             logger.error("[Groq] Contenu interdit persistant après retries — fallback hardcodé")
             voiceover = (
-                "Tu cherches des plantes aquatiques magnifiques pour ton aquarium ? "
+                "[ACCROCHE]\n"
+                "Tu cherches des plantes aquatiques magnifiques pour ton aquarium ?\n\n"
+                "[CORPS]\n"
                 "Chez ZenAquatique, on te propose une sélection exceptionnelle cultivée avec passion en France. "
-                "Des boutures disponibles à partir de 0,99€ seulement — "
-                "de quoi créer un aquascape luxuriant sans te ruiner. "
+                "Des boutures disponibles à partir de 0,99€ seulement — de quoi créer un aquascape luxuriant sans te ruiner. "
                 "Nos plantes sont fraîches, robustes et prêtes à prospérer dès leur arrivée chez toi. "
                 "Faciles à entretenir, elles s'adaptent parfaitement à ton aquarium. "
-                "La livraison est rapide et soignée — tes plantes arrivent en parfait état. "
+                "La livraison est rapide et soignée — tes plantes arrivent en parfait état.\n\n"
+                "[CTA]\n"
                 "Commande maintenant sur zen-aquatique.fr !"
             )
 

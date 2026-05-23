@@ -1568,6 +1568,7 @@ async function regenVoiceoverAI() {
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.detail || 'Erreur');
+    _resetRenderBtn();
     _voTpl   = d.props?.template_type || '';
     _voProps = d.props || null;
     const badge = document.getElementById('voiceover-template');
@@ -1639,14 +1640,21 @@ function _applyScript(d) {
   document.getElementById('voiceover-fields').style.display = 'block';
 }
 
+function _resetRenderBtn() {
+  const btn = document.querySelector('[onclick="approveAndRender(this)"]');
+  if (!btn) return;
+  btn.innerHTML = '<i class="fa-solid fa-clapperboard me-1"></i>Rendre la vidéo';
+  btn.className = btn.className.replace('btn-success','btn-primary');
+  btn.disabled = false;
+}
+
 async function approveAndRender(btn) {
   if (!_voCid) return;
   const orig = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Écriture Root.tsx + rendu…';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rendu en cours…';
   const errBox = document.getElementById('render-error-box');
   if (errBox) errBox.style.display = 'none';
-  let apiOk = false;
   try {
     const res = await fetch('/api/approve-voiceover', {
       method: 'POST',
@@ -1655,9 +1663,10 @@ async function approveAndRender(btn) {
     });
     const d = await res.json();
     if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
-    apiOk = true;
-    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Vidéo générée !';
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Rendu !';
     btn.className = btn.className.replace('btn-primary','btn-success');
+    // Réactive le bouton après 3s pour permettre un nouveau rendu
+    setTimeout(_resetRenderBtn, 3000);
     showToast(`✅ ${_voCid}.mp4 généré !`, 'success');
 
     // Affiche le lecteur vidéo
@@ -1674,10 +1683,7 @@ async function approveAndRender(btn) {
       playerBox.style.display = 'block';
     }
   } catch(e) {
-    if (apiOk) {
-      // L'API a réussi mais showToast a planté (bootstrap non chargé) — pas d'erreur réelle
-      return;
-    }
+    _resetRenderBtn();
     btn.innerHTML = orig;
     btn.disabled = false;
     if (errBox) {
@@ -1769,6 +1775,7 @@ async function regenProps() {
     if (!res.ok) throw new Error(d.detail || 'Erreur');
     _voProps = d.props || null;
     document.getElementById('props-feedback').value = '';
+    _resetRenderBtn();
     showToast('✅ Overlays mis à jour — clique sur Rendre pour régénérer la vidéo', 'success');
   } catch(e) {
     if (errBox) { errBox.textContent = '❌ ' + e.message; errBox.style.display = 'block'; }

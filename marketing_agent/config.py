@@ -37,7 +37,7 @@ SHOPIFY_ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN", "")
 # Meta — tokens séparés user / page
 # META_PAGE_TOKEN est le token de la Page Facebook (nécessaire pour publier)
 META_USER_TOKEN       = os.environ.get("META_USER_TOKEN", "")
-META_PAGE_TOKEN       = os.environ.get("META_PAGE_TOKEN", os.environ.get("META_ACCESS_TOKEN", ""))
+META_PAGE_TOKEN       = os.environ.get("META_PAGE_TOKEN", os.environ.get("META_ACCESS_TOKEN", os.environ.get("META_USER_TOKEN", "")))
 META_ACCESS_TOKEN     = META_PAGE_TOKEN  # alias backward compat
 META_APP_ID           = os.environ.get("META_APP_ID", "")
 META_APP_SECRET       = os.environ.get("META_APP_SECRET", "")

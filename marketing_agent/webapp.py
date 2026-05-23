@@ -1003,30 +1003,32 @@ def _generate_social_captions_sync(composition_id: str) -> dict:
 
     content_summary = "\n\n".join(content_parts)
 
-    prompt = f"""{CONTENT_RULES}
+    prompt = f"""Tu es le social media manager de ZenAquatique (zen-aquatique.fr).
+{CONTENT_RULES}
 
-Tu es le social media manager de ZenAquatique (zen-aquatique.fr).
-
-Script de la vidéo (source) :
+Voici le script de la vidéo :
+---
 {content_summary}
+---
 
-Écris 3 légendes courtes, directes, qui décrivent précisément ce que montre cette vidéo.
-NE COPIE PAS le script — reformule en 2-4 phrases maximum par plateforme.
-Chaque légende doit répondre à : "De quoi parle cette vidéo ?"
+EXEMPLE de ce qu'on attend (pour une autre vidéo) :
+Facebook  → "🌿 La Cryptocoryne, c'est la plante parfaite pour débuter. Elle pousse sans CO2, s'adapte à tous les aquariums et reste belle des années. Cultivée en France, livrée fraîche chez toi dès 1,49€. 👉 zen-aquatique.fr"
+Instagram → "La plante des débutants qui ne meurt pas 🌿\nCryptocoryne française • sans CO2 • dès 1,49€\n🔗 Lien en bio — zen-aquatique.fr\n#aquarium #aquascape #plantesaquatiques #zenaquatique"
+TikTok    → "Tu galères avec tes plantes aquatiques ? 🌿 La Cryptocoryne pousse toute seule, même sans CO2. Dès 1,49€ sur zen-aquatique.fr 👉\n#aquarium #zenaquatique #plantesaquatiques"
 
-FACEBOOK : 2-4 phrases + quelques emojis + "👉 zen-aquatique.fr"
-INSTAGRAM : 2-3 phrases + emojis + 15 hashtags + "🔗 Lien en bio — zen-aquatique.fr"
-TIKTOK : 1-2 phrases percutantes + 8 hashtags + "👉 zen-aquatique.fr"
+Maintenant écris les 3 légendes pour LA VIDÉO CI-DESSUS.
+Même style : naturel, court, une idée forte, pas de copie du script.
 
-Hashtags Instagram : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
-Hashtags TikTok : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
+Hashtags Instagram à inclure : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
+Hashtags TikTok à inclure : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
 
-Réponds UNIQUEMENT en JSON valide :
+Réponds UNIQUEMENT en JSON :
 {{"facebook": "...", "instagram": "...", "tiktok": "..."}}"""
 
-    fallback_fb = voiceover or f"🌿 {hook}\n\n{cta or 'Découvrez nos plantes sur zen-aquatique.fr !'}\n\n👉 zen-aquatique.fr"
-    fallback_ig = fallback_fb + "\n\n#aquarium #aquascape #plantesaquatiques #zenaquatique #aquariophilie"
-    fallback_tt = f"🌿 {hook or 'Plantes aquatiques dès 0,99€'} 👉 zen-aquatique.fr\n#aquarium #aquascape #zenaquatique"
+    _h = hook or "Plantes aquatiques cultivées en France"
+    fallback_fb = f"🌿 {_h}\n\nDès 0,99€, livrées fraîches et garanties vivantes. Cultivées en France avec passion.\n\n👉 zen-aquatique.fr"
+    fallback_ig = f"🌿 {_h}\nDès 0,99€ • Cultivées en France • Livrées fraîches\n🔗 Lien en bio — zen-aquatique.fr\n\n#aquarium #aquascape #plantesaquatiques #zenaquatique #aquariophilie"
+    fallback_tt = f"🌿 {_h} — dès 0,99€, livrées fraîches ! 👉 zen-aquatique.fr\n#aquarium #aquascape #zenaquatique #plantesaquatiques"
 
     try:
         from groq import Groq

@@ -43,10 +43,21 @@ META_APP_ID        = os.environ.get("META_APP_ID", "")
 META_APP_SECRET    = os.environ.get("META_APP_SECRET", "")
 META_IG_ACCOUNT_ID = os.environ.get("META_IG_ACCOUNT_ID", "")
 
-# META_PAGE_TOKEN lu directement (Page Token), fallback sur User Token
-META_PAGE_TOKEN       = os.environ.get("META_PAGE_TOKEN", META_USER_TOKEN)
-META_ACCESS_TOKEN     = META_PAGE_TOKEN
-FACEBOOK_PAGE_ID      = META_PAGE_ID
+# Accepte tous les noms possibles pour le token et l'ID de page
+META_PAGE_TOKEN = (
+    os.environ.get("META_PAGE_TOKEN")
+    or os.environ.get("META_USER_TOKEN")
+    or os.environ.get("META_ACCESS_TOKEN")
+    or ""
+)
+META_ACCESS_TOKEN = META_PAGE_TOKEN
+
+FACEBOOK_PAGE_ID = (
+    os.environ.get("META_PAGE_ID")
+    or os.environ.get("FACEBOOK_PAGE_ID")
+    or ""
+)
+
 INSTAGRAM_BUSINESS_ID = META_IG_ACCOUNT_ID
 
 # TikTok

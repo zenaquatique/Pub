@@ -775,15 +775,24 @@ async def api_generate_voiceover_ai(request: Request):
 
 
 # POST /api/script — génère TOUJOURS un nouveau script (vide le cache d'abord)
+def _write_props_to_roots(composition_id: str, props: dict) -> None:
+    """Écrit les props dans Root.tsx (crée la composition si absente). Silencieux en cas d'erreur."""
+    try:
+        res = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
+        if res.get("status") == "error" and "introuvable" in res.get("error", ""):
+            create_post_composition(composition_id, VIDEO_ASSETS_PATH, props)
+    except Exception:
+        logger.exception("Erreur écriture Root.tsx pour %s", composition_id)
+
+
 @app.post("/api/script")
 async def api_script(request: Request):
     body = await request.json()
     composition_id = body.get("composition_id", "").strip()
     feedback = body.get("feedback", "").strip()
-    context  = body.get("context", "").strip()   # ligne calendrier envoyée par le frontend
+    context  = body.get("context", "").strip()
     if not composition_id:
         raise HTTPException(400, "composition_id manquant")
-    # Vider le cache
     (SCRIPTS_DIR / f"{composition_id}.json").unlink(missing_ok=True)
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
@@ -791,6 +800,10 @@ async def api_script(request: Request):
     )
     if result.get("status") == "error":
         raise HTTPException(500, result["error"])
+    # Écrit immédiatement dans Root.tsx — ce que l'utilisateur voit = ce qui est dans Root.tsx
+    props = result.get("props")
+    if props:
+        await loop.run_in_executor(_executor, _write_props_to_roots, composition_id, props)
     return result
 
 

@@ -946,6 +946,82 @@ async def api_rendered_videos():
     return list_rendered_videos(VIDEO_ASSETS_PATH)
 
 
+def _regen_props_sync(composition_id: str, feedback: str) -> dict:
+    """Regénère uniquement les props visuels (overlays) en gardant le voiceover intact."""
+    cached = _load_script(composition_id)
+    if not cached.get("props"):
+        return {"status": "error", "error": "Aucun script en cache — génère d'abord le script."}
+
+    template_type = cached["props"].get("template_type", "EducatifVideoProps")
+    schema = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
+    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+    memory_block = f"\nCONTRAINTES MÉMOIRE :\n{memory}\n" if memory else ""
+
+    prompt_sys = (
+        f"Tu modifies les overlays visuels d'une vidéo ZenAquatique.\n"
+        f"{memory_block}\n{CONTENT_RULES}\n"
+        "Réponds UNIQUEMENT en JSON valide selon le schéma fourni. Textes courts (hookText max 7 mots)."
+    )
+    prompt_user = (
+        f"Props actuelles :\n{json.dumps(cached['props'], ensure_ascii=False, indent=2)}\n\n"
+        f"Instructions de modification : {feedback}\n\n"
+        f"Schéma à respecter :\n{schema}\n\n"
+        "Génère les nouvelles props en appliquant les modifications demandées."
+    )
+
+    try:
+        if ANTHROPIC_API_KEY:
+            import anthropic
+            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            msg = client.messages.create(
+                model=CLAUDE_SCRIPT_MODEL, max_tokens=2000,
+                system=prompt_sys,
+                messages=[{"role": "user", "content": prompt_user}],
+            )
+            raw = next((b.text for b in msg.content if getattr(b, "type", "") == "text"), "").strip()
+            if "```" in raw:
+                for part in raw.split("```"):
+                    s = part.strip().lstrip("json").strip()
+                    if s.startswith("{"):
+                        raw = s; break
+            new_props = json.loads(raw)
+        else:
+            from groq import Groq
+            resp = Groq(api_key=GROQ_API_KEY).chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": prompt_sys},
+                    {"role": "user",   "content": prompt_user},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.6, max_tokens=2000,
+            )
+            new_props = json.loads(resp.choices[0].message.content)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    new_props["template_type"]  = template_type
+    new_props["composition_id"] = composition_id
+
+    updated = {**cached, "props": new_props}
+    _save_script(composition_id, updated)
+    return {"status": "success", "props": new_props, "voiceover": cached.get("voiceover", "")}
+
+
+@app.post("/api/script/{composition_id}/props")
+async def api_regen_props(composition_id: str, request: Request):
+    """Regénère les overlays visuels sans toucher au voiceover."""
+    body = await request.json()
+    feedback = body.get("feedback", "").strip()
+    if not feedback:
+        raise HTTPException(400, "feedback manquant")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(_executor, _regen_props_sync, composition_id, feedback)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
 @app.get("/api/video/{filename}")
 async def api_serve_video(filename: str):
     """Sert un fichier MP4 depuis le dossier out/ du projet Remotion."""

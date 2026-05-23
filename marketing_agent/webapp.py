@@ -946,6 +946,19 @@ async def api_rendered_videos():
     return list_rendered_videos(VIDEO_ASSETS_PATH)
 
 
+@app.get("/api/video/{filename}")
+async def api_serve_video(filename: str):
+    """Sert un fichier MP4 depuis le dossier out/ du projet Remotion."""
+    from fastapi.responses import FileResponse
+    # Sécurité : nom de fichier seulement, pas de traversal
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Nom de fichier invalide")
+    video_path = Path(VIDEO_ASSETS_PATH) / "out" / filename
+    if not video_path.exists():
+        raise HTTPException(404, f"Vidéo introuvable : {filename}")
+    return FileResponse(str(video_path), media_type="video/mp4")
+
+
 # ─── API — Script vidéo ───────────────────────────────────────────────────────
 
 _REMOTION_TEMPLATE_HINTS = {

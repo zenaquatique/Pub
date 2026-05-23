@@ -708,6 +708,16 @@ Chargement…</pre>
               </button>
             </div>
             <div id="render-error-box" class="alert alert-danger mt-3 mb-0" style="display:none; white-space:pre-wrap; max-height:220px; overflow-y:auto; font-size:.78rem; font-family:monospace;"></div>
+
+            <!-- Lecteur vidéo après rendu -->
+            <div id="video-player-box" class="mt-3" style="display:none">
+              <hr class="my-2">
+              <p class="small text-muted mb-2"><i class="fa-solid fa-film me-1"></i>Vidéo rendue :</p>
+              <video id="video-player" controls style="width:100%;max-height:360px;border-radius:8px;background:#000"></video>
+              <a id="video-download-link" href="#" download class="btn btn-sm btn-outline-secondary mt-2">
+                <i class="fa-solid fa-download me-1"></i>Télécharger le MP4
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -1620,6 +1630,20 @@ async function approveAndRender(btn) {
     btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Vidéo générée !';
     btn.className = btn.className.replace('btn-primary','btn-success');
     showToast(`✅ ${_voCid}.mp4 généré !`, 'success');
+
+    // Affiche le lecteur vidéo
+    const filename = `${_voCid}.mp4`;
+    const videoUrl = `/api/video/${filename}`;
+    const playerBox = document.getElementById('video-player-box');
+    const player    = document.getElementById('video-player');
+    const dlLink    = document.getElementById('video-download-link');
+    if (playerBox && player) {
+      player.src = videoUrl + '?t=' + Date.now();
+      player.load();
+      dlLink.href = videoUrl;
+      dlLink.download = filename;
+      playerBox.style.display = 'block';
+    }
   } catch(e) {
     if (apiOk) {
       // L'API a réussi mais showToast a planté (bootstrap non chargé) — pas d'erreur réelle

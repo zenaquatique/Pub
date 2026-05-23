@@ -636,74 +636,52 @@ def _generate_with_groq(
             f"\n{CONTENT_RULES}\n"
         )
 
-        # ── Appel 1 : props JSON (overlays visuels) ──
-        resp_props = client.chat.completions.create(
+        # ── Appel unique : props + voiceover générés ensemble (garantit la cohérence) ──
+        user_msg = (
+            f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
+            "Génère un JSON unique avec deux clés :\n\n"
+            f"1. \"props\" — overlays visuels selon ce schéma (hookText max 7 mots) :\n{schema}\n\n"
+            "2. \"voiceover\" — script parlé en 7 phrases positives :\n"
+            '{"accroche":"...","visuel":"...","prix":"...","origine":"...","entretien":"...","livraison":"...","cta":"..."}\n\n'
+            "RÈGLE ABSOLUE : props et voiceover racontent la MÊME histoire (mêmes plantes, même angle).\n"
+            "hookText dans props = version ultra-courte de l'accroche voiceover.\n"
+            "NE mentionne JAMAIS : concurrents, animaleries, pesticides, plantes qui meurent, traitements.\n\n"
+            'Retourne UNIQUEMENT : {"props": {...}, "voiceover": {"accroche":"...","visuel":"...","prix":"...","origine":"...","entretien":"...","livraison":"...","cta":"..."}}'
+        )
+
+        resp = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
-                {"role": "system", "content": sys_base + "Réponds UNIQUEMENT en JSON valide selon le schéma fourni. Textes courts (hookText max 7 mots)."},
-                {"role": "user", "content": (
-                    f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\nSchéma :\n{schema}"
-                )},
+                {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
+                {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
             temperature=0.7,
-            max_tokens=2048,
+            max_tokens=3000,
         )
+
         try:
-            props = json.loads(resp_props.choices[0].message.content)
+            data   = json.loads(resp.choices[0].message.content)
+            props  = data.get("props", {})
             if not isinstance(props, dict):
                 props = {}
+            vo_data = data.get("voiceover", {})
+            if not isinstance(vo_data, dict):
+                vo_data = {}
         except Exception:
-            props = {}
+            props   = {}
+            vo_data = {}
 
-        # ── Appel 2 : voiceover via template structuré (empêche le narratif animalerie) ──
-        vo_template_prompt = (
-            f"Sujet de la vidéo : {subject}\n{fb_block}\n"
-            "Remplis ce script JSON en 7 champs. Chaque champ = UNE phrase courte et positive sur ZenAquatique.\n"
-            "NE parle JAMAIS de concurrents, d'animaleries, de plantes qui meurent, de pesticides, de traitements.\n\n"
-            "{\n"
-            '  "accroche": "[question ou exclamation sur la beauté aquatique - 1 phrase]",\n'
-            '  "visuel": "[beauté visuelle de ces plantes spécifiques - 1 phrase]",\n'
-            '  "prix": "[prix accessibles dès 0,99€ chez ZenAquatique - 1 phrase]",\n'
-            '  "origine": "[cultivées en France/Europe avec soin - 1 phrase]",\n'
-            '  "entretien": "[facilité d\'entretien et robustesse - 1 phrase]",\n'
-            '  "livraison": "[livraison rapide, plantes fraîches à réception - 1 phrase]",\n'
-            '  "cta": "[appel à commander sur zen-aquatique.fr - 1 phrase]"\n'
-            "}"
-        )
+        def _assemble_vo(vd: dict) -> str:
+            def _s(k): return (vd.get(k) or "").strip()
+            corps = " ".join(filter(None, [_s("visuel"), _s("prix"), _s("origine"), _s("entretien"), _s("livraison")]))
+            parts = []
+            if _s("accroche"): parts.append(f"[ACCROCHE]\n{_s('accroche')}")
+            if corps:          parts.append(f"[CORPS]\n{corps}")
+            if _s("cta"):      parts.append(f"[CTA]\n{_s('cta')}")
+            return "\n\n".join(parts)
 
-        resp_vo = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": sys_base + "Réponds UNIQUEMENT en JSON valide."},
-                {"role": "user", "content": vo_template_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.8,
-            max_tokens=1024,
-        )
-
-        # Assemble le voiceover en sections depuis les slots JSON
-        try:
-            vo_data = json.loads(resp_vo.choices[0].message.content)
-
-            def _slot(key):
-                return vo_data.get(key, "").strip()
-
-            corps = " ".join(filter(None, [
-                _slot("visuel"), _slot("prix"), _slot("origine"),
-                _slot("entretien"), _slot("livraison"),
-            ]))
-            sections = []
-            if _slot("accroche"):
-                sections.append(f"[ACCROCHE]\n{_slot('accroche')}")
-            if corps:
-                sections.append(f"[CORPS]\n{corps}")
-            if _slot("cta"):
-                sections.append(f"[CTA]\n{_slot('cta')}")
-            voiceover = "\n\n".join(sections)
-        except Exception:
-            voiceover = ""
+        voiceover = _assemble_vo(vo_data)
 
         # ── Filtre de sécurité : retry si mots interdits détectés ──
         for _attempt in range(3):
@@ -714,22 +692,20 @@ def _generate_with_groq(
             retry_resp = client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[
-                    {"role": "system", "content": sys_base + "Réponds UNIQUEMENT en JSON valide."},
-                    {"role": "user", "content": _retry_prompt(vo_template_prompt, violations)},
+                    {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
+                    {"role": "user", "content": _retry_prompt(user_msg, violations)},
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.6,
-                max_tokens=1024,
+                max_tokens=3000,
             )
             try:
-                vo_data2 = json.loads(retry_resp.choices[0].message.content)
-                def _slot2(k): return vo_data2.get(k, "").strip()
-                corps2 = " ".join(filter(None, [_slot2("visuel"), _slot2("prix"), _slot2("origine"), _slot2("entretien"), _slot2("livraison")]))
-                sections2 = []
-                if _slot2("accroche"): sections2.append(f"[ACCROCHE]\n{_slot2('accroche')}")
-                if corps2: sections2.append(f"[CORPS]\n{corps2}")
-                if _slot2("cta"): sections2.append(f"[CTA]\n{_slot2('cta')}")
-                voiceover = "\n\n".join(sections2)
+                data2   = json.loads(retry_resp.choices[0].message.content)
+                props2  = data2.get("props", {})
+                if isinstance(props2, dict) and props2:
+                    props = props2
+                vo_data2 = data2.get("voiceover", {})
+                voiceover = _assemble_vo(vo_data2 if isinstance(vo_data2, dict) else {})
             except Exception:
                 break
 

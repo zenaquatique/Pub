@@ -1031,7 +1031,7 @@ async def api_serve_video(filename: str):
         raise HTTPException(400, "Nom de fichier invalide")
     video_path = Path(VIDEO_ASSETS_PATH) / "out" / filename
     if not video_path.exists():
-        raise HTTPException(404, f"Vidéo introuvable : {filename}")
+        raise HTTPException(404, f"Vidéo introuvable : {video_path}")
     return FileResponse(str(video_path), media_type="video/mp4")
 
 

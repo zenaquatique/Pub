@@ -689,25 +689,27 @@ Chargement…</pre>
               style="font-size:.9rem;line-height:1.7;font-family:monospace"
               placeholder="Le script apparaîtra ici…"></textarea>
 
-            <!-- Zone feedback + actions -->
-            <div class="mb-3">
-              <input type="text" id="regen-feedback" class="form-control form-control-sm mb-2"
-                placeholder="Instructions de modification — ex : change le hookText, utilise un ton plus dynamique…"
-                onkeydown="if(event.key==='Enter'){ event.preventDefault(); modifyAndRender(this); }" />
-              <div class="d-flex gap-2 flex-wrap">
-                <button class="btn btn-primary" onclick="approveAndRender(this)">
-                  <i class="fa-solid fa-clapperboard me-1"></i>Valider + Rendre
-                </button>
-                <button class="btn btn-warning" onclick="modifyAndRender(this)">
-                  <i class="fa-solid fa-pen-to-square me-1"></i>Modifier + Rendre
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="regenVoiceoverAI()">
-                  <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Nouveau script seulement
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="copyVoiceover()">
-                  <i class="fa-solid fa-copy me-1"></i>Copier
+            <!-- Modifier le script -->
+            <div class="mb-2">
+              <label class="form-label small text-muted mb-1">Modifier le script</label>
+              <div class="input-group">
+                <input type="text" id="regen-feedback" class="form-control form-control-sm"
+                  placeholder="Ex : rends l'accroche plus percutante, parle des crevettes…"
+                  onkeydown="if(event.key==='Enter'){ event.preventDefault(); regenVoiceoverAI(); }" />
+                <button class="btn btn-warning btn-sm" onclick="regenVoiceoverAI()">
+                  <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Appliquer
                 </button>
               </div>
+            </div>
+
+            <!-- Rendre la vidéo -->
+            <div class="d-flex gap-2 flex-wrap mt-3">
+              <button class="btn btn-primary" onclick="approveAndRender(this)">
+                <i class="fa-solid fa-clapperboard me-1"></i>Rendre la vidéo
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="copyVoiceover()">
+                <i class="fa-solid fa-copy me-1"></i>Copier
+              </button>
             </div>
             <div id="render-error-box" class="alert alert-danger mt-3 mb-0" style="display:none; white-space:pre-wrap; max-height:220px; overflow-y:auto; font-size:.78rem; font-family:monospace;"></div>
 

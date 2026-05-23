@@ -1,44 +1,89 @@
 """Publication sur les réseaux sociaux (Instagram, Facebook, TikTok)."""
+import os
 import time
 import requests
 from config import (
-    META_ACCESS_TOKEN, INSTAGRAM_BUSINESS_ID, FACEBOOK_PAGE_ID,
+    META_PAGE_TOKEN, META_IG_ACCOUNT_ID, FACEBOOK_PAGE_ID,
     TIKTOK_ACCESS_TOKEN,
 )
+
+# backward compat
+META_ACCESS_TOKEN     = META_PAGE_TOKEN
+INSTAGRAM_BUSINESS_ID = META_IG_ACCOUNT_ID
+
+
+def post_video_to_facebook(video_path: str, description: str, title: str = "") -> dict:
+    """Upload et publie une vidéo MP4 sur la Page Facebook via graph-video."""
+    if not META_PAGE_TOKEN or not FACEBOOK_PAGE_ID:
+        return {"status": "skipped", "reason": "Facebook non configuré — vérifiez META_PAGE_TOKEN et META_PAGE_ID dans .env"}
+
+    if not os.path.exists(video_path):
+        return {"status": "error", "error": f"Fichier introuvable : {video_path}"}
+
+    url = f"https://graph-video.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/videos"
+
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(
+                url,
+                files={"source": (os.path.basename(video_path), f, "video/mp4")},
+                data={
+                    "description": description,
+                    "title": title or "",
+                    "access_token": META_PAGE_TOKEN,
+                },
+                timeout=600,
+            )
+        resp.raise_for_status()
+        data = resp.json()
+        video_id = data.get("id", "")
+        page_url = f"https://www.facebook.com/{FACEBOOK_PAGE_ID}/videos/{video_id}" if video_id else ""
+        return {
+            "status": "published",
+            "platform": "facebook",
+            "video_id": video_id,
+            "url": page_url,
+        }
+    except requests.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.response.json().get("error", {}).get("message", exc.response.text)
+        except Exception:
+            detail = exc.response.text if exc.response else str(exc)
+        return {"status": "error", "error": detail}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 def post_to_instagram(caption: str, image_url: str) -> dict:
     """Publie une image avec légende sur Instagram Business."""
-    if not META_ACCESS_TOKEN or not INSTAGRAM_BUSINESS_ID:
+    if not META_PAGE_TOKEN or not META_IG_ACCOUNT_ID:
         return {"status": "skipped", "reason": "Instagram non configuré"}
 
-    # Étape 1 : créer le conteneur média
-    create_url = f"https://graph.facebook.com/v19.0/{INSTAGRAM_BUSINESS_ID}/media"
-    payload = {"image_url": image_url, "caption": caption, "access_token": META_ACCESS_TOKEN}
+    create_url = f"https://graph.facebook.com/v19.0/{META_IG_ACCOUNT_ID}/media"
+    payload = {"image_url": image_url, "caption": caption, "access_token": META_PAGE_TOKEN}
     r = requests.post(create_url, data=payload, timeout=20)
     r.raise_for_status()
     container_id = r.json()["id"]
 
-    time.sleep(3)  # attente stabilisation du conteneur
+    time.sleep(3)
 
-    # Étape 2 : publier
-    publish_url = f"https://graph.facebook.com/v19.0/{INSTAGRAM_BUSINESS_ID}/media_publish"
-    r2 = requests.post(publish_url, data={"creation_id": container_id, "access_token": META_ACCESS_TOKEN}, timeout=20)
+    publish_url = f"https://graph.facebook.com/v19.0/{META_IG_ACCOUNT_ID}/media_publish"
+    r2 = requests.post(publish_url, data={"creation_id": container_id, "access_token": META_PAGE_TOKEN}, timeout=20)
     r2.raise_for_status()
     return {"status": "published", "platform": "instagram", "post_id": r2.json().get("id")}
 
 
 def post_to_facebook(message: str, link: str = None, image_url: str = None) -> dict:
-    """Publie sur la Page Facebook."""
-    if not META_ACCESS_TOKEN or not FACEBOOK_PAGE_ID:
+    """Publie un texte/lien/image sur la Page Facebook."""
+    if not META_PAGE_TOKEN or not FACEBOOK_PAGE_ID:
         return {"status": "skipped", "reason": "Facebook non configuré"}
 
     url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/feed"
-    payload = {"message": message, "access_token": META_ACCESS_TOKEN}
+    payload = {"message": message, "access_token": META_PAGE_TOKEN}
     if link:
         payload["link"] = link
     if image_url and not link:
-        # publication avec photo
         url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/photos"
         payload["url"] = image_url
         payload["caption"] = message

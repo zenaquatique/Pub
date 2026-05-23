@@ -36,6 +36,7 @@ from tools.remotion import (
     update_post_props, create_post_composition,
 )
 from tools.shopify import get_products, get_store_analytics
+from tools.social import post_video_to_facebook
 
 logger = logging.getLogger(__name__)
 
@@ -952,6 +953,44 @@ async def api_render_video(request: Request):
         raise HTTPException(400, "composition_id manquant")
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(_executor, _render_sync, composition_id)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
+@app.post("/api/publish-video/{composition_id}")
+async def api_publish_video(composition_id: str, request: Request):
+    body    = await request.json()
+    caption = body.get("caption", "").strip()
+
+    # Cherche la vidéo dans out/ avec plusieurs nommages possibles
+    out_dir = Path(VIDEO_ASSETS_PATH) / "out"
+    day     = composition_id[6:8]   # "20260523" → "23"
+    month   = composition_id[4:6]   # "20260523" → "05"
+    candidates = [
+        out_dir / f"{composition_id}.mp4",   # rendu Remotion standard
+        out_dir / f"{day}-{month}.mp4",      # nommage manuel DD-MM
+        out_dir / f"{day}-{month}.mov",
+        out_dir / f"{day}-{month}.MP4",
+    ]
+    video_path = next((str(p) for p in candidates if p.exists()), None)
+    if not video_path:
+        searched = " | ".join(p.name for p in candidates)
+        raise HTTPException(
+            404,
+            f"Aucune vidéo trouvée dans {out_dir}.\nFichiers cherchés : {searched}",
+        )
+
+    if not caption:
+        cached  = _load_script(composition_id)
+        caption = cached.get("voiceover", "").strip()
+        if not caption:
+            caption = "🌿 Plantes aquatiques cultivées en France, livrées fraîches chez toi. Lien en bio, sur zen-aquatique.fr !"
+
+    loop   = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, post_video_to_facebook, video_path, caption
+    )
     if result.get("status") == "error":
         raise HTTPException(500, result["error"])
     return result

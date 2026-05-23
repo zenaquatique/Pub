@@ -34,10 +34,16 @@ SUJET DU SCRIPT : Les points forts de ZenAquatique. RIEN D'AUTRE.
 SHOPIFY_SHOP_URL = os.environ.get("SHOPIFY_SHOP_URL", "")
 SHOPIFY_ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN", "")
 
-# Meta (Instagram / Facebook)
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
-INSTAGRAM_BUSINESS_ID = os.environ.get("INSTAGRAM_BUSINESS_ID", "")
-FACEBOOK_PAGE_ID = os.environ.get("FACEBOOK_PAGE_ID", "")
+# Meta — tokens séparés user / page
+# META_PAGE_TOKEN est le token de la Page Facebook (nécessaire pour publier)
+META_USER_TOKEN       = os.environ.get("META_USER_TOKEN", "")
+META_PAGE_TOKEN       = os.environ.get("META_PAGE_TOKEN", os.environ.get("META_ACCESS_TOKEN", ""))
+META_ACCESS_TOKEN     = META_PAGE_TOKEN  # alias backward compat
+META_APP_ID           = os.environ.get("META_APP_ID", "")
+META_APP_SECRET       = os.environ.get("META_APP_SECRET", "")
+FACEBOOK_PAGE_ID      = os.environ.get("META_PAGE_ID", os.environ.get("FACEBOOK_PAGE_ID", ""))
+META_IG_ACCOUNT_ID    = os.environ.get("META_IG_ACCOUNT_ID", os.environ.get("INSTAGRAM_BUSINESS_ID", ""))
+INSTAGRAM_BUSINESS_ID = META_IG_ACCOUNT_ID  # alias backward compat
 
 # TikTok
 TIKTOK_ACCESS_TOKEN = os.environ.get("TIKTOK_ACCESS_TOKEN", "")
@@ -54,7 +60,6 @@ BRAND_VOICE = os.environ.get("BRAND_VOICE", "dynamique, authentique, proche du c
 TARGET_AUDIENCE = os.environ.get("TARGET_AUDIENCE", "adultes 25-45 ans")
 
 # Meta webhooks
-META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 META_WEBHOOK_VERIFY_TOKEN = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "mon_token_secret_webhook")
 
 # Scheduler

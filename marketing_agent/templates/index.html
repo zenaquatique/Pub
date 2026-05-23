@@ -720,11 +720,32 @@ Chargement…</pre>
               <button class="btn btn-primary" onclick="approveAndRender(this)">
                 <i class="fa-solid fa-clapperboard me-1"></i>Rendre la vidéo
               </button>
+              <button class="btn btn-outline-primary btn-sm" onclick="togglePublishPanel()">
+                <i class="fa-brands fa-facebook me-1"></i>Publier Facebook
+              </button>
               <button class="btn btn-outline-secondary btn-sm" onclick="copyVoiceover()">
                 <i class="fa-solid fa-copy me-1"></i>Copier
               </button>
             </div>
             <div id="render-error-box" class="alert alert-danger mt-3 mb-0" style="display:none; white-space:pre-wrap; max-height:220px; overflow-y:auto; font-size:.78rem; font-family:monospace;"></div>
+
+            <!-- Panneau publication Facebook -->
+            <div id="publish-panel" style="display:none" class="mt-3 border rounded p-3" style="background:#f8f9ff">
+              <p class="small fw-bold mb-2"><i class="fa-brands fa-facebook me-1" style="color:#1877f2"></i>Publication Facebook</p>
+              <label class="form-label small text-muted mb-1">Légende du post (modifiable)</label>
+              <textarea id="publish-caption" class="form-control form-control-sm mb-2" rows="6"
+                style="font-size:.85rem;line-height:1.6;font-family:monospace"
+                placeholder="La légende sera pré-remplie depuis le script…"></textarea>
+              <div class="d-flex gap-2 align-items-center flex-wrap">
+                <button class="btn btn-primary btn-sm" onclick="publishToFacebook(this)">
+                  <i class="fa-brands fa-facebook me-1"></i>Publier maintenant
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('publish-panel').style.display='none'">
+                  Annuler
+                </button>
+              </div>
+              <div id="publish-result" class="mt-2" style="display:none"></div>
+            </div>
 
             <!-- Lecteur vidéo après rendu -->
             <div id="video-player-box" class="mt-3" style="display:none">
@@ -1790,6 +1811,58 @@ async function regenProps() {
 function copyVoiceover() {
   navigator.clipboard.writeText(document.getElementById('voiceover-text').value)
     .then(() => showToast('Copié !'));
+}
+
+function togglePublishPanel() {
+  const panel = document.getElementById('publish-panel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    // Pré-remplit la légende avec le voiceover actuel
+    const voiceover = document.getElementById('voiceover-text')?.value || '';
+    document.getElementById('publish-caption').value = voiceover;
+    document.getElementById('publish-result').style.display = 'none';
+  }
+}
+
+async function publishToFacebook(btn) {
+  if (!_voCid) return;
+  const caption = document.getElementById('publish-caption').value.trim();
+  if (!caption) { showToast('Légende vide — ajoutez un texte.', 'warning'); return; }
+
+  const resultBox = document.getElementById('publish-result');
+  resultBox.style.display = 'none';
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Publication…';
+
+  try {
+    const res = await fetch(`/api/publish-video/${_voCid}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({caption}),
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'published') {
+      const link = data.url ? `<a href="${data.url}" target="_blank" class="alert-link">Voir le post</a>` : '';
+      resultBox.className = 'mt-2 alert alert-success py-2 small';
+      resultBox.innerHTML = `<i class="fa-solid fa-check me-1"></i>Publié sur Facebook ! ${link}`;
+      resultBox.style.display = 'block';
+      showToast('✅ Vidéo publiée sur Facebook !', 'success');
+    } else {
+      const msg = data.detail || data.error || JSON.stringify(data);
+      resultBox.className = 'mt-2 alert alert-danger py-2 small';
+      resultBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-1"></i>${msg}`;
+      resultBox.style.display = 'block';
+    }
+  } catch(e) {
+    resultBox.className = 'mt-2 alert alert-danger py-2 small';
+    resultBox.innerHTML = `Erreur réseau : ${e.message}`;
+    resultBox.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
 }
 
 // ── Parsing markdown avec détection des lignes de dates ─────────────────────

@@ -1069,6 +1069,34 @@ async def api_caption(composition_id: str):
     }
 
 
+@app.get("/api/debug-env")
+async def api_debug_env():
+    """Vérifie quelles variables .env sont chargées (valeurs masquées)."""
+    import os
+    from pathlib import Path as _Path
+
+    env_file = _Path(__file__).parent / ".env"
+    vars_to_check = [
+        "META_USER_TOKEN", "META_PAGE_TOKEN", "META_PAGE_ID",
+        "META_IG_ACCOUNT_ID", "META_APP_ID", "META_APP_SECRET",
+        "GROQ_API_KEY", "TIKTOK_ACCESS_TOKEN",
+        "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET",
+    ]
+    result = {}
+    for v in vars_to_check:
+        val = os.environ.get(v, "")
+        if val:
+            result[v] = f"✅ {val[:6]}…({len(val)} chars)"
+        else:
+            result[v] = "❌ VIDE"
+
+    return {
+        "env_file_exists": env_file.exists(),
+        "env_file_path": str(env_file),
+        "variables": result,
+    }
+
+
 @app.post("/api/publish-video/{composition_id}")
 async def api_publish_video(composition_id: str, request: Request):
     body     = await request.json()

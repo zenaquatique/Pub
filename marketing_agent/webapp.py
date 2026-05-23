@@ -349,23 +349,23 @@ _VOICEOVER_SCHEMAS = {
   "ctaText": "call-to-action"
 }""",
     "EducatifVideoProps": """{
-  "hookText": "question ou affirmation courte (max 8 mots)",
-  "hookEmoji": "1 emoji aquatique",
+  "hookText": "question ou exclamation qui STOPPE LE SCROLL — doit donner envie de regarder la suite (ex: 'Ton aquarium peut ressembler à ça 👇', 'Voilà pourquoi tes plantes poussent si vite'). PAS juste un mot-clé.",
+  "hookEmoji": "1 emoji aquatique pertinent",
   "tips": [
-    {"num": "01", "title": "titre accrocheur (3-5 mots)", "desc": "2-3 phrases complètes qui développent le bénéfice avec des détails concrets et des arguments de vente"},
-    {"num": "02", "title": "titre accrocheur (3-5 mots)", "desc": "2-3 phrases complètes qui développent le bénéfice avec des détails concrets et des arguments de vente"},
-    {"num": "03", "title": "titre accrocheur (3-5 mots)", "desc": "2-3 phrases complètes qui développent le bénéfice avec des détails concrets et des arguments de vente"}
+    {"num": "01", "title": "3-4 mots accrocheurs", "desc": "1 phrase complète et convaincante — argument de vente concret, pas un mot-clé"},
+    {"num": "02", "title": "3-4 mots accrocheurs", "desc": "1 phrase complète et convaincante — argument de vente concret, pas un mot-clé"},
+    {"num": "03", "title": "3-4 mots accrocheurs", "desc": "1 phrase complète et convaincante — argument de vente concret, pas un mot-clé"}
   ],
-  "ctaText": "appel à l'action complet (1-2 phrases)"
+  "ctaText": "1 phrase d'action directe (ex: 'Commande sur zen-aquatique.fr !')"
 }""",
     "PromoVideoProps": """{
-  "hookText": "accroche promo courte (max 8 mots)",
+  "hookText": "accroche promo qui stoppe le scroll — question ou urgence (ex: 'Cette semaine seulement 🔥'). PAS juste un mot-clé.",
   "plants": [
-    {"emoji": "🌿", "name": "Nom plante", "description": "2 phrases : bénéfice principal + argument achat", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom plante", "description": "2 phrases : bénéfice principal + argument achat", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom plante", "description": "2 phrases : bénéfice principal + argument achat", "price": "X,XX€"}
+    {"emoji": "🌿", "name": "Nom plante précis", "description": "1 phrase : bénéfice concret de cette plante", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom plante précis", "description": "1 phrase : bénéfice concret de cette plante", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom plante précis", "description": "1 phrase : bénéfice concret de cette plante", "price": "X,XX€"}
   ],
-  "ctaText": "appel à l'action avec urgence (1-2 phrases)"
+  "ctaText": "1 phrase d'urgence directe"
 }""",
 }
 
@@ -490,8 +490,10 @@ MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts d
             f"Template : {template_type}\n"
             f"{f'FEEDBACK : {feedback}' if feedback else ''}\n\n"
             f"Génère les overlays visuels selon ce schéma exact :\n{schema}\n\n"
-            f"hookText : accroche percutante max 7 mots.\n"
-            f"tips/items/desc : phrases courtes, concrètes, positives sur ZenAquatique.\n"
+            f"RÈGLE CRITIQUE hookText : phrase complète qui STOPPE LE SCROLL.\n"
+            f"  ✅ BON : 'Ton aquarium peut ressembler à ça 👇' / 'Ces plantes vont transformer ton aquarium'\n"
+            f"  ❌ MAUVAIS : 'Paysage aquatique' / 'Plantes aquatiques' / tout sujet sans verbe\n"
+            f"tips/items desc : 1 phrase complète avec argument de vente concret (jamais un mot-clé seul).\n"
             f"NE mentionne JAMAIS concurrents, animaleries, pesticides, plantes qui meurent."
         )
 
@@ -604,9 +606,12 @@ def _generate_with_groq(
         # ── Appel unique : génère les props visuels (contenu de la vidéo) ──────────
         props_prompt = (
             f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
-            f"Génère les overlays visuels selon ce schéma exact.\n"
-            f"hookText : accroche percutante max 7 mots.\n"
-            f"Chaque tip/item : texte court, concret, positif sur ZenAquatique.\n"
+            f"Génère les overlays visuels selon ce schéma exact.\n\n"
+            f"RÈGLE CRITIQUE hookText : c'est l'accroche qui STOPPE LE SCROLL sur TikTok/Insta.\n"
+            f"  ✅ BON : 'Ton aquarium peut ressembler à ça 👇' / 'Voilà pourquoi tes plantes explosent de couleurs'\n"
+            f"  ❌ MAUVAIS : 'Paysage aquatique' / 'Plantes aquatiques' / tout mot-clé sans verbe\n"
+            f"  → Pose une question OU crée une curiosité OU annonce un bénéfice concret. Toujours une phrase complète.\n\n"
+            f"Chaque tip desc : 1 phrase complète avec un argument de vente concret (pas un mot-clé).\n"
             f"NE mentionne JAMAIS concurrents, animaleries, pesticides, plantes qui meurent.\n\n"
             f"Schéma :\n{schema}"
         )

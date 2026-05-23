@@ -720,31 +720,55 @@ Chargement…</pre>
               <button class="btn btn-primary" onclick="approveAndRender(this)">
                 <i class="fa-solid fa-clapperboard me-1"></i>Rendre la vidéo
               </button>
-              <button class="btn btn-outline-primary btn-sm" onclick="togglePublishPanel()">
-                <i class="fa-brands fa-facebook me-1"></i>Publier Facebook
-              </button>
               <button class="btn btn-outline-secondary btn-sm" onclick="copyVoiceover()">
                 <i class="fa-solid fa-copy me-1"></i>Copier
               </button>
             </div>
+
+            <!-- Boutons de publication -->
+            <div class="d-flex gap-2 flex-wrap mt-2">
+              <button class="btn btn-sm" style="background:#1877f2;color:#fff;border:none" onclick="openPublishPanel('facebook')">
+                <i class="fa-brands fa-facebook me-1"></i>Facebook
+              </button>
+              <button class="btn btn-sm" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:none" onclick="openPublishPanel('instagram')">
+                <i class="fa-brands fa-instagram me-1"></i>Instagram
+              </button>
+              <button class="btn btn-sm" style="background:#010101;color:#fff;border:none" onclick="openPublishPanel('tiktok')">
+                <i class="fa-brands fa-tiktok me-1"></i>TikTok
+              </button>
+            </div>
+
             <div id="render-error-box" class="alert alert-danger mt-3 mb-0" style="display:none; white-space:pre-wrap; max-height:220px; overflow-y:auto; font-size:.78rem; font-family:monospace;"></div>
 
-            <!-- Panneau publication Facebook -->
-            <div id="publish-panel" style="display:none" class="mt-3 border rounded p-3" style="background:#f8f9ff">
-              <p class="small fw-bold mb-2"><i class="fa-brands fa-facebook me-1" style="color:#1877f2"></i>Publication Facebook</p>
-              <label class="form-label small text-muted mb-1">Légende du post (modifiable)</label>
-              <textarea id="publish-caption" class="form-control form-control-sm mb-2" rows="6"
-                style="font-size:.85rem;line-height:1.6;font-family:monospace"
-                placeholder="La légende sera pré-remplie depuis le script…"></textarea>
-              <div class="d-flex gap-2 align-items-center flex-wrap">
-                <button class="btn btn-primary btn-sm" onclick="publishToFacebook(this)">
-                  <i class="fa-brands fa-facebook me-1"></i>Publier maintenant
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('publish-panel').style.display='none'">
-                  Annuler
+            <!-- Panneau publication unifié -->
+            <div id="publish-panel" style="display:none" class="mt-3 border rounded p-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span id="publish-platform-label" class="fw-bold small"></span>
+                <button class="btn btn-sm btn-link p-0 text-muted" onclick="document.getElementById('publish-panel').style.display='none'">
+                  <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
-              <div id="publish-result" class="mt-2" style="display:none"></div>
+
+              <!-- Badge schedule -->
+              <div id="publish-schedule-badge" class="mb-2" style="display:none"></div>
+
+              <!-- Spinner chargement légende -->
+              <div id="publish-loading" class="text-center py-3" style="display:none">
+                <div class="spinner-border spinner-border-sm me-2" style="color:var(--accent)"></div>
+                <span class="text-muted small">Génération de la légende IA…</span>
+              </div>
+
+              <div id="publish-fields" style="display:none">
+                <label class="form-label small text-muted mb-1">Légende (générée par IA — modifiable)</label>
+                <textarea id="publish-caption" class="form-control form-control-sm mb-2" rows="7"
+                  style="font-size:.84rem;line-height:1.6"></textarea>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                  <button id="publish-btn" class="btn btn-sm btn-primary" onclick="publishToSocial(this)">
+                    <i class="fa-solid fa-paper-plane me-1"></i>Publier
+                  </button>
+                </div>
+                <div id="publish-result" class="mt-2" style="display:none"></div>
+              </div>
             </div>
 
             <!-- Lecteur vidéo après rendu -->
@@ -1813,22 +1837,61 @@ function copyVoiceover() {
     .then(() => showToast('Copié !'));
 }
 
-function togglePublishPanel() {
-  const panel = document.getElementById('publish-panel');
-  const isHidden = panel.style.display === 'none';
-  panel.style.display = isHidden ? 'block' : 'none';
-  if (isHidden) {
-    // Pré-remplit la légende avec le voiceover actuel
-    const voiceover = document.getElementById('voiceover-text')?.value || '';
-    document.getElementById('publish-caption').value = voiceover;
-    document.getElementById('publish-result').style.display = 'none';
+let _publishPlatform = 'facebook';
+const _platformMeta = {
+  facebook:  { label: '<i class="fa-brands fa-facebook me-1" style="color:#1877f2"></i>Facebook',  btnStyle: 'background:#1877f2;color:#fff;border:none' },
+  instagram: { label: '<i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i>Instagram', btnStyle: 'background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:none' },
+  tiktok:    { label: '<i class="fa-brands fa-tiktok me-1"></i>TikTok',                             btnStyle: 'background:#010101;color:#fff;border:none' },
+};
+
+async function openPublishPanel(platform) {
+  if (!_voCid) return;
+  _publishPlatform = platform;
+  const panel    = document.getElementById('publish-panel');
+  const loading  = document.getElementById('publish-loading');
+  const fields   = document.getElementById('publish-fields');
+  const badge    = document.getElementById('publish-schedule-badge');
+  const label    = document.getElementById('publish-platform-label');
+  const btn      = document.getElementById('publish-btn');
+  const result   = document.getElementById('publish-result');
+
+  panel.style.display  = 'block';
+  loading.style.display = 'block';
+  fields.style.display  = 'none';
+  result.style.display  = 'none';
+  badge.style.display   = 'none';
+
+  const m = _platformMeta[platform] || _platformMeta.facebook;
+  label.innerHTML = m.label;
+  btn.style.cssText = m.btnStyle + ';font-size:.8rem;padding:.3rem .7rem;';
+
+  try {
+    const res  = await fetch(`/api/caption/${_voCid}`);
+    const data = await res.json();
+
+    document.getElementById('publish-caption').value = data.captions?.[platform] || '';
+
+    if (data.scheduled_at) {
+      const dt = new Date(data.scheduled_at);
+      const fmt = dt.toLocaleString('fr-FR', {day:'2-digit', month:'long', hour:'2-digit', minute:'2-digit'});
+      badge.innerHTML = `<span class="badge" style="background:#e8f4fd;color:#1877f2;font-size:.78rem">📅 Programmé le ${fmt}</span>`;
+      badge.style.display = 'block';
+    } else {
+      badge.innerHTML = `<span class="badge bg-success" style="font-size:.78rem">⚡ Publication immédiate (date passée)</span>`;
+      badge.style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('publish-caption').value = '';
+  } finally {
+    loading.style.display = 'none';
+    fields.style.display  = 'block';
   }
 }
 
-async function publishToFacebook(btn) {
+async function publishToSocial(btn) {
   if (!_voCid) return;
   const caption = document.getElementById('publish-caption').value.trim();
-  if (!caption) { showToast('Légende vide — ajoutez un texte.', 'warning'); return; }
+  if (!caption) { showToast('Légende vide.', 'warning'); return; }
 
   const resultBox = document.getElementById('publish-result');
   resultBox.style.display = 'none';
@@ -1837,20 +1900,23 @@ async function publishToFacebook(btn) {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Publication…';
 
   try {
-    const res = await fetch(`/api/publish-video/${_voCid}`, {
+    const res  = await fetch(`/api/publish-video/${_voCid}`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({caption}),
+      body: JSON.stringify({platform: _publishPlatform, caption}),
     });
     const data = await res.json();
-    if (res.ok && data.status === 'published') {
-      const link = data.url ? `<a href="${data.url}" target="_blank" class="alert-link">Voir le post</a>` : '';
+
+    if (res.ok && (data.status === 'published' || data.status === 'scheduled')) {
+      const isScheduled = data.status === 'scheduled';
+      const link = data.url ? ` <a href="${data.url}" target="_blank" class="alert-link">Voir le post</a>` : '';
+      const msg  = isScheduled ? `📅 Programmé sur ${_publishPlatform} !${link}` : `✅ Publié sur ${_publishPlatform} !${link}`;
       resultBox.className = 'mt-2 alert alert-success py-2 small';
-      resultBox.innerHTML = `<i class="fa-solid fa-check me-1"></i>Publié sur Facebook ! ${link}`;
+      resultBox.innerHTML = msg;
       resultBox.style.display = 'block';
-      showToast('✅ Vidéo publiée sur Facebook !', 'success');
+      showToast(msg.replace(/<[^>]+>/g,''), 'success');
     } else {
-      const msg = data.detail || data.error || JSON.stringify(data);
+      const msg = (typeof data.detail === 'string' ? data.detail : null) || data.error || JSON.stringify(data);
       resultBox.className = 'mt-2 alert alert-danger py-2 small';
       resultBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-1"></i>${msg}`;
       resultBox.style.display = 'block';

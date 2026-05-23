@@ -71,6 +71,11 @@ POSTING_TIMEZONE = os.environ.get("POSTING_TIMEZONE", "Europe/Paris")
 ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_SCRIPT_MODEL = os.environ.get("CLAUDE_SCRIPT_MODEL", "claude-opus-4-7")
 
+# Cloudinary (hébergement vidéo temporaire pour Instagram Reels et TikTok)
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY    = os.environ.get("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
+
 # Ressources locales (vault Obsidian + dossier vidéo)
 OBSIDIAN_VAULT_PATH = os.environ.get("OBSIDIAN_VAULT_PATH", r"C:\Users\ec\Desktop\Obsidian\Pub")
 VIDEO_ASSETS_PATH   = os.environ.get("VIDEO_ASSETS_PATH",   r"C:\Users\ec\Desktop\zenaquatique-video")

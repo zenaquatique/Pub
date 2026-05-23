@@ -5,7 +5,7 @@ import hmac
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,7 +16,8 @@ from fastapi.staticfiles import StaticFiles
 
 from agent import execute_pending_action, _load_pending_actions, PENDING_ACTIONS_FILE
 from config import (
-    META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME, POSTING_HOUR, POSTING_MINUTE,
+    META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN, STORE_NAME,
+    POSTING_HOUR, POSTING_MINUTE, POSTING_TIMEZONE,
     OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
@@ -36,7 +37,7 @@ from tools.remotion import (
     update_post_props, create_post_composition,
 )
 from tools.shopify import get_products, get_store_analytics
-from tools.social import post_video_to_facebook
+from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
 
 logger = logging.getLogger(__name__)
 
@@ -945,6 +946,95 @@ def _render_sync(composition_id: str) -> dict:
     return render_video(composition_id, VIDEO_ASSETS_PATH, f"{composition_id}.mp4")
 
 
+def _get_post_schedule(composition_id: str):
+    """Retourne la datetime UTC planifiée (si > 10 min dans le futur), sinon None."""
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # Python < 3.9
+    try:
+        year  = int(composition_id[0:4])
+        month = int(composition_id[4:6])
+        day   = int(composition_id[6:8])
+        tz    = ZoneInfo(POSTING_TIMEZONE)
+        local_dt = datetime(year, month, day, POSTING_HOUR, POSTING_MINUTE, tzinfo=tz)
+        utc_dt   = local_dt.astimezone(timezone.utc)
+        now      = datetime.now(timezone.utc)
+        return utc_dt if (utc_dt - now).total_seconds() > 600 else None
+    except Exception:
+        return None
+
+
+def _generate_social_captions_sync(composition_id: str) -> dict:
+    """Génère des légendes IA pour Facebook, Instagram et TikTok depuis les props."""
+    cached = _load_script(composition_id)
+    props  = cached.get("props") or extract_post_props(composition_id, VIDEO_ASSETS_PATH) or {}
+
+    hook   = props.get("hookText", "")
+    tips   = props.get("tips", [])
+    plants = props.get("plants", [])
+    cta    = props.get("ctaText", "")
+
+    content_parts = []
+    if hook:
+        content_parts.append(f"Accroche vidéo : {hook}")
+    for t in tips:
+        content_parts.append(f"Point {t.get('num','')} « {t.get('title','')} » : {t.get('desc','')}")
+    for p in plants:
+        content_parts.append(f"Plante {p.get('name','')} — {p.get('description','')} à {p.get('price','')}")
+    if cta:
+        content_parts.append(f"CTA : {cta}")
+    content_summary = "\n".join(content_parts) if content_parts else "Plantes aquatiques ZenAquatique — cultivées en France, dès 0,99€"
+
+    prompt = f"""{CONTENT_RULES}
+
+Tu es le social media manager de ZenAquatique (zen-aquatique.fr).
+Voici le contenu de la vidéo du jour :
+{content_summary}
+
+Génère 3 légendes de publication en JSON, une par plateforme :
+
+FACEBOOK (150-250 mots) :
+- Storytelling engageant qui reprend et développe les arguments de la vidéo
+- 5-8 emojis bien placés
+- Mentionne : prix dès 0,99€, cultivées en France, livraison fraîche
+- CTA final : "👉 Découvrez toute la sélection sur zen-aquatique.fr"
+
+INSTAGRAM (100-150 mots + hashtags) :
+- Accroche visuelle, emojis, phrases courtes et percutantes
+- 15 hashtags FR aquariophilie : #aquarium #aquascape #plantesaquatiques #aquariophilie #zenaquatique #aquariumfrance #boutures #aquascaping #aquascapefrance #aquariumplants #freshwateraquarium #plantedtank #aquariumhobby #aquaticplants #aquariumlife
+- Se termine par "🔗 Lien en bio — zen-aquatique.fr"
+
+TIKTOK (60-90 mots + hashtags) :
+- Ton direct, dynamique, parle à la 2e personne
+- 8 hashtags viraux : #aquarium #aquascape #zenaquatique #plantesaquatiques #aquariumtiktok #aquascapefrance #aquariophilie #plantedtank
+- Se termine par "👉 zen-aquatique.fr"
+
+Réponds UNIQUEMENT en JSON valide :
+{{"facebook": "...", "instagram": "...", "tiktok": "..."}}"""
+
+    fallback_fb = f"🌿 {hook}\n\n{cta or 'Découvrez nos plantes sur zen-aquatique.fr !'}\n\n👉 zen-aquatique.fr"
+    fallback_ig = fallback_fb + "\n\n#aquarium #aquascape #plantesaquatiques #zenaquatique #aquariophilie"
+    fallback_tt = f"🌿 {hook or 'Plantes aquatiques dès 0,99€'} 👉 zen-aquatique.fr\n#aquarium #aquascape #zenaquatique"
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=GROQ_API_KEY)
+        resp = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.7, max_tokens=2000,
+        )
+        data = json.loads(resp.choices[0].message.content)
+        if all(k in data for k in ("facebook", "instagram", "tiktok")):
+            return data
+    except Exception as exc:
+        logger.error("Erreur génération légendes sociales: %s", exc)
+
+    return {"facebook": fallback_fb, "instagram": fallback_ig, "tiktok": fallback_tt}
+
+
 @app.post("/api/render-video")
 async def api_render_video(request: Request):
     body = await request.json()
@@ -958,39 +1048,61 @@ async def api_render_video(request: Request):
     return result
 
 
+@app.get("/api/caption/{composition_id}")
+async def api_caption(composition_id: str):
+    """Génère les légendes IA pour Facebook, Instagram et TikTok."""
+    loop       = asyncio.get_event_loop()
+    captions   = await loop.run_in_executor(_executor, _generate_social_captions_sync, composition_id)
+    scheduled  = _get_post_schedule(composition_id)
+    return {
+        "captions": captions,
+        "scheduled_at": scheduled.isoformat() if scheduled else None,
+        "publishes_now": scheduled is None,
+    }
+
+
 @app.post("/api/publish-video/{composition_id}")
 async def api_publish_video(composition_id: str, request: Request):
-    body    = await request.json()
-    caption = body.get("caption", "").strip()
+    body     = await request.json()
+    platform = body.get("platform", "facebook").lower()
+    caption  = body.get("caption", "").strip()
 
-    # Cherche la vidéo dans out/ avec plusieurs nommages possibles
+    # Cherche la vidéo dans out/ selon plusieurs nommages
     out_dir = Path(VIDEO_ASSETS_PATH) / "out"
-    day     = composition_id[6:8]   # "20260523" → "23"
-    month   = composition_id[4:6]   # "20260523" → "05"
+    day   = composition_id[6:8]
+    month = composition_id[4:6]
     candidates = [
-        out_dir / f"{composition_id}.mp4",   # rendu Remotion standard
-        out_dir / f"{day}-{month}.mp4",      # nommage manuel DD-MM
+        out_dir / f"{composition_id}.mp4",
+        out_dir / f"{day}-{month}.mp4",
         out_dir / f"{day}-{month}.mov",
         out_dir / f"{day}-{month}.MP4",
     ]
     video_path = next((str(p) for p in candidates if p.exists()), None)
     if not video_path:
         searched = " | ".join(p.name for p in candidates)
-        raise HTTPException(
-            404,
-            f"Aucune vidéo trouvée dans {out_dir}.\nFichiers cherchés : {searched}",
-        )
+        raise HTTPException(404, f"Aucune vidéo trouvée dans {out_dir}.\nFichiers cherchés : {searched}")
 
     if not caption:
-        cached  = _load_script(composition_id)
-        caption = cached.get("voiceover", "").strip()
-        if not caption:
-            caption = "🌿 Plantes aquatiques cultivées en France, livrées fraîches chez toi. Lien en bio, sur zen-aquatique.fr !"
+        caption = "🌿 Plantes aquatiques cultivées en France, livrées fraîches. Dès 0,99€. 👉 zen-aquatique.fr"
 
-    loop   = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        _executor, post_video_to_facebook, video_path, caption
-    )
+    scheduled_at = _get_post_schedule(composition_id)
+    loop = asyncio.get_event_loop()
+
+    if platform == "facebook":
+        result = await loop.run_in_executor(
+            _executor, post_video_to_facebook, video_path, caption, "", scheduled_at
+        )
+    elif platform == "instagram":
+        result = await loop.run_in_executor(
+            _executor, post_reels_to_instagram, video_path, caption, scheduled_at
+        )
+    elif platform == "tiktok":
+        result = await loop.run_in_executor(
+            _executor, post_video_to_tiktok, video_path, caption
+        )
+    else:
+        raise HTTPException(400, f"Plateforme inconnue : {platform}")
+
     if result.get("status") == "error":
         raise HTTPException(500, result["error"])
     return result

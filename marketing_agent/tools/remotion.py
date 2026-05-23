@@ -105,7 +105,9 @@ def extract_post_props(composition_id: str, project_path: str) -> dict:
 
 
 def generate_voiceover(props: dict) -> str:
-    """Génère le script voix off structuré depuis les props Remotion."""
+    """Génère le script voix off structuré depuis les props Remotion.
+    Rythme cible : 3,5 mots/seconde → hook 10-14 mots (3 s), tip desc 14-18 mots (5 s), CTA 10-14 mots (3 s).
+    """
     t = props.get("template_type", "")
     lines: list[str] = []
 

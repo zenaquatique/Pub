@@ -349,35 +349,35 @@ _VOICEOVER_SCHEMAS = {
   "ctaText": "call-to-action"
 }""",
     "EducatifVideoProps": """{
-  "hookText": "5-8 mots — accroche SPÉCIFIQUE à ce sujet avec un verbe fort. Ex: 'Tes plantes aquatiques arrivent vivantes chez toi !'",
+  "hookText": "10-14 mots — 2 phrases : contexte accrocheur + bénéfice clé ZenAquatique. Ex: 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'",
   "hookEmoji": "1 emoji aquatique pertinent",
   "tips": [
     {
       "num": "01",
-      "title": "2-4 mots évocateurs, PAS génériques (ex: 'Dès 0,99€', 'Made in France', 'Boutures garanties')",
-      "desc": "8-12 mots — phrase VENDEUSE et SPÉCIFIQUE. Ex: 'Des boutures françaises fraîches à prix imbattable.'"
+      "title": "2-4 mots CONCRETS (ex: 'Dès 0,99€', 'Made in France', 'Boutures garanties')",
+      "desc": "14-18 mots — 2 phrases : argument principal avec chiffre ou fait + détail engageant. Ex: 'Des boutures françaises à partir de 0,99€, fraîches et garanties vivantes à réception. L'aquarium de tes rêves à petit prix.'"
     },
     {
       "num": "02",
-      "title": "2-4 mots évocateurs",
-      "desc": "8-12 mots — phrase vendeuse et spécifique avec un argument ZenAquatique concret"
+      "title": "2-4 mots CONCRETS",
+      "desc": "14-18 mots — 2 phrases avec argument ZenAquatique précis (origine, livraison, qualité…)"
     },
     {
       "num": "03",
-      "title": "2-4 mots évocateurs",
-      "desc": "8-12 mots — phrase vendeuse et spécifique"
+      "title": "2-4 mots CONCRETS",
+      "desc": "14-18 mots — 2 phrases avec argument ZenAquatique précis"
     }
   ],
-  "ctaText": "5-8 mots — CTA direct avec zen-aquatique.fr (ex: 'Commande tes plantes sur zen-aquatique.fr !')"
+  "ctaText": "10-14 mots — 2 phrases : appel à l'action fort + zen-aquatique.fr. Ex: 'Crée l'aquarium de tes rêves dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'"
 }""",
     "PromoVideoProps": """{
-  "hookText": "MAX 7 MOTS — accroche promo avec verbe et urgence (ex: 'Nos meilleures plantes à -30% ce weekend !')",
+  "hookText": "10-14 mots — 2 phrases : accroche + angle de la sélection. Ex: 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout dans un aquascape.'",
   "plants": [
-    {"emoji": "🌿", "name": "Nom plante précis", "description": "MAX 8 MOTS — bénéfice clé de cette plante", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom plante précis", "description": "MAX 8 MOTS — bénéfice clé de cette plante", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom plante précis", "description": "MAX 8 MOTS — bénéfice clé de cette plante", "price": "X,XX€"}
+    {"emoji": "🌿", "name": "Nom précis (latin + commun si possible)", "description": "12-15 mots — 2 phrases : effet visuel ou bénéfice principal + usage. Ex: 'Un tapis dense et vert éclatant, incontournable en aquascape. Idéal pour couvrir l'avant-plan.'", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom précis (latin + commun si possible)", "description": "12-15 mots — 2 phrases : effet visuel ou bénéfice + usage", "price": "X,XX€"},
+    {"emoji": "🌿", "name": "Nom précis (latin + commun si possible)", "description": "12-15 mots — 2 phrases : effet visuel ou bénéfice + usage", "price": "X,XX€"}
   ],
-  "ctaText": "MAX 7 MOTS — urgence directe"
+  "ctaText": "10-14 mots — 2 phrases : appel à l'action + zen-aquatique.fr. Ex: 'Crée l'avant-plan parfait dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'"
 }""",
 }
 
@@ -502,30 +502,29 @@ MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts d
             f"Template : {template_type}\n"
             f"{f'FEEDBACK : {feedback}' if feedback else ''}\n\n"
             f"Génère les overlays visuels selon ce schéma exact :\n{schema}\n\n"
-            f"⏱ CONTRAINTES DURÉE VIDÉO (respecter absolument) :\n"
-            f"  • hookText : 5-7 MOTS MAX — phrase avec verbe fort\n"
-            f"  • chaque tip title : 2-4 mots concrets\n"
-            f"  • chaque tip desc : 8-12 mots MAX — 1 phrase vendeuse\n"
-            f"  • ctaText : 5-7 MOTS MAX — inclure zen-aquatique.fr\n\n"
+            f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde (respecter absolument) :\n"
+            f"  • hookText : 10-14 MOTS — 2 phrases courtes\n"
+            f"  • chaque tip title : 2-4 mots concrets (affiché à l'écran, pas lu)\n"
+            f"  • chaque tip desc : 14-18 MOTS — 2 phrases vendeuses\n"
+            f"  • ctaText : 10-14 MOTS — 2 phrases (action + zen-aquatique.fr)\n\n"
             f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
-            f"  1. hookText = phrase COMPLÈTE avec verbe (pas un titre/label)\n"
-            f"     ✅ 'Tes plantes arrivent vivantes et fraîches !' (6 mots)\n"
-            f"     ❌ 'Paysage aquatique' / 'Plantes ZenAquatique'\n"
-            f"  2. tip title = argument CONCRET de ZenAquatique\n"
+            f"  1. hookText = 2 vraies phrases avec verbe fort\n"
+            f"     ✅ 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'\n"
+            f"     ❌ 'Paysage aquatique' / 'Découvrez nos plantes !'\n"
+            f"  2. tip title = argument CONCRET (pas un mot vague)\n"
             f"     ✅ 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches'\n"
             f"     ❌ 'Prix bas' / 'Qualité' / 'Service'\n"
-            f"  3. tip desc = phrase vendeuse avec fait précis\n"
-            f"     ✅ 'Des boutures françaises à partir de 0,99€ seulement.'\n"
-            f"     ❌ 'Nos plantes sont de bonne qualité.'\n"
-            f"  4. ctaText = impératif + zen-aquatique.fr\n"
-            f"     ✅ 'Commande dès maintenant sur zen-aquatique.fr'\n"
-            f"     ❌ 'Commandez maintenant !' / 'En savoir plus'\n\n"
-            f"ARGUMENTS ZENAQUATIQUE à utiliser (choisir les plus pertinents) :\n"
+            f"  3. tip desc = 2 phrases avec chiffre ou fait précis\n"
+            f"     ✅ 'Des boutures françaises à partir de 0,99€, fraîches garanties vivantes. L'aquarium de tes rêves à petit prix.'\n"
+            f"     ❌ 'Nos plantes sont de bonne qualité.' (trop court et générique)\n"
+            f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases\n"
+            f"     ✅ 'Crée l'aquarium de tes rêves dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'\n"
+            f"     ❌ 'Commandez maintenant !' (trop court)\n\n"
+            f"ARGUMENTS ZENAQUATIQUE à intégrer :\n"
             f"  • Prix dès 0,99€\n"
             f"  • Cultivées en France / Europe\n"
-            f"  • Livraison rapide, plantes fraîches à réception\n"
-            f"  • Boutures garanties vivantes\n"
-            f"  • Adaptation facile, idéal débutants\n"
+            f"  • Livrées fraîches, garanties vivantes à réception\n"
+            f"  • Boutures de qualité, adaptation facile\n"
             f"NE mentionne JAMAIS concurrents, animaleries, pesticides, plantes qui meurent."
         )
 
@@ -639,30 +638,29 @@ def _generate_with_groq(
         props_prompt = (
             f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
             f"Génère les overlays visuels selon ce schéma exact.\n\n"
-            f"⏱ CONTRAINTES DURÉE VIDÉO (respecter absolument) :\n"
-            f"  • hookText : 5-7 MOTS MAX — phrase avec verbe fort\n"
-            f"  • chaque tip title : 2-4 mots concrets\n"
-            f"  • chaque tip desc : 8-12 mots MAX — 1 phrase vendeuse\n"
-            f"  • ctaText : 5-7 MOTS MAX — inclure zen-aquatique.fr\n\n"
+            f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde (respecter absolument) :\n"
+            f"  • hookText : 10-14 MOTS — 2 phrases courtes\n"
+            f"  • chaque tip title : 2-4 mots concrets (affiché à l'écran, pas lu)\n"
+            f"  • chaque tip desc : 14-18 MOTS — 2 phrases vendeuses\n"
+            f"  • ctaText : 10-14 MOTS — 2 phrases (action + zen-aquatique.fr)\n\n"
             f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
-            f"  1. hookText = phrase COMPLÈTE avec verbe (pas un titre/label)\n"
-            f"     ✅ 'Tes plantes arrivent vivantes et fraîches !' (6 mots)\n"
-            f"     ❌ 'Paysage aquatique' / 'Plantes ZenAquatique'\n"
-            f"  2. tip title = argument CONCRET de ZenAquatique\n"
+            f"  1. hookText = 2 vraies phrases avec verbe fort\n"
+            f"     ✅ 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'\n"
+            f"     ❌ 'Paysage aquatique' / 'Découvrez nos plantes !'\n"
+            f"  2. tip title = argument CONCRET (pas un mot vague)\n"
             f"     ✅ 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches'\n"
             f"     ❌ 'Prix bas' / 'Qualité' / 'Service'\n"
-            f"  3. tip desc = phrase vendeuse avec fait précis\n"
-            f"     ✅ 'Des boutures françaises à partir de 0,99€ seulement.'\n"
-            f"     ❌ 'Nos plantes sont de bonne qualité.'\n"
-            f"  4. ctaText = impératif + zen-aquatique.fr\n"
-            f"     ✅ 'Commande dès maintenant sur zen-aquatique.fr'\n"
-            f"     ❌ 'Commandez maintenant !' / 'En savoir plus'\n\n"
-            f"ARGUMENTS ZENAQUATIQUE à utiliser (choisir les plus pertinents) :\n"
+            f"  3. tip desc = 2 phrases avec chiffre ou fait précis\n"
+            f"     ✅ 'Des boutures françaises à partir de 0,99€, fraîches garanties vivantes. L'aquarium de tes rêves à petit prix.'\n"
+            f"     ❌ 'Nos plantes sont de bonne qualité.' (trop court et générique)\n"
+            f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases\n"
+            f"     ✅ 'Crée l'aquarium de tes rêves dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'\n"
+            f"     ❌ 'Commandez maintenant !' (trop court)\n\n"
+            f"ARGUMENTS ZENAQUATIQUE à intégrer :\n"
             f"  • Prix dès 0,99€\n"
             f"  • Cultivées en France / Europe\n"
-            f"  • Livraison rapide, plantes fraîches à réception\n"
-            f"  • Boutures garanties vivantes\n"
-            f"  • Adaptation facile, idéal débutants\n\n"
+            f"  • Livrées fraîches, garanties vivantes à réception\n"
+            f"  • Boutures de qualité, adaptation facile\n\n"
             f"Schéma :\n{schema}"
         )
 

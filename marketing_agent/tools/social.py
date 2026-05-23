@@ -61,7 +61,10 @@ def post_video_to_facebook(
 ) -> dict:
     """Upload et publie (ou programme) une vidéo MP4 sur la Page Facebook."""
     if not META_PAGE_TOKEN or not FACEBOOK_PAGE_ID:
-        return {"status": "skipped", "reason": "Facebook non configuré — vérifiez META_PAGE_TOKEN et META_PAGE_ID dans .env"}
+        missing = []
+        if not META_PAGE_TOKEN: missing.append("META_PAGE_TOKEN")
+        if not FACEBOOK_PAGE_ID: missing.append("META_PAGE_ID")
+        return {"status": "skipped", "reason": f"Variables manquantes dans .env : {', '.join(missing)}"}
     if not os.path.exists(video_path):
         return {"status": "error", "error": f"Fichier introuvable : {video_path}"}
 

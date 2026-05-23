@@ -1492,12 +1492,24 @@ async function calendarVoiceover(compositionId) {
   document.getElementById('voiceover-spinner').style.display = 'block';
   document.getElementById('voiceover-fields').style.display = 'none';
   document.getElementById('voiceover-error').style.display = 'none';
+  document.getElementById('video-player-box').style.display = 'none';
   const panel = document.getElementById('voiceover-panel');
   const spinnerText = document.querySelector('#voiceover-spinner span');
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
 
-  // Toujours générer un nouveau script — pas de cache
+  // 1. Vérifie le cache — si un script validé existe, l'afficher directement
+  if (spinnerText) spinnerText.textContent = 'Chargement…';
+  try {
+    const cached = await fetch(`/api/script/${compositionId}`);
+    const cachedD = await cached.json();
+    if (cached.ok && cachedD.status === 'success') {
+      _applyScript(cachedD);
+      return;
+    }
+  } catch(_) {}
+
+  // 2. Pas de cache → génère un nouveau script
   if (spinnerText) spinnerText.textContent = 'Génération du script IA…';
   try {
     const res = await fetch('/api/script', {

@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Charge toujours le .env du même dossier que config.py, quel que soit le CWD
+load_dotenv(Path(__file__).parent / ".env")
 
 # Groq (génération scripts vidéo)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")

@@ -54,7 +54,10 @@ _agent_state: dict = {
     "error": "",
     "task": "",
 }
-_executor = ThreadPoolExecutor(max_workers=1)
+_executor = ThreadPoolExecutor(max_workers=4)
+
+# Jobs Instagram en arrière-plan { job_id -> résultat }
+_publish_jobs: dict = {}
 
 # ─── Persistance des rapports ─────────────────────────────────────────────────
 
@@ -1103,26 +1106,39 @@ async def api_debug_env():
     }
 
 
-@app.post("/api/publish-video/{composition_id}")
-async def api_publish_video(composition_id: str, request: Request):
-    body     = await request.json()
-    platform = body.get("platform", "facebook").lower()
-    caption  = body.get("caption", "").strip()
-
-    # Cherche la vidéo dans out/ selon plusieurs nommages
+def _find_video(composition_id: str) -> str | None:
     out_dir = Path(VIDEO_ASSETS_PATH) / "out"
-    day   = composition_id[6:8]
-    month = composition_id[4:6]
-    candidates = [
+    day, month = composition_id[6:8], composition_id[4:6]
+    for p in [
         out_dir / f"{composition_id}.mp4",
         out_dir / f"{day}-{month}.mp4",
         out_dir / f"{day}-{month}.mov",
         out_dir / f"{day}-{month}.MP4",
-    ]
-    video_path = next((str(p) for p in candidates if p.exists()), None)
+    ]:
+        if p.exists():
+            return str(p)
+    return None
+
+
+def _run_instagram_bg(job_id: str, video_path: str, caption: str, scheduled_at):
+    """Tâche longue Instagram — poll côté Meta jusqu'à FINISHED (2-5 min)."""
+    _publish_jobs[job_id] = {"status": "processing", "message": "Traitement vidéo côté Meta…"}
+    result = post_reels_to_instagram(video_path, caption, scheduled_at)
+    _publish_jobs[job_id] = result
+
+
+@app.post("/api/publish-video/{composition_id}")
+async def api_publish_video(
+    composition_id: str, request: Request, background_tasks: BackgroundTasks
+):
+    body     = await request.json()
+    platform = body.get("platform", "facebook").lower()
+    caption  = body.get("caption", "").strip()
+
+    video_path = _find_video(composition_id)
     if not video_path:
-        searched = " | ".join(p.name for p in candidates)
-        raise HTTPException(404, f"Aucune vidéo trouvée dans {out_dir}.\nFichiers cherchés : {searched}")
+        out_dir = Path(VIDEO_ASSETS_PATH) / "out"
+        raise HTTPException(404, f"Aucune vidéo trouvée dans {out_dir}")
 
     if not caption:
         caption = "🌿 Plantes aquatiques cultivées en France, livrées fraîches. Dès 0,99€. 👉 zen-aquatique.fr"
@@ -1134,20 +1150,36 @@ async def api_publish_video(composition_id: str, request: Request):
         result = await loop.run_in_executor(
             _executor, post_video_to_facebook, video_path, caption, "", scheduled_at
         )
+        if result.get("status") == "error":
+            raise HTTPException(500, result["error"])
+        return result
+
     elif platform == "instagram":
-        result = await loop.run_in_executor(
-            _executor, post_reels_to_instagram, video_path, caption, scheduled_at
-        )
+        import uuid
+        job_id = uuid.uuid4().hex
+        _publish_jobs[job_id] = {"status": "processing", "message": "Upload Cloudinary en cours…"}
+        background_tasks.add_task(_run_instagram_bg, job_id, video_path, caption, scheduled_at)
+        return {"status": "processing", "job_id": job_id, "platform": "instagram"}
+
     elif platform == "tiktok":
         result = await loop.run_in_executor(
             _executor, post_video_to_tiktok, video_path, caption
         )
+        if result.get("status") == "error":
+            raise HTTPException(500, result["error"])
+        return result
+
     else:
         raise HTTPException(400, f"Plateforme inconnue : {platform}")
 
-    if result.get("status") == "error":
-        raise HTTPException(500, result["error"])
-    return result
+
+@app.get("/api/publish-status/{job_id}")
+async def api_publish_status(job_id: str):
+    """Retourne l'état d'un job de publication en arrière-plan."""
+    job = _publish_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job inconnu")
+    return job
 
 
 @app.get("/api/post-script/{composition_id}")

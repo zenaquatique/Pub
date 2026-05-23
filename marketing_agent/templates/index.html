@@ -1838,6 +1838,32 @@ function copyVoiceover() {
 }
 
 let _publishPlatform = 'facebook';
+
+async function _pollInstagramJob(jobId, resultBox) {
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 8000));
+    try {
+      const r = await fetch(`/api/publish-status/${jobId}`);
+      const d = await r.json();
+      if (d.status === 'processing') {
+        resultBox.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${d.message || 'Traitement Meta en cours…'}`;
+        continue;
+      }
+      if (d.status === 'published' || d.status === 'scheduled') {
+        const msg = d.status === 'scheduled' ? '📅 Programmé sur Instagram !' : '✅ Publié sur Instagram !';
+        resultBox.className = 'mt-2 alert alert-success py-2 small';
+        resultBox.innerHTML = msg;
+        showToast(msg, 'success');
+      } else {
+        resultBox.className = 'mt-2 alert alert-danger py-2 small';
+        resultBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-1"></i>${d.error || 'Erreur inconnue'}`;
+      }
+      return;
+    } catch(e) { /* réseau — on réessaie */ }
+  }
+  resultBox.className = 'mt-2 alert alert-warning py-2 small';
+  resultBox.innerHTML = '⏱ Timeout — vérifie manuellement sur Instagram si le post est apparu.';
+}
 const _platformMeta = {
   facebook:  { label: '<i class="fa-brands fa-facebook me-1" style="color:#1877f2"></i>Facebook',  btnStyle: 'background:#1877f2;color:#fff;border:none' },
   instagram: { label: '<i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i>Instagram', btnStyle: 'background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff;border:none' },
@@ -1915,10 +1941,15 @@ async function publishToSocial(btn) {
     });
     const data = await res.json();
 
-    if (res.ok && (data.status === 'published' || data.status === 'scheduled')) {
-      const isScheduled = data.status === 'scheduled';
+    if (res.ok && data.status === 'processing' && data.job_id) {
+      // Instagram : polling en arrière-plan
+      resultBox.className = 'mt-2 alert alert-info py-2 small';
+      resultBox.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Traitement vidéo côté Meta… (2-5 min)';
+      resultBox.style.display = 'block';
+      _pollInstagramJob(data.job_id, resultBox);
+    } else if (res.ok && (data.status === 'published' || data.status === 'scheduled')) {
       const link = data.url ? ` <a href="${data.url}" target="_blank" class="alert-link">Voir le post</a>` : '';
-      const msg  = isScheduled ? `📅 Programmé sur ${_publishPlatform} !${link}` : `✅ Publié sur ${_publishPlatform} !${link}`;
+      const msg  = data.status === 'scheduled' ? `📅 Programmé sur ${_publishPlatform} !${link}` : `✅ Publié sur ${_publishPlatform} !${link}`;
       resultBox.className = 'mt-2 alert alert-success py-2 small';
       resultBox.innerHTML = msg;
       resultBox.style.display = 'block';

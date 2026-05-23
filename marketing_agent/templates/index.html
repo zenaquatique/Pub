@@ -689,23 +689,25 @@ Chargement…</pre>
               style="font-size:.9rem;line-height:1.7;font-family:monospace"
               placeholder="Le script apparaîtra ici…"></textarea>
 
-            <!-- Zone feedback + regénération -->
-            <div class="input-group mb-3">
-              <input type="text" id="regen-feedback" class="form-control form-control-sm"
-                placeholder="Retour optionnel — ex : mauvais template, sujet incorrect…"
-                onkeydown="if(event.key==='Enter'){ event.preventDefault(); regenVoiceoverAI(); }" />
-              <button class="btn btn-warning btn-sm" onclick="regenVoiceoverAI()">
-                <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Nouveau script
-              </button>
-            </div>
-
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-primary" onclick="approveAndRender(this)">
-                <i class="fa-solid fa-clapperboard me-1"></i>Valider + Rendre la vidéo
-              </button>
-              <button class="btn btn-outline-secondary" onclick="copyVoiceover()">
-                <i class="fa-solid fa-copy me-1"></i>Copier
-              </button>
+            <!-- Zone feedback + actions -->
+            <div class="mb-3">
+              <input type="text" id="regen-feedback" class="form-control form-control-sm mb-2"
+                placeholder="Instructions de modification — ex : change le hookText, utilise un ton plus dynamique…"
+                onkeydown="if(event.key==='Enter'){ event.preventDefault(); modifyAndRender(this); }" />
+              <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-primary" onclick="approveAndRender(this)">
+                  <i class="fa-solid fa-clapperboard me-1"></i>Valider + Rendre
+                </button>
+                <button class="btn btn-warning" onclick="modifyAndRender(this)">
+                  <i class="fa-solid fa-pen-to-square me-1"></i>Modifier + Rendre
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="regenVoiceoverAI()">
+                  <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Nouveau script seulement
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="copyVoiceover()">
+                  <i class="fa-solid fa-copy me-1"></i>Copier
+                </button>
+              </div>
             </div>
             <div id="render-error-box" class="alert alert-danger mt-3 mb-0" style="display:none; white-space:pre-wrap; max-height:220px; overflow-y:auto; font-size:.78rem; font-family:monospace;"></div>
 
@@ -1668,6 +1670,65 @@ async function approveAndRender(btn) {
       errBox.style.display = 'block';
     }
     try { showToast('Erreur rendu', 'danger'); } catch(_) {}
+  }
+}
+
+async function modifyAndRender(btn) {
+  if (!_voCid) return;
+  const feedback = (document.getElementById('regen-feedback')?.value || '').trim();
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  const errBox = document.getElementById('render-error-box');
+  if (errBox) errBox.style.display = 'none';
+  document.getElementById('video-player-box').style.display = 'none';
+
+  try {
+    // Étape 1 : regénère le script avec les instructions
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Génération…';
+    const scriptRes = await fetch('/api/script', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: _voCid, feedback, context: _voRowCtx}),
+    });
+    const scriptD = await scriptRes.json();
+    if (!scriptRes.ok) throw new Error(scriptD.detail || 'Erreur génération script');
+    _applyScript(scriptD);
+    document.getElementById('regen-feedback').value = '';
+
+    // Étape 2 : rend la vidéo (remplace l'ancienne)
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Rendu vidéo…';
+    const renderRes = await fetch('/api/approve-voiceover', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: _voCid}),
+    });
+    const renderD = await renderRes.json();
+    if (!renderRes.ok) throw new Error(renderD.detail || JSON.stringify(renderD));
+
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Modifié !';
+    btn.className = btn.className.replace('btn-warning','btn-success');
+    showToast(`✅ ${_voCid}.mp4 mis à jour !`, 'success');
+
+    // Affiche le lecteur avec la nouvelle vidéo
+    const filename = `${_voCid}.mp4`;
+    const videoUrl = `/api/video/${filename}`;
+    const playerBox = document.getElementById('video-player-box');
+    const player    = document.getElementById('video-player');
+    const dlLink    = document.getElementById('video-download-link');
+    if (playerBox && player) {
+      player.src = videoUrl + '?t=' + Date.now();
+      player.load();
+      dlLink.href = videoUrl;
+      dlLink.download = filename;
+      playerBox.style.display = 'block';
+    }
+  } catch(e) {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+    if (errBox) {
+      errBox.textContent = '❌ ' + e.message;
+      errBox.style.display = 'block';
+    }
   }
 }
 

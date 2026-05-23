@@ -1065,6 +1065,19 @@ async def api_render_video(request: Request):
     return result
 
 
+@app.get("/api/caption/{composition_id}")
+async def api_caption(composition_id: str):
+    """Génère les légendes IA pour Facebook, Instagram et TikTok."""
+    loop      = asyncio.get_event_loop()
+    captions  = await loop.run_in_executor(_executor, _generate_social_captions_sync, composition_id)
+    scheduled = _get_post_schedule(composition_id)
+    return {
+        "captions": captions,
+        "scheduled_at": scheduled.isoformat() if scheduled else None,
+        "publishes_now": scheduled is None,
+    }
+
+
 @app.get("/api/debug-video/{composition_id}")
 async def api_debug_video(composition_id: str):
     out_dir = Path(VIDEO_ASSETS_PATH) / "out"

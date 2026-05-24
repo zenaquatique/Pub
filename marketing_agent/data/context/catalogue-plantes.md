@@ -15,10 +15,10 @@
 | Sagittaria Subulata | 1,50€ | sagittaria-subulata |
 | Cryptocoryne Lucens | 1,99€ | cryptocoryne-lucens |
 | Rotala H'ra | 1,50€ | rotala-hra |
-| Rotala Laos | 1,50€ | rotala-orange-juice ⚠️ slug à corriger |
+| Rotala Laos | 1,50€ | rotala-orange-juice |
 | Cryptocoryne Beckettii | 1,99€ | cryptocoryne-beckettii |
 | Lysimachia Nummularia Aurea | 1,99€ | lysimachia-nummularia-aurea |
-| Ludwigia Repens | 1,50€ | ludwigjia-palustris-red ⚠️ slug à corriger |
+| Ludwigia Repens | 1,50€ | ludwigjia-palustris-red |
 | Egeria Densa | 0,99€ | egeria-densa-1-tige |
 | Rotala Rotundifolia | 1,50€ | rotala-rotundifolia |
 | Anubias Barteri Nana | 4,99€ | anubias-nana-1-bouture |

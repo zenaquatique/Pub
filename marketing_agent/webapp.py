@@ -30,10 +30,11 @@ from tools.customer import (
     send_facebook_reply,
     send_instagram_reply,
 )
-from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory
+from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory, read_local_context
 from tools.remotion import (
     render_video, list_rendered_videos,
     extract_post_props, generate_voiceover, date_to_composition_id,
+
     update_post_props, create_post_composition,
 )
 from tools.shopify import get_products, get_store_analytics
@@ -471,8 +472,10 @@ def _generate_with_claude(
             existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
         is_new = not existing_props
 
-        vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-        memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+        vault     = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+        memory    = read_agent_memory(OBSIDIAN_VAULT_PATH)
+        local_ctx = read_local_context()
+        combined  = (local_ctx + "\n" + vault).strip()
 
         if is_new:
             cal_entry, template_type = _build_cal_entry(composition_id, context)
@@ -491,7 +494,7 @@ MARQUE : {STORE_NAME} | NICHE : {STORE_NICHE}
 VOIX : {BRAND_VOICE}
 AUDIENCE : {TARGET_AUDIENCE}
 
-{f"CONNAISSANCES MARQUE (vault Obsidian) :{chr(10)}{vault[:8000]}" if vault else ""}
+{f"CONNAISSANCES MARQUE :{chr(10)}{combined[:8000]}" if combined else ""}
 
 {f"CONTRAINTES MÉMOIRE — OBLIGATOIRES :{chr(10)}{memory}" if memory else ""}
 
@@ -610,9 +613,11 @@ def _generate_with_groq(
             existing_props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
         is_new = not existing_props
 
-        vault  = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-        memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-        vault_block  = f"\nCONNAISSANCES MARQUE :\n{vault[:6000]}\n" if vault else ""
+        vault        = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+        memory       = read_agent_memory(OBSIDIAN_VAULT_PATH)
+        local_ctx    = read_local_context()
+        combined     = (local_ctx + "\n" + vault).strip()
+        vault_block  = f"\nCONNAISSANCES MARQUE :\n{combined[:8000]}\n" if combined else ""
         memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory}\n" if memory else ""
         fb_block     = f"\nRETOUR UTILISATEUR : {feedback}\n" if feedback else ""
 

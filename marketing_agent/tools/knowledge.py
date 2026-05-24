@@ -12,6 +12,21 @@ _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 _MEMORY_FOLDER = "Mémoire Agent"
 _MEMORY_FILE   = "memoire.md"
 
+# Dossier de contexte local (commité dans le repo, toujours disponible)
+_LOCAL_CONTEXT_DIR = Path(__file__).parent.parent / "data" / "context"
+
+
+def read_local_context() -> str:
+    """Lit tous les fichiers .md du dossier data/context/ du projet."""
+    if not _LOCAL_CONTEXT_DIR.exists():
+        return ""
+    parts = []
+    for f in sorted(_LOCAL_CONTEXT_DIR.glob("*.md")):
+        text = f.read_text(encoding="utf-8", errors="ignore").strip()
+        if text:
+            parts.append(f"\n---\n## [contexte local] {f.name}\n{text}")
+    return "\n".join(parts)
+
 
 def read_agent_memory(vault_path: str) -> str:
     """Lit le fichier mémoire de l'agent dans la vault Obsidian."""

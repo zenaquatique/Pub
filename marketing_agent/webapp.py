@@ -34,8 +34,7 @@ from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video
 from tools.remotion import (
     render_video, list_rendered_videos,
     extract_post_props, generate_voiceover, date_to_composition_id,
-
-    update_post_props, create_post_composition,
+    update_post_props, create_post_composition, repair_root_tsx,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1126,6 +1125,13 @@ async def api_debug_env():
         "env_file_path": str(env_file),
         "variables": result,
     }
+
+
+@app.get("/api/repair-root-tsx")
+async def api_repair_root_tsx():
+    """Supprime les balises <Composition> dupliquées dans Root.tsx."""
+    result = repair_root_tsx(VIDEO_ASSETS_PATH)
+    return result
 
 
 def _find_video(composition_id: str) -> str | None:

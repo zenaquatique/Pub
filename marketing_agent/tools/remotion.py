@@ -245,8 +245,11 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
 
         content = tsx.read_text(encoding="utf-8", errors="ignore")
 
-        # Si la composition existe déjà, on update
-        if re.search(rf"const post{composition_id}:", content):
+        has_const = bool(re.search(rf"const post{composition_id}:", content))
+        has_tag   = bool(re.search(rf'id="{composition_id}"', content))
+
+        # Bloc const existant → mise à jour des props uniquement
+        if has_const:
             return update_post_props(composition_id, project_path, props)
 
         # ── 1. Ajouter le bloc const avant le premier export ──────────────────────
@@ -260,41 +263,40 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
         else:
             content += "\n\n" + const_block + "\n"
 
-        # ── 2. Déduire fps/width/height depuis une Composition existante ───────────
-        comp_m = re.search(
-            r'<Composition[^>]*?fps=\{(\d+)\}[^>]*?width=\{(\d+)\}[^>]*?height=\{(\d+)\}',
-            content, re.DOTALL,
-        )
-        fps    = int(comp_m.group(1)) if comp_m else 30
-        width  = int(comp_m.group(2)) if comp_m else 1080
-        height = int(comp_m.group(3)) if comp_m else 1920
-        duration = _TYPE_DURATION.get(template_type, 600)
-        component = _TYPE_TO_COMPONENT.get(template_type, template_type.replace("Props", ""))
+        # ── 2. Insérer le tag <Composition> seulement s'il n'existe pas déjà ─────
+        if not has_tag:
+            comp_m = re.search(
+                r'<Composition[^>]*?fps=\{(\d+)\}[^>]*?width=\{(\d+)\}[^>]*?height=\{(\d+)\}',
+                content, re.DOTALL,
+            )
+            fps    = int(comp_m.group(1)) if comp_m else 30
+            width  = int(comp_m.group(2)) if comp_m else 1080
+            height = int(comp_m.group(3)) if comp_m else 1920
+            duration = _TYPE_DURATION.get(template_type, 600)
+            component = _TYPE_TO_COMPONENT.get(template_type, template_type.replace("Props", ""))
 
-        new_comp = (
-            f'      <Composition\n'
-            f'        id="{composition_id}"\n'
-            f'        component={{{component}}}\n'
-            f'        durationInFrames={{{duration}}}\n'
-            f'        fps={{{fps}}}\n'
-            f'        width={{{width}}}\n'
-            f'        height={{{height}}}\n'
-            f'        defaultProps={{post{composition_id}}}\n'
-            f'      />'
-        )
+            new_comp = (
+                f'      <Composition\n'
+                f'        id="{composition_id}"\n'
+                f'        component={{{component}}}\n'
+                f'        durationInFrames={{{duration}}}\n'
+                f'        fps={{{fps}}}\n'
+                f'        width={{{width}}}\n'
+                f'        height={{{height}}}\n'
+                f'        defaultProps={{post{composition_id}}}\n'
+                f'      />'
+            )
 
-        # Insérer après le dernier /> d'une Composition
-        all_ends = list(re.finditer(r'/>[ \t]*\n(\s*(?=<Composition|\s*</))', content))
-        if all_ends:
-            m = all_ends[-1]
-            pos = m.start() + 2   # après />
-            content = content[:pos] + "\n" + new_comp + content[pos:]
-        else:
-            # Fallback : avant la fermeture du composant racine
-            close_m = re.search(r'(</>|</\w*Root>)', content)
-            if close_m:
-                pos = close_m.start()
-                content = content[:pos] + new_comp + "\n      " + content[pos:]
+            all_ends = list(re.finditer(r'/>[ \t]*\n(\s*(?=<Composition|\s*</))', content))
+            if all_ends:
+                m = all_ends[-1]
+                pos = m.start() + 2   # après />
+                content = content[:pos] + "\n" + new_comp + content[pos:]
+            else:
+                close_m = re.search(r'(</>|</\w*Root>)', content)
+                if close_m:
+                    pos = close_m.start()
+                    content = content[:pos] + new_comp + "\n      " + content[pos:]
 
         tsx.write_text(content, encoding="utf-8")
         logger.info("Composition '%s' créée dans Root.tsx", composition_id)
@@ -305,6 +307,64 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
         }
     except Exception as exc:
         logger.exception("Erreur create_post_composition pour '%s'", composition_id)
+        return {"status": "error", "error": str(exc)}
+
+
+def repair_root_tsx(project_path: str) -> dict:
+    """Supprime les balises <Composition> dupliquées dans Root.tsx."""
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        if not tsx.exists():
+            return {"status": "error", "error": "Root.tsx introuvable"}
+
+        lines = tsx.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
+
+        seen_ids: set = set()
+        removed: list = []
+        result: list = []
+        in_comp = False
+        comp_buf: list = []
+        comp_id: str | None = None
+
+        for line in lines:
+            if not in_comp:
+                stripped = line.strip()
+                if stripped.startswith("<Composition") and not stripped.startswith("//"):
+                    in_comp = True
+                    comp_buf = [line]
+                    m = re.search(r'id="([^"]+)"', line)
+                    comp_id = m.group(1) if m else None
+                else:
+                    result.append(line)
+            else:
+                comp_buf.append(line)
+                if not comp_id:
+                    m = re.search(r'id="([^"]+)"', line)
+                    if m:
+                        comp_id = m.group(1)
+                if line.strip() == "/>":
+                    if comp_id and comp_id in seen_ids:
+                        removed.append(comp_id)
+                    else:
+                        if comp_id:
+                            seen_ids.add(comp_id)
+                        result.extend(comp_buf)
+                    in_comp = False
+                    comp_buf = []
+                    comp_id = None
+
+        if in_comp:
+            result.extend(comp_buf)
+
+        if removed:
+            tsx.write_text("".join(result), encoding="utf-8")
+            logger.info("repair_root_tsx : supprimé %s", removed)
+            return {"status": "fixed", "removed": removed,
+                    "message": f"{len(removed)} doublon(s) supprimé(s) : {', '.join(removed)}"}
+
+        return {"status": "ok", "removed": [], "message": "Aucun doublon trouvé dans Root.tsx"}
+    except Exception as exc:
+        logger.exception("Erreur repair_root_tsx")
         return {"status": "error", "error": str(exc)}
 
 

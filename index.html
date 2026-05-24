@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Boutique</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --purple: #bc8cff;
+      --orange: #ffa657;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 230px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 10;
+    }
+    .sidebar-logo {
+      padding: 18px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-logo h1 { font-size: 15px; font-weight: 700; }
+    .sidebar-logo p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .sidebar-nav { padding: 10px 8px; flex: 1; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+      transition: all 0.15s;
+      user-select: none;
+      margin-bottom: 2px;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--surface2); color: var(--accent); font-weight: 500; }
+    .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+    /* ── Main ── */
+    .main {
+      margin-left: 230px;
+      flex: 1;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Page Header ── */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .page-title { font-size: 20px; font-weight: 700; }
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+
+    /* ── KPI Grid ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 8px;
+    }
+    .kpi-value { font-size: 24px; font-weight: 700; }
+    .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 5px; }
+    .c-pos { color: var(--green); }
+    .c-neg { color: var(--red); }
+    .c-blue { color: var(--accent); }
+    .c-muted { color: var(--text); }
+    .c-yellow { color: var(--yellow); }
+
+    /* ── Charts ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 7fr 4fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Breakdown ── */
+    .breakdown-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .br-section {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-weight: 600;
+      padding: 12px 0 4px;
+    }
+    .br-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .br-row:last-child { border-bottom: none; }
+    .br-label { color: var(--muted); }
+    .br-total { font-weight: 700; font-size: 14px; }
+    .br-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+    /* ── Forms ── */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .form-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-label { font-size: 12px; color: var(--muted); }
+    .form-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+    .form-input:focus { outline: none; border-color: var(--accent); }
+    .form-input.auto-mode { border-color: var(--purple); color: var(--purple); }
+    .form-hint { font-size: 11px; color: var(--muted); }
+    .hint-link { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .hint-link:hover { text-decoration: underline; }
+
+    /* ── Summary Preview ── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .summary-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .summary-item-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+    .summary-item-value { font-size: 17px; font-weight: 700; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); }
+    .btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
+    .btn-danger:hover { background: rgba(248,81,73,0.1); }
+
+    /* ── Table ── */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      padding: 9px 14px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+    .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 999;
+      display: none;
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(16px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .empty-sub { font-size: 13px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1000px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { width: 54px; }
+      .sidebar-logo h1, .sidebar-logo p, .nav-item span { display: none; }
+      .main { margin-left: 54px; padding: 16px; }
+      .form-grid { grid-template-columns: repeat(2, 1fr); }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>Shopify Analytics</h1>
+    <p>Tableau de bord</p>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" onclick="showPage('dashboard', this)">
+      <span class="nav-icon">📊</span><span>Vue d'ensemble</span>
+    </div>
+    <div class="nav-item" onclick="showPage('saisie', this)">
+      <span class="nav-icon">✏️</span><span>Saisie mensuelle</span>
+    </div>
+    <div class="nav-item" onclick="showPage('historique', this)">
+      <span class="nav-icon">📅</span><span>Historique</span>
+    </div>
+  </nav>
+</aside>
+
+<!-- ── Main ── -->
+<main class="main">
+
+  <!-- ══ DASHBOARD ══ -->
+  <div id="page-dashboard" class="page active">
+    <div class="page-header">
+      <h2 class="page-title">Vue d'ensemble</h2>
+      <div class="header-actions">
+        <select id="dash-month" onchange="renderDashboard()"></select>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpi-grid"></div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="card-title">Évolution mensuelle</div>
+        <canvas id="lineChart" height="90"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="card-title">Répartition des charges</div>
+        <canvas id="donutChart"></canvas>
+      </div>
+    </div>
+
+    <div class="breakdown-card">
+      <div class="card-title">Détail du mois</div>
+      <div id="breakdown-content"></div>
+    </div>
+  </div>
+
+  <!-- ══ SAISIE ══ -->
+  <div id="page-saisie" class="page">
+    <div class="page-header">
+      <h2 class="page-title">Saisie mensuelle</h2>
+      <div class="header-actions">
+        <select id="saisie-month" onchange="loadForm()"></select>
+        <button class="btn btn-secondary" onclick="promptNewMonth()">+ Nouveau mois</button>
+        <button class="btn btn-primary" onclick="saveForm()">Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section-title">💰 Revenus</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">CA — Chiffre d'affaires</label>
+          <input type="number" id="f-ca" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Ventes produits Shopify (hors port)</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ventes complémentaires</label>
+          <input type="number" id="f-comp" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Upsell, cross-sell</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Frais de port reçus</label>
+          <input type="number" id="f-port" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Livraison facturée aux clients</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre de commandes</label>
+          <input type="number" id="f-cmd" class="form-input" placeholder="0" step="1" oninput="updatePreview()">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section-title">📦 Stock</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Coût stock vendu (COGS)</label>
+          <input type="number" id="f-cogs" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Valeur théorique du stock écoulé</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Achat stock payé</label>
+          <input type="number" id="f-stock-paye" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Sorties réelles de trésorerie</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Achat stock non payé</label>
+          <input type="number" id="f-stock-np" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Engagements futurs</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section-title">💳 Charges opérationnelles</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">
+            Frais de carte
+            <span id="badge-auto" style="color:var(--purple);font-size:10px;margin-left:4px;">AUTO</span>
+          </label>
+          <input type="number" id="f-carte" class="form-input auto-mode" placeholder="calculé auto" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">1.5% × CA + 0.25€/commande —
+            <a class="hint-link" onclick="toggleAuto()">basculer</a>
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Urssaf / Charges sociales</label>
+          <input type="number" id="f-urssaf" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shopify</label>
+          <input type="number" id="f-shopify" class="form-input" placeholder="71.99" step="0.01" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Publicité</label>
+          <input type="number" id="f-pub" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Ads, influenceurs, promotions</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Frais de compte bancaire</label>
+          <input type="number" id="f-compte" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Frais annexes</label>
+          <input type="number" id="f-annexe" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Logiciels, abonnements, divers</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section-title">👤 Personnel</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Dépenses personnelles</label>
+          <input type="number" id="f-perso" class="form-input" placeholder="0.00" step="0.01" oninput="updatePreview()">
+          <span class="form-hint">Prélèvements perso du compte pro</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input type="text" id="f-notes" class="form-input" placeholder="Remarques...">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div class="form-section-title">🧮 Récapitulatif en temps réel</div>
+      <div class="summary-grid" id="preview-grid"></div>
+    </div>
+  </div>
+
+  <!-- ══ HISTORIQUE ══ -->
+  <div id="page-historique" class="page">
+    <div class="page-header">
+      <h2 class="page-title">Historique</h2>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="exportCSV()">Exporter CSV</button>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">
+        <span class="card-title" style="margin:0">Tous les mois</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Mois</th>
+            <th>CA</th>
+            <th>Commandes</th>
+            <th>Panier moy.</th>
+            <th>Marge brute</th>
+            <th>Bénéfice net</th>
+            <th>Marge nette</th>
+            <th>Trésorerie</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let db = JSON.parse(localStorage.getItem('shopify_analytics') || '{"months":{}}');
+let carteAuto = true;
+let lineChart = null;
+let donutChart = null;
+
+// ── Calculations ──────────────────────────────────────────────────────────
+function calc(d) {
+  const ca        = +d.ca || 0;
+  const comp      = +d.comp || 0;
+  const port      = +d.port || 0;
+  const cmd       = +d.cmd || 0;
+  const cogs      = +d.cogs || 0;
+  const stockP    = +d.stockPaye || 0;
+  const stockNP   = +d.stockNonPaye || 0;
+  const urssaf    = +d.urssaf || 0;
+  const shopify   = +d.shopify || 0;
+  const pub       = +d.pub || 0;
+  const compte    = +d.compte || 0;
+  const annexe    = +d.annexe || 0;
+  const perso     = +d.perso || 0;
+
+  const carte = d.carteAuto !== false
+    ? ca * 0.015 + cmd * 0.25
+    : (+d.carte || 0);
+
+  const totalRevenu  = ca + comp + port;
+  const panierMoyen  = cmd > 0 ? ca / cmd : 0;
+
+  // Marge brute = (revenu total - COGS) / revenu total
+  const margeB_val = totalRevenu - cogs;
+  const margeB_pct = totalRevenu > 0 ? margeB_val / totalRevenu * 100 : 0;
+
+  // Charges opérationnelles (hors stock)
+  const chargesOp = carte + urssaf + shopify + pub + compte + annexe;
+
+  // Résultat actuel (cash): CA - stock payé - charges op
+  const resActuel     = ca - stockP - chargesOp;
+  const margeActuelle = ca > 0 ? resActuel / ca * 100 : 0;
+
+  // Résultat théorique (accounting): CA - COGS - charges op
+  const resTheo     = ca - cogs - chargesOp;
+  const margeTheo   = ca > 0 ? resTheo / ca * 100 : 0;
+
+  // "Final" = après dépenses perso
+  const resFinal     = resActuel - perso;
+  const margeFinal   = ca > 0 ? resFinal / ca * 100 : 0;
+
+  const resFinalTheo = resTheo - perso;
+
+  return {
+    ca, comp, port, cmd, cogs, stockP, stockNP,
+    carte, urssaf, shopify, pub, compte, annexe, perso,
+    totalRevenu, panierMoyen,
+    margeB_val, margeB_pct,
+    chargesOp,
+    resActuel, margeActuelle,
+    resTheo, margeTheo,
+    resFinal, margeFinal,
+    resFinalTheo,
+  };
+}
+
+// ── Formatters ────────────────────────────────────────────────────────────
+const fmt  = (n, d=2) => n.toLocaleString('fr-FR', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtE = n => fmt(n) + ' €';
+const fmtP = n => fmt(n, 1) + ' %';
+const cc   = n => n >= 0 ? 'c-pos' : 'c-neg';
+const ccP  = n => n >= 30 ? 'c-pos' : n >= 15 ? 'c-yellow' : 'c-neg';
+
+// ── Navigation ────────────────────────────────────────────────────────────
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'dashboard')  renderDashboard();
+  if (name === 'historique') renderHistory();
+}
+
+// ── Month utilities ───────────────────────────────────────────────────────
+function nowKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function monthLabel(k) {
+  const [y, m] = k.split('-');
+  return new Date(+y, +m-1, 1).toLocaleDateString('fr-FR', {month:'long', year:'numeric'});
+}
+
+function sortedMonths() {
+  return Object.keys(db.months).sort().reverse();
+}
+
+function populateSelects() {
+  const months = sortedMonths();
+  ['dash-month', 'saisie-month'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (!months.length) {
+      const o = document.createElement('option');
+      o.value = nowKey();
+      o.textContent = monthLabel(nowKey()) + ' (vide)';
+      sel.appendChild(o);
+      return;
+    }
+    months.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m;
+      o.textContent = monthLabel(m);
+      sel.appendChild(o);
+    });
+    if (prev && months.includes(prev)) sel.value = prev;
+  });
+}
+
+function promptNewMonth() {
+  const key = prompt('Entrez le mois à créer (format AAAA-MM) :', nowKey());
+  if (!key || !/^\d{4}-\d{2}$/.test(key)) return;
+  if (!db.months[key]) db.months[key] = {};
+  persist();
+  populateSelects();
+  document.getElementById('saisie-month').value = key;
+  loadForm();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const key = document.getElementById('dash-month')?.value;
+  const d   = key ? (db.months[key] || {}) : {};
+  const c   = calc(d);
+
+  // KPI
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Chiffre d'affaires</div>
+      <div class="kpi-value c-blue">${fmtE(c.ca)}</div>
+      <div class="kpi-sub">Revenu total&nbsp;: ${fmtE(c.totalRevenu)} · ${c.cmd} commandes</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Marge brute</div>
+      <div class="kpi-value ${ccP(c.margeB_pct)}">${fmtP(c.margeB_pct)}</div>
+      <div class="kpi-sub">${fmtE(c.margeB_val)} après COGS</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Bénéfice net</div>
+      <div class="kpi-value ${cc(c.resActuel)}">${fmtE(c.resActuel)}</div>
+      <div class="kpi-sub">Marge nette&nbsp;: ${fmtP(c.margeActuelle)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Trésorerie après perso</div>
+      <div class="kpi-value ${cc(c.resFinal)}">${fmtE(c.resFinal)}</div>
+      <div class="kpi-sub">Panier moyen&nbsp;: ${fmtE(c.panierMoyen)}</div>
+    </div>
+  `;
+
+  // Breakdown
+  document.getElementById('breakdown-content').innerHTML = `
+    <div class="br-section">Revenus</div>
+    <div class="br-row"><span class="br-label">CA (ventes produits)</span><span class="c-pos">+${fmtE(c.ca)}</span></div>
+    ${c.comp>0 ? `<div class="br-row"><span class="br-label">Ventes complémentaires</span><span class="c-pos">+${fmtE(c.comp)}</span></div>` : ''}
+    ${c.port>0 ? `<div class="br-row"><span class="br-label">Frais de port reçus</span><span class="c-pos">+${fmtE(c.port)}</span></div>` : ''}
+    <div class="br-row br-total"><span>Total revenus</span><span class="c-blue">${fmtE(c.totalRevenu)}</span></div>
+
+    <hr class="br-divider">
+    <div class="br-section">Stock</div>
+    <div class="br-row"><span class="br-label">Coût stock vendu — COGS (théorique)</span><span class="c-neg">−${fmtE(c.cogs)}</span></div>
+    <div class="br-row br-total"><span>Marge brute (revenu − COGS)</span><span class="${ccP(c.margeB_pct)}">${fmtE(c.margeB_val)} · ${fmtP(c.margeB_pct)}</span></div>
+
+    <hr class="br-divider">
+    <div class="br-section">Charges opérationnelles</div>
+    <div class="br-row"><span class="br-label">Frais de carte${d.carteAuto!==false?' (auto)':''}</span><span class="c-neg">−${fmtE(c.carte)}</span></div>
+    <div class="br-row"><span class="br-label">Urssaf / Charges sociales</span><span class="c-neg">−${fmtE(c.urssaf)}</span></div>
+    <div class="br-row"><span class="br-label">Achat stock payé</span><span class="c-neg">−${fmtE(c.stockP)}</span></div>
+    ${c.stockNP>0 ? `<div class="br-row"><span class="br-label">⚠ Stock non payé (engagement)</span><span class="c-yellow">−${fmtE(c.stockNP)}</span></div>` : ''}
+    <div class="br-row"><span class="br-label">Frais annexes</span><span class="c-neg">−${fmtE(c.annexe)}</span></div>
+    <div class="br-row"><span class="br-label">Shopify</span><span class="c-neg">−${fmtE(c.shopify)}</span></div>
+    ${c.pub>0 ? `<div class="br-row"><span class="br-label">Publicité</span><span class="c-neg">−${fmtE(c.pub)}</span></div>` : ''}
+    <div class="br-row"><span class="br-label">Frais de compte</span><span class="c-neg">−${fmtE(c.compte)}</span></div>
+    <div class="br-row br-total"><span>Total charges</span><span class="c-neg">−${fmtE(c.chargesOp + c.stockP)}</span></div>
+
+    <hr class="br-divider">
+    <div class="br-row br-total" style="font-size:15px">
+      <span>Bénéfice net actuel (base cash)</span>
+      <span class="${cc(c.resActuel)}">${fmtE(c.resActuel)} · ${fmtP(c.margeActuelle)}</span>
+    </div>
+    <div class="br-row" style="color:var(--muted);font-size:12px">
+      <span>Résultat théorique (base COGS)</span>
+      <span class="${cc(c.resTheo)}">${fmtE(c.resTheo)} · ${fmtP(c.margeTheo)}</span>
+    </div>
+
+    ${c.perso > 0 ? `
+    <hr class="br-divider">
+    <div class="br-section">Personnel</div>
+    <div class="br-row"><span class="br-label">Dépenses personnelles</span><span class="c-neg">−${fmtE(c.perso)}</span></div>
+    <div class="br-row br-total" style="font-size:15px">
+      <span>Trésorerie finale</span>
+      <span class="${cc(c.resFinal)}">${fmtE(c.resFinal)} · ${fmtP(c.margeFinal)}</span>
+    </div>` : ''}
+  `;
+
+  renderCharts();
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────
+function renderCharts() {
+  const months = sortedMonths().slice(0, 12).reverse();
+  const labels  = months.map(m => monthLabel(m).slice(0, 3) + '. ' + m.slice(0,4));
+  const caData  = months.map(m => +((db.months[m]||{}).ca||0));
+  const netData = months.map(m => calc(db.months[m]||{}).resActuel);
+
+  // Line chart
+  if (lineChart) lineChart.destroy();
+  lineChart = new Chart(document.getElementById('lineChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'CA',
+          data: caData,
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.08)',
+          fill: true, tension: 0.4, pointRadius: 4,
+        },
+        {
+          label: 'Bénéfice net',
+          data: netData,
+          borderColor: '#3fb950',
+          backgroundColor: 'rgba(63,185,80,0.08)',
+          fill: true, tension: 0.4, pointRadius: 4,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#7d8590', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#7d8590', font:{size:11} }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#7d8590', font:{size:11}, callback: v => v+'€' }, grid: { color: '#21262d' } },
+      }
+    }
+  });
+
+  // Donut chart
+  const key  = document.getElementById('dash-month')?.value;
+  const c    = calc(db.months[key] || {});
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('donutChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Stock payé','Urssaf','Frais carte','Frais annexes','Shopify','Pub','Frais compte'],
+      datasets: [{
+        data: [c.stockP, c.urssaf, c.carte, c.annexe, c.shopify, c.pub, c.compte],
+        backgroundColor: ['#58a6ff','#bc8cff','#ffa657','#f85149','#3fb950','#d29922','#6e7681'],
+        borderWidth: 0, hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '62%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#7d8590', font:{size:11}, padding: 10 } }
+      }
+    }
+  });
+}
+
+// ── Saisie / Form ─────────────────────────────────────────────────────────
+function loadForm() {
+  const key = document.getElementById('saisie-month')?.value;
+  const d   = key ? (db.months[key] || {}) : {};
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val ?? '';
+  };
+
+  set('f-ca',        d.ca);
+  set('f-comp',      d.comp);
+  set('f-port',      d.port);
+  set('f-cmd',       d.cmd);
+  set('f-cogs',      d.cogs);
+  set('f-stock-paye',d.stockPaye);
+  set('f-stock-np',  d.stockNonPaye);
+  set('f-urssaf',    d.urssaf);
+  set('f-shopify',   d.shopify);
+  set('f-pub',       d.pub);
+  set('f-compte',    d.compte);
+  set('f-annexe',    d.annexe);
+  set('f-perso',     d.perso);
+  set('f-notes',     d.notes);
+
+  carteAuto = d.carteAuto !== false;
+  const carteInput = document.getElementById('f-carte');
+  const carteBadge = document.getElementById('badge-auto');
+  if (carteAuto) {
+    carteInput.className = 'form-input auto-mode';
+    carteInput.value = '';
+    carteInput.placeholder = 'calculé auto';
+    carteBadge.style.display = 'inline';
+  } else {
+    carteInput.className = 'form-input';
+    carteInput.value = d.carte ?? '';
+    carteInput.placeholder = '0.00';
+    carteBadge.style.display = 'none';
+  }
+  updatePreview();
+}
+
+function toggleAuto() {
+  carteAuto = !carteAuto;
+  const input = document.getElementById('f-carte');
+  const badge = document.getElementById('badge-auto');
+  if (carteAuto) {
+    input.className = 'form-input auto-mode';
+    input.value = '';
+    input.placeholder = 'calculé auto';
+    badge.style.display = 'inline';
+  } else {
+    input.className = 'form-input';
+    input.placeholder = '0.00';
+    badge.style.display = 'none';
+  }
+  updatePreview();
+}
+
+function readForm() {
+  const v = id => document.getElementById(id)?.value || '';
+  return {
+    ca:          v('f-ca'),
+    comp:        v('f-comp'),
+    port:        v('f-port'),
+    cmd:         v('f-cmd'),
+    cogs:        v('f-cogs'),
+    stockPaye:   v('f-stock-paye'),
+    stockNonPaye:v('f-stock-np'),
+    carteAuto,
+    carte:       carteAuto ? null : v('f-carte'),
+    urssaf:      v('f-urssaf'),
+    shopify:     v('f-shopify'),
+    pub:         v('f-pub'),
+    compte:      v('f-compte'),
+    annexe:      v('f-annexe'),
+    perso:       v('f-perso'),
+    notes:       v('f-notes'),
+  };
+}
+
+function updatePreview() {
+  const c = calc(readForm());
+  const items = [
+    { label:'Revenu total',    val: fmtE(c.totalRevenu),   cls: 'c-blue' },
+    { label:'Marge brute',     val: fmtP(c.margeB_pct),    cls: ccP(c.margeB_pct) },
+    { label:'Total charges',   val: fmtE(c.chargesOp+c.stockP), cls: 'c-neg' },
+    { label:'Bénéfice net',    val: fmtE(c.resActuel),     cls: cc(c.resActuel) },
+    { label:'Marge nette',     val: fmtP(c.margeActuelle), cls: ccP(c.margeActuelle) },
+    { label:'Trésorerie',      val: fmtE(c.resFinal),      cls: cc(c.resFinal) },
+    { label:'Panier moyen',    val: fmtE(c.panierMoyen),   cls: 'c-muted' },
+    { label:'Commandes',       val: c.cmd,                  cls: 'c-muted' },
+  ];
+  document.getElementById('preview-grid').innerHTML = items.map(i => `
+    <div class="summary-item">
+      <div class="summary-item-label">${i.label}</div>
+      <div class="summary-item-value ${i.cls}">${i.val}</div>
+    </div>
+  `).join('');
+}
+
+function saveForm() {
+  const key = document.getElementById('saisie-month')?.value;
+  if (!key) return;
+  db.months[key] = readForm();
+  persist();
+  toast('✓ Données enregistrées pour ' + monthLabel(key));
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+function renderHistory() {
+  const months = sortedMonths();
+  const tbody  = document.getElementById('history-tbody');
+  if (!months.length) {
+    tbody.innerHTML = `<tr><td colspan="8">
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <div class="empty-title">Aucune donnée</div>
+        <div class="empty-sub">Commencez par saisir votre premier mois</div>
+      </div>
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = months.map(m => {
+    const c = calc(db.months[m] || {});
+    const mn = c.margeActuelle;
+    const badgeCls = mn >= 30 ? 'badge-green' : mn >= 15 ? 'badge-yellow' : 'badge-red';
+    return `<tr>
+      <td style="font-weight:500">${monthLabel(m)}</td>
+      <td>${fmtE(c.ca)}</td>
+      <td>${c.cmd}</td>
+      <td>${fmtE(c.panierMoyen)}</td>
+      <td class="${ccP(c.margeB_pct)}">${fmtP(c.margeB_pct)}</td>
+      <td class="${cc(c.resActuel)}">${fmtE(c.resActuel)}</td>
+      <td><span class="badge ${badgeCls}">${fmtP(mn)}</span></td>
+      <td class="${cc(c.resFinal)}">${fmtE(c.resFinal)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const months = sortedMonths();
+  const headers = ['Mois','CA','Ventes comp.','Port reçu','Commandes',
+    'COGS','Stock payé','Stock non payé','Frais carte','Urssaf','Shopify','Pub',
+    'Frais compte','Frais annexes','Dép. perso',
+    'Marge brute %','Bénéfice net','Marge nette %','Trésorerie finale'];
+  const rows = months.map(m => {
+    const c = calc(db.months[m] || {});
+    return [
+      monthLabel(m), c.ca, c.comp, c.port, c.cmd,
+      c.cogs, c.stockP, c.stockNP, c.carte, c.urssaf, c.shopify, c.pub,
+      c.compte, c.annexe, c.perso,
+      fmt(c.margeB_pct,1), c.resActuel, fmt(c.margeActuelle,1), c.resFinal
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const csv = [headers.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+  a.download = 'analytics_shopify_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+// ── Persistence ───────────────────────────────────────────────────────────
+function persist() {
+  localStorage.setItem('shopify_analytics', JSON.stringify(db));
+  populateSelects();
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2800);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+function init() {
+  // Seed with the user's May 2025 data if empty
+  if (!Object.keys(db.months).length) {
+    db.months['2025-05'] = {
+      ca: 1383, comp: 54.94, port: 197.21, cmd: 37,
+      cogs: 414.9, stockPaye: 282, stockNonPaye: 0,
+      carteAuto: false, carte: 30,
+      urssaf: 174, shopify: 71.99, pub: 0,
+      compte: 16.90, annexe: 252.72,
+      perso: 0, notes: 'Premier mois importé',
+    };
+  }
+  populateSelects();
+  loadForm();
+  renderDashboard();
+}
+
+init();
+</script>
+</body>
+</html>

@@ -22,6 +22,7 @@ from config import (
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
     GROQ_API_KEY, GROQ_MODEL, CONTENT_RULES,
+    OPENAI_API_KEY, OPENAI_MODEL,
 )
 from tools.customer import (
     get_pending_messages,
@@ -427,6 +428,49 @@ def _detect_template(text: str) -> str:
     return "EducatifVideoProps"
 
 
+def _llm_chat_json(messages: list, temperature: float = 0.7, max_tokens: int = 2048) -> str:
+    """Appelle Groq en JSON; bascule automatiquement sur OpenAI si rate-limitée (429)."""
+    if GROQ_API_KEY:
+        try:
+            from groq import Groq
+            resp = Groq(api_key=GROQ_API_KEY).chat.completions.create(
+                model=GROQ_MODEL,
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return resp.choices[0].message.content
+        except Exception as exc:
+            is_429 = "429" in str(exc) or getattr(exc, "status_code", None) == 429
+            if not is_429:
+                raise
+            logger.warning("Groq rate-limitée (429) → bascule sur OpenAI")
+
+    if not OPENAI_API_KEY:
+        raise RuntimeError(
+            "Limite quotidienne Groq atteinte et OPENAI_API_KEY absent du .env — "
+            "attends ~24h ou ajoute ta clé OpenAI dans le fichier .env"
+        )
+
+    import requests as _req
+    r = _req.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        json={
+            "model": OPENAI_MODEL,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    logger.info("Fallback OpenAI utilisé (Groq rate-limited)")
+    return r.json()["choices"][0]["message"]["content"]
+
+
 def _generate_voiceover_ai_sync(
     composition_id: str,
     feedback: str = "",
@@ -604,8 +648,6 @@ def _generate_with_groq(
     context: str,
 ) -> dict:
     try:
-        from groq import Groq
-
         if feedback or force_reset or context:
             existing_props = {}
         else:
@@ -628,7 +670,6 @@ def _generate_with_groq(
 
         subject = cal_entry or f"Post ZenAquatique du {composition_id}"
         schema  = _VOICEOVER_SCHEMAS.get(template_type, _VOICEOVER_SCHEMAS["EducatifVideoProps"])
-        client  = Groq(api_key=GROQ_API_KEY)
 
         sys_base = (
             f"Tu travailles pour ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques.\n"
@@ -662,17 +703,14 @@ def _generate_with_groq(
             f"Schéma :\n{schema}"
         )
 
-        resp = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide selon le schéma."},
-                {"role": "user",   "content": props_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.7, max_tokens=2048,
-        )
         try:
-            props = json.loads(resp.choices[0].message.content)
+            props = json.loads(_llm_chat_json(
+                messages=[
+                    {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide selon le schéma."},
+                    {"role": "user",   "content": props_prompt},
+                ],
+                temperature=0.7, max_tokens=2048,
+            ))
             if not isinstance(props, dict):
                 props = {}
         except Exception:
@@ -684,18 +722,15 @@ def _generate_with_groq(
             violations = _check_voiceover(props_text)
             if not violations:
                 break
-            logger.warning("[Groq] Mots interdits dans props (%s) — retry %d/3", violations, _attempt + 1)
-            retry_resp = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
-                    {"role": "user",   "content": _retry_prompt(props_prompt, violations)},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.5, max_tokens=2048,
-            )
+            logger.warning("[LLM] Mots interdits dans props (%s) — retry %d/3", violations, _attempt + 1)
             try:
-                props2 = json.loads(retry_resp.choices[0].message.content)
+                props2 = json.loads(_llm_chat_json(
+                    messages=[
+                        {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide."},
+                        {"role": "user",   "content": _retry_prompt(props_prompt, violations)},
+                    ],
+                    temperature=0.5, max_tokens=2048,
+                ))
                 if isinstance(props2, dict) and props2:
                     props      = props2
                     props_text = json.dumps(props, ensure_ascii=False)
@@ -705,7 +740,6 @@ def _generate_with_groq(
         props["template_type"]  = template_type
         props["composition_id"] = composition_id
 
-        # Voiceover = lecture synchronisée des props (toujours en accord avec la vidéo)
         voiceover = generate_voiceover(props)
 
         result = {
@@ -809,36 +843,31 @@ def _text_to_props_sync(script_text: str, composition_id: str, template_type: st
     memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
     memory_block = f"\nCONTRAINTES MÉMOIRE (respecte-les) :\n{memory}\n" if memory else ""
 
-    client = Groq(api_key=GROQ_API_KEY)
-    resp = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": (
-                f"Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).\n"
-                f"{memory_block}"
-                f"\n{CONTENT_RULES}\n\n"
-                "Convertis les scripts en JSON selon le schéma exact. "
-                "Textes courts : hookText max 8 mots, items max 6 mots. "
-                "Réponds UNIQUEMENT en JSON valide."
-            )},
-            {"role": "user", "content": (
-                f"Script pour la vidéo {composition_id} (template : {template_type}) :\n\n"
-                f"---\n{script_text}\n---\n\n"
-                f"Convertis en JSON selon ce schéma :\n{schema}"
-            )},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.3,
-        max_tokens=2048,
-    )
     try:
-        props = json.loads(resp.choices[0].message.content)
+        props = json.loads(_llm_chat_json(
+            messages=[
+                {"role": "system", "content": (
+                    f"Tu es expert en contenu vidéo court pour ZenAquatique ({STORE_NICHE}).\n"
+                    f"{memory_block}"
+                    f"\n{CONTENT_RULES}\n\n"
+                    "Convertis les scripts en JSON selon le schéma exact. "
+                    "Textes courts : hookText max 8 mots, items max 6 mots. "
+                    "Réponds UNIQUEMENT en JSON valide."
+                )},
+                {"role": "user", "content": (
+                    f"Script pour la vidéo {composition_id} (template : {template_type}) :\n\n"
+                    f"---\n{script_text}\n---\n\n"
+                    f"Convertis en JSON selon ce schéma :\n{schema}"
+                )},
+            ],
+            temperature=0.3,
+            max_tokens=2048,
+        ))
         props["template_type"] = template_type
         props["composition_id"] = composition_id
         return {"status": "success", "props": props}
-    except Exception:
-        raw = resp.choices[0].message.content if resp.choices else ""
-        return {"status": "error", "error": "Réponse invalide", "raw": raw[:500]}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 def _voiceover_to_props_sync(composition_id: str, voiceover: str, template_type: str) -> dict:
@@ -872,17 +901,13 @@ def _voiceover_to_props_sync(composition_id: str, voiceover: str, template_type:
                         raw = s; break
             props = json.loads(raw)
         else:
-            from groq import Groq
-            resp = Groq(api_key=GROQ_API_KEY).chat.completions.create(
-                model=GROQ_MODEL,
+            props = json.loads(_llm_chat_json(
                 messages=[
                     {"role": "system", "content": prompt_sys},
                     {"role": "user",   "content": prompt_user},
                 ],
-                response_format={"type": "json_object"},
                 temperature=0.3, max_tokens=2048,
-            )
-            props = json.loads(resp.choices[0].message.content)
+            ))
         props["template_type"]  = template_type
         props["composition_id"] = composition_id
         return {"status": "success", "props": props}
@@ -1027,16 +1052,11 @@ Réponds UNIQUEMENT en JSON :
     fallback_tt = f"🌿 {_h} — dès 0,99€, livrées fraîches ! 👉 zen-aquatique.fr\n#aquarium #aquascape #zenaquatique #plantesaquatiques"
 
     try:
-        from groq import Groq
-        client = Groq(api_key=GROQ_API_KEY)
-        resp = client.chat.completions.create(
-            model=GROQ_MODEL,
+        data = json.loads(_llm_chat_json(
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
             temperature=0.6,
             max_tokens=2000,
-        )
-        data = json.loads(resp.choices[0].message.content)
+        ))
         if all(k in data for k in ("facebook", "instagram", "tiktok")):
             return data
     except Exception as exc:

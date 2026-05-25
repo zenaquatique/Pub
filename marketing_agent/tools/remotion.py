@@ -311,53 +311,35 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
 
 
 def repair_root_tsx(project_path: str) -> dict:
-    """Supprime les balises <Composition> dupliquées dans Root.tsx."""
+    """Supprime les balises <Composition> dupliquées dans Root.tsx (single-line ou multi-line)."""
     try:
         tsx = Path(project_path) / "src" / "Root.tsx"
         if not tsx.exists():
             return {"status": "error", "error": "Root.tsx introuvable"}
 
-        lines = tsx.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
+        content = tsx.read_text(encoding="utf-8", errors="ignore")
 
-        seen_ids: set = set()
+        # Capture <Composition ... /> (single ou multi-line ; pas de > dans les attributs JSX)
+        pattern = re.compile(r'\n?[ \t]*<Composition\b[^>]*/>', re.DOTALL)
+
+        seen_ids: list = []
         removed: list = []
-        result: list = []
-        in_comp = False
-        comp_buf: list = []
-        comp_id: str | None = None
 
-        for line in lines:
-            if not in_comp:
-                stripped = line.strip()
-                if stripped.startswith("<Composition") and not stripped.startswith("//"):
-                    in_comp = True
-                    comp_buf = [line]
-                    m = re.search(r'id="([^"]+)"', line)
-                    comp_id = m.group(1) if m else None
-                else:
-                    result.append(line)
-            else:
-                comp_buf.append(line)
-                if not comp_id:
-                    m = re.search(r'id="([^"]+)"', line)
-                    if m:
-                        comp_id = m.group(1)
-                if line.strip() == "/>":
-                    if comp_id and comp_id in seen_ids:
-                        removed.append(comp_id)
-                    else:
-                        if comp_id:
-                            seen_ids.add(comp_id)
-                        result.extend(comp_buf)
-                    in_comp = False
-                    comp_buf = []
-                    comp_id = None
+        def _dedup(m: re.Match) -> str:
+            tag = m.group(0)
+            id_m = re.search(r'id="([^"]+)"', tag)
+            if id_m:
+                cid = id_m.group(1)
+                if cid in seen_ids:
+                    removed.append(cid)
+                    return ""
+                seen_ids.append(cid)
+            return tag
 
-        if in_comp:
-            result.extend(comp_buf)
+        new_content = pattern.sub(_dedup, content)
 
         if removed:
-            tsx.write_text("".join(result), encoding="utf-8")
+            tsx.write_text(new_content, encoding="utf-8")
             logger.info("repair_root_tsx : supprimé %s", removed)
             return {"status": "fixed", "removed": removed,
                     "message": f"{len(removed)} doublon(s) supprimé(s) : {', '.join(removed)}"}

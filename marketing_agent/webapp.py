@@ -1154,6 +1154,27 @@ async def api_repair_root_tsx():
     return result
 
 
+@app.get("/api/debug-root-tsx")
+async def api_debug_root_tsx():
+    """Affiche tous les IDs de compositions trouvés dans Root.tsx."""
+    import re as _re
+    from pathlib import Path as _Path
+    tsx = _Path(VIDEO_ASSETS_PATH) / "src" / "Root.tsx"
+    if not tsx.exists():
+        return {"error": "Root.tsx introuvable", "path": str(tsx)}
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+    ids = _re.findall(r'id="(\d{8})"', content)
+    from collections import Counter
+    counts = Counter(ids)
+    duplicates = {k: v for k, v in counts.items() if v > 1}
+    return {
+        "all_ids": ids,
+        "total_compositions": len(ids),
+        "duplicates": duplicates,
+        "has_duplicates": bool(duplicates),
+    }
+
+
 def _find_video(composition_id: str) -> str | None:
     """Cherche uniquement la vidéo finale montée (DD-MM). Jamais le rendu Remotion brut."""
     out_dir = Path(VIDEO_ASSETS_PATH) / "out"

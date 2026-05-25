@@ -37,7 +37,7 @@ from tools.remotion import (
     extract_post_props, generate_voiceover, date_to_composition_id,
     update_post_props, create_post_composition, repair_root_tsx,
     delete_composition, list_src_files, read_project_file, scan_register_root,
-    normalize_root_tsx,
+    normalize_root_tsx, force_render,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1160,6 +1160,20 @@ async def api_repair_root_tsx():
 async def api_normalize_root_tsx():
     """Convertit les <Composition> multi-lignes en single-line pour corriger le bug Remotion."""
     result = normalize_root_tsx(VIDEO_ASSETS_PATH)
+    return result
+
+
+@app.get("/api/force-render/{composition_id}")
+async def api_force_render(composition_id: str):
+    """Suppression nucléaire + recréation single-line + rendu sans cache.
+    Utilise les props déjà dans Root.tsx — ne regénère pas le script.
+    """
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, lambda: force_render(composition_id, VIDEO_ASSETS_PATH)
+    )
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
     return result
 
 

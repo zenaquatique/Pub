@@ -705,6 +705,131 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
         return {"status": "error", "error": str(exc)}
 
 
+def _clear_all_remotion_caches(project_path: str) -> None:
+    """Vide tous les caches Remotion/webpack connus."""
+    project = Path(project_path)
+    for subdir in ["node_modules/.cache", ".remotion"]:
+        d = project / subdir
+        if d.exists():
+            shutil.rmtree(d)
+    import tempfile as _tmp
+    tmp = Path(_tmp.gettempdir())
+    for entry in tmp.glob("remotion-*"):
+        try:
+            shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+        except Exception:
+            pass
+
+
+def force_render(composition_id: str, project_path: str) -> dict:
+    """Suppression nucléaire + recréation + rendu sans cache.
+
+    Extrait les props existants, supprime TOUTES les occurrences de la
+    composition dans Root.tsx (const block ET tag, même en doublon),
+    recrée en single-line propre, vide tous les caches, puis rend.
+    """
+    tsx = Path(project_path) / "src" / "Root.tsx"
+    if not tsx.exists():
+        return {"status": "error", "error": "Root.tsx introuvable"}
+
+    # ── 1. Extraire les props avant suppression ───────────────────────────────
+    props = extract_post_props(composition_id, project_path)
+    if not props or not props.get("template_type"):
+        return {"status": "error", "error": f"Props introuvables pour '{composition_id}' — génère d'abord le script"}
+
+    logger.info("force_render %s: props extraits — template=%s", composition_id, props.get("template_type"))
+
+    # ── 2. Suppression nucléaire de TOUTES les occurrences ───────────────────
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+
+    # Supprimer TOUS les blocs const (il peut y en avoir plusieurs en cas de bug)
+    const_re = re.compile(rf"const post{composition_id}:\s*\w+Props\s*=\s*\{{")
+    iterations = 0
+    while const_re.search(content) and iterations < 10:
+        m = const_re.search(content)
+        brace_start = m.end() - 1
+        depth, end = 0, brace_start
+        for i, ch in enumerate(content[brace_start:], brace_start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if content[end:end+1] == ";":
+            end += 1
+        start = m.start()
+        while start > 0 and content[start - 1] == "\n":
+            start -= 1
+        content = content[:start] + content[end:]
+        iterations += 1
+
+    # Supprimer TOUS les tags <Composition> avec cet ID (single ou multi-line)
+    tag_re = re.compile(
+        r'\n?[ \t]*<Composition\b[^>]*?' + rf'id="{composition_id}"' + r'[^>]*/>', re.DOTALL
+    )
+    before_count = len(tag_re.findall(content))
+    content = tag_re.sub("", content)
+    logger.info("force_render %s: %d tag(s) supprimé(s)", composition_id, before_count)
+
+    # Nettoyage lignes vides
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    tsx.write_text(content, encoding="utf-8")
+
+    # ── 3. Vérification: aucune trace ne doit rester ─────────────────────────
+    content_check = tsx.read_text(encoding="utf-8", errors="ignore")
+    remaining = len(re.findall(rf'id="{composition_id}"', content_check))
+    if remaining:
+        logger.error("force_render: %d occurrence(s) résiduelle(s) après suppression !", remaining)
+        return {"status": "error", "error": f"{remaining} occurrence(s) de '{composition_id}' impossible à supprimer"}
+
+    # ── 4. Recréer en single-line propre ─────────────────────────────────────
+    create_result = create_post_composition(composition_id, project_path, props)
+    if create_result.get("status") == "error":
+        return create_result
+    logger.info("force_render %s: composition recréée en single-line", composition_id)
+
+    # ── 5. Vider tous les caches ──────────────────────────────────────────────
+    _clear_all_remotion_caches(project_path)
+
+    # ── 6. Rendre sans cache bundle ───────────────────────────────────────────
+    project = Path(project_path)
+    npx = _find_npx()
+    env = os.environ.copy()
+    env["PATH"] = os.pathsep.join([
+        r"C:\Program Files\nodejs",
+        os.path.expandvars(r"%APPDATA%\npm"),
+    ]) + os.pathsep + env.get("PATH", "")
+
+    out_dir = project / "out"
+    out_dir.mkdir(exist_ok=True)
+    output_path = out_dir / f"{composition_id}.mp4"
+
+    cmd = f'"{npx}" remotion render --bundle-cache=false "{composition_id}" "{output_path}"'
+    logger.info("force_render: lancement → %s", cmd)
+    try:
+        result = subprocess.run(
+            cmd, cwd=str(project), shell=True, env=env,
+            capture_output=True, text=True, timeout=600,
+            encoding="utf-8", errors="replace",
+        )
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "Timeout rendu >10 min"}
+
+    if result.returncode == 0:
+        return {
+            "status": "success",
+            "composition_id": composition_id,
+            "output_path": str(output_path),
+            "message": f"Vidéo rendue → {output_path}",
+        }
+
+    error_output = (result.stderr or result.stdout or "")[-3000:]
+    logger.error("force_render failed (code %d): %s", result.returncode, error_output)
+    return {"status": "error", "error": f"Exit {result.returncode}\n\n{error_output}"}
+
+
 def list_rendered_videos(project_path: str) -> list[dict]:
     """Liste les MP4 déjà rendus dans out/."""
     out = Path(project_path) / "out"

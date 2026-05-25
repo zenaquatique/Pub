@@ -398,6 +398,62 @@ def update_post_props(composition_id: str, project_path: str, updates: dict) -> 
         return {"status": "error", "error": str(exc)}
 
 
+def delete_composition(composition_id: str, project_path: str) -> dict:
+    """Supprime complètement une composition de Root.tsx (const block + tag <Composition>)."""
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        if not tsx.exists():
+            return {"status": "error", "error": "Root.tsx introuvable"}
+
+        content = tsx.read_text(encoding="utf-8", errors="ignore")
+
+        # 1. Supprimer le bloc const (const postID: ... = { ... };)
+        m = re.search(rf"const post{composition_id}:\s*\w+Props\s*=\s*\{{", content)
+        if m:
+            brace_start = m.end() - 1
+            depth, end = 0, brace_start
+            for i, ch in enumerate(content[brace_start:], brace_start):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if content[end:end+1] == ";":
+                end += 1
+            # Inclure les newlines précédentes/suivantes pour ne pas laisser de lignes vides
+            start = m.start()
+            while start > 0 and content[start-1] == "\n":
+                start -= 1
+            content = content[:start] + content[end:]
+
+        # 2. Supprimer le tag <Composition id="ID" ... />  (single ou multi-line)
+        tag_pattern = re.compile(
+            r'\n?[ \t]*<Composition\b[^>]*?' + rf'id="{composition_id}"' + r'[^>]*/>', re.DOTALL
+        )
+        content = tag_pattern.sub("", content)
+
+        # Nettoie les lignes vides multiples
+        content = re.sub(r'\n{3,}', '\n\n', content)
+
+        tsx.write_text(content, encoding="utf-8")
+        logger.info("Composition '%s' supprimée de Root.tsx", composition_id)
+        return {"status": "deleted", "composition_id": composition_id,
+                "message": f"Composition '{composition_id}' supprimée — régénère le script pour la recréer."}
+    except Exception as exc:
+        logger.exception("Erreur delete_composition pour '%s'", composition_id)
+        return {"status": "error", "error": str(exc)}
+
+
+def list_src_files(project_path: str) -> list[str]:
+    """Liste tous les fichiers TypeScript/TSX du projet Remotion."""
+    src = Path(project_path) / "src"
+    if not src.exists():
+        return []
+    return [str(f.relative_to(src)) for f in sorted(src.rglob("*")) if f.is_file()]
+
+
 def _find_npx() -> str:
     """Trouve npx dans PATH ou dans les emplacements Node.js courants."""
     found = shutil.which("npx")

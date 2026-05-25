@@ -36,6 +36,7 @@ from tools.remotion import (
     render_video, list_rendered_videos,
     extract_post_props, generate_voiceover, date_to_composition_id,
     update_post_props, create_post_composition, repair_root_tsx,
+    delete_composition, list_src_files,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1152,6 +1153,22 @@ async def api_repair_root_tsx():
     """Supprime les balises <Composition> dupliquées dans Root.tsx."""
     result = repair_root_tsx(VIDEO_ASSETS_PATH)
     return result
+
+
+@app.delete("/api/composition/{composition_id}")
+async def api_delete_composition(composition_id: str):
+    """Supprime une composition de Root.tsx (const + tag). Régénère ensuite le script."""
+    result = delete_composition(composition_id, VIDEO_ASSETS_PATH)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
+@app.get("/api/debug-src-files")
+async def api_debug_src_files():
+    """Liste les fichiers TypeScript du projet Remotion pour détecter des compositions en doublon."""
+    files = list_src_files(VIDEO_ASSETS_PATH)
+    return {"src_files": files, "count": len(files)}
 
 
 @app.get("/api/debug-root-tsx")

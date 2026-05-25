@@ -1159,19 +1159,27 @@ async def api_debug_root_tsx():
     """Affiche tous les IDs de compositions trouvés dans Root.tsx."""
     import re as _re
     from pathlib import Path as _Path
+    from collections import Counter
     tsx = _Path(VIDEO_ASSETS_PATH) / "src" / "Root.tsx"
     if not tsx.exists():
         return {"error": "Root.tsx introuvable", "path": str(tsx)}
     content = tsx.read_text(encoding="utf-8", errors="ignore")
     ids = _re.findall(r'id="(\d{8})"', content)
-    from collections import Counter
     counts = Counter(ids)
     duplicates = {k: v for k, v in counts.items() if v > 1}
+
+    # Extrait les lignes contenant un ID pour inspection visuelle
+    lines_with_id = []
+    for i, line in enumerate(content.splitlines(), 1):
+        if _re.search(r'\d{8}', line):
+            lines_with_id.append({"line": i, "content": line.strip()})
+
     return {
         "all_ids": ids,
         "total_compositions": len(ids),
         "duplicates": duplicates,
         "has_duplicates": bool(duplicates),
+        "lines_with_8digit_ids": lines_with_id,
     }
 
 

@@ -36,7 +36,7 @@ from tools.remotion import (
     render_video, list_rendered_videos,
     extract_post_props, generate_voiceover, date_to_composition_id,
     update_post_props, create_post_composition, repair_root_tsx,
-    delete_composition, list_src_files,
+    delete_composition, list_src_files, read_project_file, scan_register_root,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1223,6 +1223,42 @@ async def api_debug_root_tsx():
         "has_duplicates": bool(duplicates),
         "lines_with_8digit_ids": lines_with_id,
     }
+
+
+@app.get("/api/debug-read-src/{filepath:path}")
+async def api_debug_read_src(filepath: str):
+    """Lit le contenu brut d'un fichier dans le projet Remotion (chemin relatif à la racine)."""
+    result = read_project_file(VIDEO_ASSETS_PATH, filepath)
+    if result["status"] == "error":
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.get("/api/debug-scan-register-root")
+async def api_debug_scan_register_root():
+    """Scanne tous les fichiers JS/TS pour trouver registerRoot et les balises <Composition>."""
+    return scan_register_root(VIDEO_ASSETS_PATH)
+
+
+@app.get("/api/debug-root-tsx-content/{composition_id}")
+async def api_debug_root_tsx_content(composition_id: str):
+    """Retourne les 10 lignes autour d'un ID dans Root.tsx pour vérification visuelle."""
+    from pathlib import Path as _Path
+    tsx = _Path(VIDEO_ASSETS_PATH) / "src" / "Root.tsx"
+    if not tsx.exists():
+        return {"error": "Root.tsx introuvable"}
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+    lines = content.splitlines()
+    results = []
+    for i, line in enumerate(lines):
+        if composition_id in line:
+            start = max(0, i - 5)
+            end = min(len(lines), i + 6)
+            results.append({
+                "match_line": i + 1,
+                "context": [{"line": j + 1, "content": lines[j]} for j in range(start, end)],
+            })
+    return {"composition_id": composition_id, "occurrences": results, "count": len(results)}
 
 
 def _find_video(composition_id: str) -> str | None:

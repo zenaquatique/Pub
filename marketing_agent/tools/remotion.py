@@ -454,6 +454,59 @@ def list_src_files(project_path: str) -> list[str]:
     return [str(f.relative_to(src)) for f in sorted(src.rglob("*")) if f.is_file()]
 
 
+def read_project_file(project_path: str, relative_path: str) -> dict:
+    """Lit le contenu d'un fichier du projet Remotion (relatif à la racine du projet)."""
+    target = Path(project_path) / relative_path
+    if not target.exists():
+        return {"status": "error", "error": f"Fichier introuvable : {target}"}
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+        return {"status": "ok", "path": str(target), "content": content}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+def scan_register_root(project_path: str) -> dict:
+    """Scanne tous les fichiers du projet à la recherche de registerRoot et <Composition."""
+    project = Path(project_path)
+    register_hits = []
+    composition_hits = []
+
+    # Scan root + src + any subfolder (but not node_modules)
+    for f in sorted(project.rglob("*")):
+        if not f.is_file():
+            continue
+        # Skip node_modules and .git
+        parts = f.parts
+        if "node_modules" in parts or ".git" in parts:
+            continue
+        suffix = f.suffix.lower()
+        if suffix not in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
+            continue
+        try:
+            content = f.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+
+        rel = str(f.relative_to(project))
+        lines = content.splitlines()
+
+        for i, line in enumerate(lines, 1):
+            if "registerRoot" in line:
+                register_hits.append({"file": rel, "line": i, "content": line.strip()})
+            if "<Composition" in line and 'id="' in line:
+                composition_hits.append({"file": rel, "line": i, "content": line.strip()})
+
+    return {
+        "registerRoot_occurrences": register_hits,
+        "composition_tag_occurrences": composition_hits,
+        "summary": {
+            "registerRoot_count": len(register_hits),
+            "composition_tags_total": len(composition_hits),
+        },
+    }
+
+
 def _find_npx() -> str:
     """Trouve npx dans PATH ou dans les emplacements Node.js courants."""
     found = shutil.which("npx")

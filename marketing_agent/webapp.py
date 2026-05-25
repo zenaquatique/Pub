@@ -37,6 +37,7 @@ from tools.remotion import (
     extract_post_props, generate_voiceover, date_to_composition_id,
     update_post_props, create_post_composition, repair_root_tsx,
     delete_composition, list_src_files, read_project_file, scan_register_root,
+    normalize_root_tsx,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1152,6 +1153,13 @@ async def api_debug_env():
 async def api_repair_root_tsx():
     """Supprime les balises <Composition> dupliquées dans Root.tsx."""
     result = repair_root_tsx(VIDEO_ASSETS_PATH)
+    return result
+
+
+@app.get("/api/normalize-root-tsx")
+async def api_normalize_root_tsx():
+    """Convertit les <Composition> multi-lignes en single-line pour corriger le bug Remotion."""
+    result = normalize_root_tsx(VIDEO_ASSETS_PATH)
     return result
 
 

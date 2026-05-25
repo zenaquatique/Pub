@@ -329,6 +329,65 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
         return {"status": "error", "error": str(exc)}
 
 
+def normalize_root_tsx(project_path: str) -> dict:
+    """Convertit toutes les <Composition> multi-lignes en single-line dans Root.tsx.
+
+    Les tags multi-lignes (créés par d'anciennes versions du code) provoquent
+    "Multiple composition registered" dans Remotion. Cette fonction les aplatit
+    en une seule ligne, identique au format des compositions manuelles.
+    """
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        if not tsx.exists():
+            return {"status": "error", "error": "Root.tsx introuvable"}
+
+        content = tsx.read_text(encoding="utf-8", errors="ignore")
+        original = content
+
+        # Capture chaque tag <Composition ... /> (single ou multi-line)
+        tag_re = re.compile(r'[ \t]*<Composition\b[^>]*/>', re.DOTALL)
+        converted = []
+
+        def _to_single_line(m: re.Match) -> str:
+            tag = m.group(0)
+            # Déjà single-line ?
+            if "\n" not in tag:
+                return tag
+            # Extrait les attributs et les compacte sur une ligne
+            tag_id_m = re.search(r'id="([^"]+)"', tag)
+            comp_id = tag_id_m.group(1) if tag_id_m else "?"
+
+            # Extrait les paires attribut=valeur et les rejoint sur une ligne
+            attrs = re.findall(r'(\w+)=\{([^{}]*)\}|(\w+)="([^"]*)"', tag)
+            parts = []
+            for a1, v1, a2, v2 in attrs:
+                if a1:
+                    parts.append(f'{a1}={{{v1}}}')
+                elif a2:
+                    parts.append(f'{a2}="{v2}"')
+
+            indent = "      "  # 6 espaces = indentation standard
+            new_tag = f'{indent}<Composition {" ".join(parts)} />'
+            converted.append(comp_id)
+            logger.info("normalize_root_tsx: aplatissement de %s", comp_id)
+            return new_tag
+
+        new_content = tag_re.sub(_to_single_line, content)
+
+        if new_content != original:
+            tsx.write_text(new_content, encoding="utf-8")
+            return {
+                "status": "fixed",
+                "converted": converted,
+                "message": f"{len(converted)} tag(s) multi-lignes aplati(s) : {', '.join(converted)}",
+            }
+
+        return {"status": "ok", "converted": [], "message": "Tous les tags déjà en single-line"}
+    except Exception as exc:
+        logger.exception("Erreur normalize_root_tsx")
+        return {"status": "error", "error": str(exc)}
+
+
 def repair_root_tsx(project_path: str) -> dict:
     """Supprime les balises <Composition> dupliquées dans Root.tsx (single-line ou multi-line)."""
     try:
@@ -569,6 +628,12 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
     project = Path(project_path)
     if not project.exists():
         return {"status": "error", "error": f"Dossier projet introuvable : {project_path}"}
+
+    # Normalise Root.tsx avant le rendu : aplatit les tags multi-lignes qui
+    # provoquent "Multiple composition registered" dans Remotion
+    norm = normalize_root_tsx(project_path)
+    if norm.get("converted"):
+        logger.warning("render_video: tags normalisés avant rendu → %s", norm["converted"])
 
     out_dir = project / "out"
     out_dir.mkdir(exist_ok=True)

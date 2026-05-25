@@ -219,21 +219,22 @@ def _props_to_ts_block(composition_id: str, template_type: str, props: dict) -> 
     return f"const post{composition_id}: {template_type} = {{\n" + "\n".join(lines) + "\n};"
 
 
+# Composant React et constante de durée par type — doit correspondre aux noms dans Root.tsx
 _TYPE_TO_COMPONENT = {
-    "VersusVideoProps":   "VersusVideo",
-    "EducatifVideoProps": "EducatifVideo",
-    "PromoVideoProps":    "PromoVideo",
+    "VersusVideoProps":   "VersusVideo as React.ComponentType",
+    "EducatifVideoProps": "EducatifVideo as React.ComponentType",
+    "PromoVideoProps":    "PromoVideo as React.ComponentType",
 }
 
-_TYPE_DURATION = {
-    "VersusVideoProps":   690,   # 23 s × 30 fps
-    "EducatifVideoProps": 690,
-    "PromoVideoProps":    480,   # 16 s × 30 fps
+_TYPE_DURATION_CONST = {
+    "VersusVideoProps":   "VERSUS_TOTAL_FRAMES",
+    "EducatifVideoProps": "EDUCATIF_TOTAL_FRAMES",
+    "PromoVideoProps":    "PROMO_TOTAL_FRAMES",
 }
 
 
 def create_post_composition(composition_id: str, project_path: str, props: dict) -> dict:
-    """Crée une nouvelle composition dans Root.tsx (const block + enregistrement)."""
+    """Crée une nouvelle composition dans Root.tsx (const block + tag single-line)."""
     try:
         tsx = Path(project_path) / "src" / "Root.tsx"
         if not tsx.exists():
@@ -263,40 +264,58 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
         else:
             content += "\n\n" + const_block + "\n"
 
-        # ── 2. Insérer le tag <Composition> seulement s'il n'existe pas déjà ─────
+        # ── 2. Insérer le tag <Composition> en format single-line ─────────────────
         if not has_tag:
-            comp_m = re.search(
-                r'<Composition[^>]*?fps=\{(\d+)\}[^>]*?width=\{(\d+)\}[^>]*?height=\{(\d+)\}',
-                content, re.DOTALL,
+            component = _TYPE_TO_COMPONENT.get(
+                template_type, template_type.replace("Props", "") + " as React.ComponentType"
             )
-            fps    = int(comp_m.group(1)) if comp_m else 30
-            width  = int(comp_m.group(2)) if comp_m else 1080
-            height = int(comp_m.group(3)) if comp_m else 1920
-            duration = _TYPE_DURATION.get(template_type, 600)
-            component = _TYPE_TO_COMPONENT.get(template_type, template_type.replace("Props", ""))
+            duration_const = _TYPE_DURATION_CONST.get(template_type, "EDUCATIF_TOTAL_FRAMES")
 
-            new_comp = (
-                f'      <Composition\n'
-                f'        id="{composition_id}"\n'
-                f'        component={{{component}}}\n'
-                f'        durationInFrames={{{duration}}}\n'
-                f'        fps={{{fps}}}\n'
-                f'        width={{{width}}}\n'
-                f'        height={{{height}}}\n'
-                f'        defaultProps={{post{composition_id}}}\n'
-                f'      />'
+            # Format identique aux compositions manuelles (single-line, constantes TS)
+            new_tag = (
+                f'      <Composition'
+                f' id="{composition_id}"'
+                f' component={{{component}}}'
+                f' durationInFrames={{{duration_const}}}'
+                f' fps={{TIKTOK_FPS}}'
+                f' width={{TIKTOK_W}}'
+                f' height={{TIKTOK_H}}'
+                f' defaultProps={{post{composition_id}}}'
+                f' />'
             )
 
-            all_ends = list(re.finditer(r'/>[ \t]*\n(\s*(?=<Composition|\s*</))', content))
-            if all_ends:
-                m = all_ends[-1]
-                pos = m.start() + 2   # après />
-                content = content[:pos] + "\n" + new_comp + content[pos:]
+            # Chercher le dernier tag <Composition ... /> single-line et insérer après
+            # (cherche les tags single-line sur une seule ligne)
+            single_line_tags = list(re.finditer(
+                r'^(\s*<Composition\s[^\n]*/>\s*)$', content, re.MULTILINE
+            ))
+            if single_line_tags:
+                # Trier par ID pour insertion en ordre chronologique
+                last_before = None
+                for m in single_line_tags:
+                    tag_id_m = re.search(r'id="(\d{8})"', m.group(0))
+                    if tag_id_m and tag_id_m.group(1) <= composition_id:
+                        last_before = m
+                    elif tag_id_m and last_before is None:
+                        # Tous les IDs sont supérieurs → insérer avant le premier
+                        pos = m.start()
+                        content = content[:pos] + new_tag + "\n" + content[pos:]
+                        tsx.write_text(content, encoding="utf-8")
+                        logger.info("Composition '%s' créée dans Root.tsx", composition_id)
+                        return {"status": "created", "composition_id": composition_id,
+                                "message": f"Composition '{composition_id}' créée dans Root.tsx"}
+
+                if last_before:
+                    pos = last_before.end()
+                    content = content[:pos] + new_tag + "\n" + content[pos:]
             else:
-                close_m = re.search(r'(</>|</\w*Root>)', content)
+                # Aucun tag single-line — insérer avant </> ou </RemotionRoot>
+                close_m = re.search(r'(\s*</>|\s*</\w*Root>)', content)
                 if close_m:
                     pos = close_m.start()
-                    content = content[:pos] + new_comp + "\n      " + content[pos:]
+                    content = content[:pos] + "\n" + new_tag + "\n" + content[pos:]
+                else:
+                    content += "\n" + new_tag + "\n"
 
         tsx.write_text(content, encoding="utf-8")
         logger.info("Composition '%s' créée dans Root.tsx", composition_id)

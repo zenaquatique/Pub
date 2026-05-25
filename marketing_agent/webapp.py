@@ -1171,6 +1171,31 @@ async def api_debug_src_files():
     return {"src_files": files, "count": len(files)}
 
 
+@app.get("/api/debug-src-search/{composition_id}")
+async def api_debug_src_search(composition_id: str):
+    """Cherche un ID de composition dans TOUS les fichiers src du projet Remotion."""
+    import re as _re
+    from pathlib import Path as _Path
+    src = _Path(VIDEO_ASSETS_PATH) / "src"
+    if not src.exists():
+        return {"error": "Dossier src introuvable"}
+    results = []
+    for f in sorted(src.rglob("*")):
+        if not f.is_file():
+            continue
+        try:
+            content = f.read_text(encoding="utf-8", errors="ignore")
+            if composition_id in content:
+                hits = []
+                for i, line in enumerate(content.splitlines(), 1):
+                    if composition_id in line:
+                        hits.append({"line": i, "content": line.strip()})
+                results.append({"file": f.name, "hits": hits})
+        except Exception:
+            pass
+    return {"composition_id": composition_id, "found_in": results}
+
+
 @app.get("/api/debug-root-tsx")
 async def api_debug_root_tsx():
     """Affiche tous les IDs de compositions trouvés dans Root.tsx."""

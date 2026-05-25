@@ -1172,6 +1172,15 @@ async def api_delete_composition(composition_id: str):
     return result
 
 
+@app.get("/api/delete-composition/{composition_id}")
+async def api_delete_composition_get(composition_id: str):
+    """Supprime une composition via GET (utilisable directement depuis le navigateur)."""
+    result = delete_composition(composition_id, VIDEO_ASSETS_PATH)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
 @app.get("/api/debug-src-files")
 async def api_debug_src_files():
     """Liste les fichiers TypeScript du projet Remotion pour détecter des compositions en doublon."""

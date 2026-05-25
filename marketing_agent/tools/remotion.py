@@ -472,11 +472,14 @@ def scan_register_root(project_path: str) -> dict:
     register_hits = []
     composition_hits = []
 
-    # Scan root + src + any subfolder (but not node_modules)
+    # Composition tag regex — handles single-line AND multi-line tags
+    _comp_re = re.compile(
+        r'<Composition\b[^>]*?id="(\d{8})"[^>]*/>', re.DOTALL
+    )
+
     for f in sorted(project.rglob("*")):
         if not f.is_file():
             continue
-        # Skip node_modules and .git
         parts = f.parts
         if "node_modules" in parts or ".git" in parts:
             continue
@@ -494,15 +497,32 @@ def scan_register_root(project_path: str) -> dict:
         for i, line in enumerate(lines, 1):
             if "registerRoot" in line:
                 register_hits.append({"file": rel, "line": i, "content": line.strip()})
-            if "<Composition" in line and 'id="' in line:
-                composition_hits.append({"file": rel, "line": i, "content": line.strip()})
+
+        # Find all <Composition> tags (single or multiline) and record line numbers
+        for m in _comp_re.finditer(content):
+            comp_id = m.group(1)
+            line_no = content[:m.start()].count("\n") + 1
+            snippet = m.group(0).replace("\n", " ")[:120]
+            composition_hits.append({
+                "file": rel,
+                "line": line_no,
+                "composition_id": comp_id,
+                "content": snippet,
+            })
+
+    from collections import Counter
+    id_counts = Counter(h["composition_id"] for h in composition_hits)
+    duplicates = {k: v for k, v in id_counts.items() if v > 1}
 
     return {
         "registerRoot_occurrences": register_hits,
         "composition_tag_occurrences": composition_hits,
+        "duplicates": duplicates,
+        "has_duplicates": bool(duplicates),
         "summary": {
             "registerRoot_count": len(register_hits),
             "composition_tags_total": len(composition_hits),
+            "unique_ids": len(id_counts),
         },
     }
 
@@ -564,13 +584,28 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
                     "message": f"Vidéo rendue → {output_path}"}
 
         error_output = (result.stderr or result.stdout or "")
-        # Cache webpack corrompu → vide le cache et relance une fois
+        # "Multiple composition" → vide TOUS les caches connus et relance sans cache bundle
         if "Multiple composition" in error_output:
-            cache_dir = project / "node_modules" / ".cache"
-            if cache_dir.exists():
-                shutil.rmtree(cache_dir)
-                logger.warning("Cache webpack vidé — retry render sans cache")
-            result = _run(cmd)
+            # 1. Cache webpack local
+            for cache_subdir in ["node_modules/.cache", ".remotion"]:
+                cache_dir = project / cache_subdir
+                if cache_dir.exists():
+                    shutil.rmtree(cache_dir)
+            # 2. Cache temp système (Windows)
+            import tempfile as _tmp
+            tmp = Path(_tmp.gettempdir())
+            for entry in tmp.glob("remotion-*"):
+                try:
+                    shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+                except Exception:
+                    pass
+            logger.warning("Tous les caches Remotion vidés — retry avec --bundle-cache=false")
+            # Relance sans cache bundle
+            cmd_no_cache = (
+                f'"{npx}" remotion render --bundle-cache=false '
+                f'"{composition_id}" "{output_path}"'
+            )
+            result = _run(cmd_no_cache)
             if result.returncode == 0:
                 return {"status": "success", "composition_id": composition_id,
                         "output_path": str(output_path),

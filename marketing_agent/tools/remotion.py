@@ -724,28 +724,47 @@ def _clear_all_remotion_caches(project_path: str) -> None:
             pass
 
 
-def force_render(composition_id: str, project_path: str) -> dict:
+def force_render(composition_id: str, project_path: str,
+                 saved_props: dict | None = None) -> dict:
     """Suppression nucléaire + recréation + rendu sans cache.
 
-    Extrait les props existants, supprime TOUTES les occurrences de la
-    composition dans Root.tsx (const block ET tag, même en doublon),
-    recrée en single-line propre, vide tous les caches, puis rend.
+    Priorité props : Root.tsx → fichier script sauvegardé → saved_props param.
+    Si aucun props trouvé : supprime quand même les tags orphelins et vide le
+    cache (utile pour débloquer les autres rendus).
     """
     tsx = Path(project_path) / "src" / "Root.tsx"
     if not tsx.exists():
         return {"status": "error", "error": "Root.tsx introuvable"}
 
-    # ── 1. Extraire les props avant suppression ───────────────────────────────
+    # ── 1. Récupérer les props (plusieurs sources) ────────────────────────────
     props = extract_post_props(composition_id, project_path)
     if not props or not props.get("template_type"):
-        return {"status": "error", "error": f"Props introuvables pour '{composition_id}' — génère d'abord le script"}
+        # Fallback : fichier script sauvegardé
+        script_file = Path(project_path).parent.parent / "marketing_agent" / "data" / "scripts" / f"{composition_id}.json"
+        # Essai chemin relatif au project_path (Remotion) → chercher le dossier marketing_agent
+        for candidate in [
+            Path(__file__).parent.parent / "data" / "scripts" / f"{composition_id}.json",
+            script_file,
+        ]:
+            if candidate.exists():
+                try:
+                    import json as _json
+                    saved_data = _json.loads(candidate.read_text(encoding="utf-8"))
+                    props = saved_data.get("props", {})
+                    if props:
+                        logger.info("force_render %s: props chargés depuis %s", composition_id, candidate)
+                        break
+                except Exception:
+                    pass
+    if saved_props and (not props or not props.get("template_type")):
+        props = saved_props
 
-    logger.info("force_render %s: props extraits — template=%s", composition_id, props.get("template_type"))
+    has_props = bool(props and props.get("template_type"))
+    logger.info("force_render %s: props=%s", composition_id, "trouvés" if has_props else "ABSENTS — suppression+cache seulement")
 
     # ── 2. Suppression nucléaire de TOUTES les occurrences ───────────────────
     content = tsx.read_text(encoding="utf-8", errors="ignore")
 
-    # Supprimer TOUS les blocs const (il peut y en avoir plusieurs en cas de bug)
     const_re = re.compile(rf"const post{composition_id}:\s*\w+Props\s*=\s*\{{")
     iterations = 0
     while const_re.search(content) and iterations < 10:
@@ -768,7 +787,6 @@ def force_render(composition_id: str, project_path: str) -> dict:
         content = content[:start] + content[end:]
         iterations += 1
 
-    # Supprimer TOUS les tags <Composition> avec cet ID (single ou multi-line)
     tag_re = re.compile(
         r'\n?[ \t]*<Composition\b[^>]*?' + rf'id="{composition_id}"' + r'[^>]*/>', re.DOTALL
     )
@@ -776,25 +794,34 @@ def force_render(composition_id: str, project_path: str) -> dict:
     content = tag_re.sub("", content)
     logger.info("force_render %s: %d tag(s) supprimé(s)", composition_id, before_count)
 
-    # Nettoyage lignes vides
     content = re.sub(r'\n{3,}', '\n\n', content)
     tsx.write_text(content, encoding="utf-8")
 
-    # ── 3. Vérification: aucune trace ne doit rester ─────────────────────────
+    # ── 3. Vérification ───────────────────────────────────────────────────────
     content_check = tsx.read_text(encoding="utf-8", errors="ignore")
     remaining = len(re.findall(rf'id="{composition_id}"', content_check))
     if remaining:
-        logger.error("force_render: %d occurrence(s) résiduelle(s) après suppression !", remaining)
+        logger.error("force_render: %d occurrence(s) résiduelle(s) !", remaining)
         return {"status": "error", "error": f"{remaining} occurrence(s) de '{composition_id}' impossible à supprimer"}
 
-    # ── 4. Recréer en single-line propre ─────────────────────────────────────
-    create_result = create_post_composition(composition_id, project_path, props)
-    if create_result.get("status") == "error":
-        return create_result
-    logger.info("force_render %s: composition recréée en single-line", composition_id)
+    # ── 4. Recréer seulement si on a les props ────────────────────────────────
+    if has_props:
+        create_result = create_post_composition(composition_id, project_path, props)
+        if create_result.get("status") == "error":
+            return create_result
+        logger.info("force_render %s: composition recréée en single-line", composition_id)
+    else:
+        logger.warning("force_render %s: pas de props — composition non recréée", composition_id)
 
     # ── 5. Vider tous les caches ──────────────────────────────────────────────
     _clear_all_remotion_caches(project_path)
+
+    if not has_props:
+        return {
+            "status": "cache_cleared",
+            "message": f"Tags '{composition_id}' supprimés ({before_count}) + caches vidés. "
+                       f"Génère d'abord le script pour pouvoir rendre '{composition_id}'.",
+        }
 
     # ── 6. Rendre sans cache bundle ───────────────────────────────────────────
     project = Path(project_path)

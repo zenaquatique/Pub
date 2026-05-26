@@ -307,7 +307,10 @@ def create_post_composition(composition_id: str, project_path: str, props: dict)
 
                 if last_before:
                     pos = last_before.end()
-                    content = content[:pos] + new_tag + "\n" + content[pos:]
+                    # ⚠ last_before.end() pointe sur le \n qui SUIT le tag.
+                    # On insère "\n" + new_tag AVANT ce \n pour que chaque
+                    # composition soit sur sa propre ligne (pas de concaténation).
+                    content = content[:pos] + "\n" + new_tag + content[pos:]
             else:
                 # Aucun tag single-line — insérer avant </> ou </RemotionRoot>
                 close_m = re.search(r'(\s*</>|\s*</\w*Root>)', content)

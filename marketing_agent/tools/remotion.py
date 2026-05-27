@@ -747,12 +747,18 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
 
 
 def _clear_all_remotion_caches(project_path: str) -> None:
-    """Vide tous les caches Remotion/webpack connus."""
+    """Vide tous les caches Remotion/webpack connus (projet + système + home user)."""
     project = Path(project_path)
+    # Cache webpack du projet
     for subdir in ["node_modules/.cache", ".remotion"]:
         d = project / subdir
         if d.exists():
-            shutil.rmtree(d)
+            try:
+                shutil.rmtree(d)
+                logger.info("Cache supprimé : %s", d)
+            except Exception as e:
+                logger.warning("Impossible de supprimer %s : %s", d, e)
+    # Cache temp système (Windows/Linux)
     import tempfile as _tmp
     tmp = Path(_tmp.gettempdir())
     for entry in tmp.glob("remotion-*"):
@@ -760,6 +766,96 @@ def _clear_all_remotion_caches(project_path: str) -> None:
             shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
         except Exception:
             pass
+    # Cache home user (~/.remotion, ~/AppData/Local/Remotion)
+    home = Path.home()
+    for user_cache in [
+        home / ".remotion",
+        home / "AppData" / "Local" / "remotion",
+        home / "AppData" / "Local" / "Temp" / "remotion",
+        home / "AppData" / "Roaming" / "remotion",
+    ]:
+        if user_cache.exists():
+            try:
+                shutil.rmtree(user_cache)
+                logger.info("Cache user supprimé : %s", user_cache)
+            except Exception as e:
+                logger.warning("Impossible de supprimer %s : %s", user_cache, e)
+
+
+def rebuild_jsx_section(project_path: str) -> dict:
+    """Reconstruit entièrement la section <Composition> du JSX de Root.tsx.
+
+    Stratégie 'table rase' :
+    1. Extrait tous les tags <Composition .../> existants (single ou multi-line).
+    2. Normalise chacun en single-line avec les bons attributs.
+    3. Déduplique par ID (garde le premier trouvé).
+    4. Supprime TOUS les tags de Root.tsx.
+    5. Réinsère tout proprement juste avant la fermeture </> / </RemotionRoot>.
+
+    Élimine les caractères cachés, les lignes vides parasites et les doublons
+    résiduels que les autres fonctions n'arrivent pas à corriger.
+    """
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        if not tsx.exists():
+            return {"status": "error", "error": "Root.tsx introuvable"}
+
+        content = tsx.read_text(encoding="utf-8", errors="ignore")
+        original = content
+
+        # ── 1. Extraire et normaliser tous les tags ───────────────────────────
+        tag_re = re.compile(r'[ \t]*<Composition\b[^>]*/>', re.DOTALL)
+        seen: dict[str, str] = {}  # id → clean single-line tag
+
+        for m in tag_re.finditer(content):
+            raw = m.group(0).strip()
+            id_m = re.search(r'id="([^"]+)"', raw)
+            if not id_m:
+                continue
+            comp_id = id_m.group(1)
+            if comp_id in seen:
+                logger.warning("rebuild_jsx_section: doublon ignoré pour %s", comp_id)
+                continue  # garde seulement le premier
+            # Normalise en single-line
+            attrs = re.findall(r'(\w+)=\{([^{}]*)\}|(\w+)="([^"]*)"', raw)
+            parts = []
+            for a1, v1, a2, v2 in attrs:
+                if a1:
+                    parts.append(f'{a1}={{{v1}}}')
+                elif a2:
+                    parts.append(f'{a2}="{v2}"')
+            seen[comp_id] = f'      <Composition {" ".join(parts)} />'
+
+        if not seen:
+            return {"status": "error", "error": "Aucun tag <Composition> trouvé dans Root.tsx"}
+
+        # ── 2. Supprimer TOUS les tags existants ─────────────────────────────
+        content = re.sub(r'\n?[ \t]*<Composition\b[^>]*/>', '', content, flags=re.DOTALL)
+        content = re.sub(r'\n{3,}', '\n\n', content)
+
+        # ── 3. Réinsérer dans l'ordre alphabétique des IDs ───────────────────
+        sorted_tags = [seen[k] for k in sorted(seen.keys())]
+        new_block = '\n'.join(sorted_tags)
+
+        # Cherche la fermeture du composant RemotionRoot
+        close_m = re.search(r'(\n[ \t]*</>|\n[ \t]*</\w*Root>)', content)
+        if close_m:
+            pos = close_m.start()
+            content = content[:pos] + '\n' + new_block + content[pos:]
+        else:
+            content += '\n' + new_block + '\n'
+
+        tsx.write_text(content, encoding="utf-8")
+        logger.info("rebuild_jsx_section: %d compositions réinsérées", len(seen))
+        return {
+            "status": "rebuilt",
+            "count": len(seen),
+            "ids": sorted(seen.keys()),
+            "message": f"Section JSX reconstruite : {len(seen)} compositions",
+        }
+    except Exception as exc:
+        logger.exception("Erreur rebuild_jsx_section")
+        return {"status": "error", "error": str(exc)}
 
 
 def force_render(composition_id: str, project_path: str,

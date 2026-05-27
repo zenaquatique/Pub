@@ -38,7 +38,7 @@ from tools.remotion import (
     update_post_props, create_post_composition, repair_root_tsx,
     delete_composition, list_src_files, read_project_file, scan_register_root,
     normalize_root_tsx, force_render, _clear_all_remotion_caches,
-    list_remotion_compositions,
+    list_remotion_compositions, rebuild_jsx_section,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1183,6 +1183,44 @@ async def api_debug_remotion_compositions():
     result = await loop.run_in_executor(
         _executor, lambda: list_remotion_compositions(VIDEO_ASSETS_PATH)
     )
+    return result
+
+
+@app.get("/api/rebuild-jsx-section")
+async def api_rebuild_jsx_section():
+    """Table rase : extrait tous les <Composition>, déduplique, réinsère proprement avant </>.
+    Fix nucléaire pour 'Multiple composition registered' quand tous les autres fix échouent.
+    """
+    result = rebuild_jsx_section(VIDEO_ASSETS_PATH)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
+@app.get("/api/force-render-v2/{composition_id}")
+async def api_force_render_v2(composition_id: str):
+    """Force render avec rebuild complet de la section JSX.
+
+    Pipeline :
+    1. rebuild_jsx_section (table rase JSX)
+    2. _clear_all_remotion_caches (y compris home user)
+    3. force_render (suppression nucléaire de la compo + re-création + render --bundle-cache=false)
+    """
+    loop = asyncio.get_event_loop()
+
+    def _pipeline():
+        # Étape 1 : reconstruit toute la section JSX
+        rebuild_result = rebuild_jsx_section(VIDEO_ASSETS_PATH)
+        if rebuild_result.get("status") == "error":
+            return rebuild_result
+        # Étape 2 : vide tous les caches (y compris home user)
+        _clear_all_remotion_caches(VIDEO_ASSETS_PATH)
+        # Étape 3 : force render
+        return force_render(composition_id, VIDEO_ASSETS_PATH)
+
+    result = await loop.run_in_executor(_executor, _pipeline)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
     return result
 
 

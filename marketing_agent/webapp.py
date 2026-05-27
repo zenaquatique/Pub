@@ -38,7 +38,7 @@ from tools.remotion import (
     update_post_props, create_post_composition, repair_root_tsx,
     delete_composition, list_src_files, read_project_file, scan_register_root,
     normalize_root_tsx, force_render, _clear_all_remotion_caches,
-    list_remotion_compositions, rebuild_jsx_section,
+    list_remotion_compositions, rebuild_jsx_section, restore_root_tsx_backup,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1188,10 +1188,19 @@ async def api_debug_remotion_compositions():
 
 @app.get("/api/rebuild-jsx-section")
 async def api_rebuild_jsx_section():
-    """Table rase : extrait tous les <Composition>, déduplique, réinsère proprement avant </>.
-    Fix nucléaire pour 'Multiple composition registered' quand tous les autres fix échouent.
+    """Table rase : extrait tous les <Composition>, déduplique, réinsère proprement (replace-span).
+    Sauvegarde Root.tsx.bak avant toute modification.
     """
     result = rebuild_jsx_section(VIDEO_ASSETS_PATH)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
+
+@app.get("/api/restore-root-tsx-backup")
+async def api_restore_root_tsx_backup():
+    """Restaure Root.tsx depuis Root.tsx.bak (créé par rebuild-jsx-section)."""
+    result = restore_root_tsx_backup(VIDEO_ASSETS_PATH)
     if result.get("status") == "error":
         raise HTTPException(500, result["error"])
     return result

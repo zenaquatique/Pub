@@ -785,15 +785,15 @@ def _clear_all_remotion_caches(project_path: str) -> None:
 def rebuild_jsx_section(project_path: str) -> dict:
     """Reconstruit entièrement la section <Composition> du JSX de Root.tsx.
 
-    Stratégie 'table rase' :
-    1. Extrait tous les tags <Composition .../> existants (single ou multi-line).
-    2. Normalise chacun en single-line avec les bons attributs.
+    Stratégie 'replace-span' (v2) :
+    1. Extrait tous les tags <Composition .../> existants.
+    2. Normalise chacun en single-line.
     3. Déduplique par ID (garde le premier trouvé).
-    4. Supprime TOUS les tags de Root.tsx.
-    5. Réinsère tout proprement juste avant la fermeture </> / </RemotionRoot>.
+    4. Repère le span exact du premier au dernier tag dans le fichier.
+    5. Remplace CE SEUL SPAN par les tags rebuiltés en ordre alphabétique.
 
-    Élimine les caractères cachés, les lignes vides parasites et les doublons
-    résiduels que les autres fonctions n'arrivent pas à corriger.
+    N'essaie plus de localiser '</>': évite l'insertion au mauvais endroit.
+    Sauvegarde Root.tsx.bak avant toute modification.
     """
     try:
         tsx = Path(project_path) / "src" / "Root.tsx"
@@ -801,13 +801,20 @@ def rebuild_jsx_section(project_path: str) -> dict:
             return {"status": "error", "error": "Root.tsx introuvable"}
 
         content = tsx.read_text(encoding="utf-8", errors="ignore")
-        original = content
+
+        # ── Backup ────────────────────────────────────────────────────────────
+        bak = tsx.with_suffix(".tsx.bak")
+        bak.write_text(content, encoding="utf-8")
+        logger.info("rebuild_jsx_section: backup → %s", bak)
 
         # ── 1. Extraire et normaliser tous les tags ───────────────────────────
         tag_re = re.compile(r'[ \t]*<Composition\b[^>]*/>', re.DOTALL)
-        seen: dict[str, str] = {}  # id → clean single-line tag
+        all_matches = list(tag_re.finditer(content))
+        if not all_matches:
+            return {"status": "error", "error": "Aucun tag <Composition> trouvé dans Root.tsx"}
 
-        for m in tag_re.finditer(content):
+        seen: dict[str, str] = {}  # id → clean single-line tag (first occurrence)
+        for m in all_matches:
             raw = m.group(0).strip()
             id_m = re.search(r'id="([^"]+)"', raw)
             if not id_m:
@@ -815,7 +822,7 @@ def rebuild_jsx_section(project_path: str) -> dict:
             comp_id = id_m.group(1)
             if comp_id in seen:
                 logger.warning("rebuild_jsx_section: doublon ignoré pour %s", comp_id)
-                continue  # garde seulement le premier
+                continue
             # Normalise en single-line
             attrs = re.findall(r'(\w+)=\{([^{}]*)\}|(\w+)="([^"]*)"', raw)
             parts = []
@@ -827,34 +834,55 @@ def rebuild_jsx_section(project_path: str) -> dict:
             seen[comp_id] = f'      <Composition {" ".join(parts)} />'
 
         if not seen:
-            return {"status": "error", "error": "Aucun tag <Composition> trouvé dans Root.tsx"}
+            return {"status": "error", "error": "Aucun tag avec id trouvé"}
 
-        # ── 2. Supprimer TOUS les tags existants ─────────────────────────────
-        content = re.sub(r'\n?[ \t]*<Composition\b[^>]*/>', '', content, flags=re.DOTALL)
-        content = re.sub(r'\n{3,}', '\n\n', content)
+        # ── 2. Calculer le span du premier au dernier tag ────────────────────
+        # On inclut les whitespace/newlines AVANT le premier tag pour avoir
+        # une insertion propre (on remplace tout le bloc d'un coup).
+        first_m = all_matches[0]
+        last_m  = all_matches[-1]
 
-        # ── 3. Réinsérer dans l'ordre alphabétique des IDs ───────────────────
+        span_start = first_m.start()
+        # Reculer pour inclure le \n précédant le premier tag
+        while span_start > 0 and content[span_start - 1] in ('\n', ' ', '\t'):
+            span_start -= 1
+
+        span_end = last_m.end()
+        # Avancer pour consommer le \n qui suit le dernier tag
+        while span_end < len(content) and content[span_end] == '\n':
+            span_end += 1
+
+        # ── 3. Construire le nouveau bloc et remplacer ───────────────────────
         sorted_tags = [seen[k] for k in sorted(seen.keys())]
-        new_block = '\n'.join(sorted_tags)
+        new_block = '\n' + '\n'.join(sorted_tags) + '\n'
 
-        # Cherche la fermeture du composant RemotionRoot
-        close_m = re.search(r'(\n[ \t]*</>|\n[ \t]*</\w*Root>)', content)
-        if close_m:
-            pos = close_m.start()
-            content = content[:pos] + '\n' + new_block + content[pos:]
-        else:
-            content += '\n' + new_block + '\n'
-
+        content = content[:span_start] + new_block + content[span_end:]
         tsx.write_text(content, encoding="utf-8")
-        logger.info("rebuild_jsx_section: %d compositions réinsérées", len(seen))
+        logger.info("rebuild_jsx_section: %d compositions réinsérées (replace-span)", len(seen))
         return {
             "status": "rebuilt",
             "count": len(seen),
             "ids": sorted(seen.keys()),
-            "message": f"Section JSX reconstruite : {len(seen)} compositions",
+            "backup": str(bak),
+            "message": f"Section JSX reconstruite : {len(seen)} compositions (backup → {bak.name})",
         }
     except Exception as exc:
         logger.exception("Erreur rebuild_jsx_section")
+        return {"status": "error", "error": str(exc)}
+
+
+def restore_root_tsx_backup(project_path: str) -> dict:
+    """Restaure Root.tsx depuis Root.tsx.bak créé par rebuild_jsx_section."""
+    try:
+        tsx = Path(project_path) / "src" / "Root.tsx"
+        bak = tsx.with_suffix(".tsx.bak")
+        if not bak.exists():
+            return {"status": "error", "error": "Aucun backup Root.tsx.bak trouvé"}
+        content = bak.read_text(encoding="utf-8", errors="ignore")
+        tsx.write_text(content, encoding="utf-8")
+        logger.info("restore_root_tsx_backup: Root.tsx restauré depuis %s", bak)
+        return {"status": "restored", "message": f"Root.tsx restauré depuis {bak.name}"}
+    except Exception as exc:
         return {"status": "error", "error": str(exc)}
 
 
@@ -957,8 +985,21 @@ def force_render(composition_id: str, project_path: str,
                        f"Génère d'abord le script pour pouvoir rendre '{composition_id}'.",
         }
 
-    # ── 6. Rendre sans cache bundle ───────────────────────────────────────────
+    # ── 6. Cache-bust via index.ts (force webpack à recompiler depuis zéro) ──
+    # Le cache bundle de Remotion est clé sur le hash de l'entry file (index.ts).
+    # Si index.ts ne change pas, le bundle corrompu reste en cache même après
+    # modification de Root.tsx. Ajouter un commentaire unique force le recompile.
+    import time as _time
     project = Path(project_path)
+    index_ts = project / "src" / "index.ts"
+    index_original: str | None = None
+    if index_ts.exists():
+        index_original = index_ts.read_text(encoding="utf-8", errors="ignore")
+        bust_comment = f"// _cache_bust_{int(_time.time())}_\n"
+        index_ts.write_text(bust_comment + index_original, encoding="utf-8")
+        logger.info("force_render: cache-bust ajouté à index.ts")
+
+    # ── 7. Rendre sans cache bundle ───────────────────────────────────────────
     npx = _find_npx()
     env = os.environ.copy()
     env["PATH"] = os.pathsep.join([
@@ -979,7 +1020,14 @@ def force_render(composition_id: str, project_path: str,
             encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired:
+        if index_original is not None:
+            index_ts.write_text(index_original, encoding="utf-8")
         return {"status": "error", "error": "Timeout rendu >10 min"}
+    finally:
+        # Toujours restaurer index.ts après le rendu
+        if index_original is not None:
+            index_ts.write_text(index_original, encoding="utf-8")
+            logger.info("force_render: index.ts restauré (cache-bust retiré)")
 
     if result.returncode == 0:
         return {
@@ -989,7 +1037,8 @@ def force_render(composition_id: str, project_path: str,
             "message": f"Vidéo rendue → {output_path}",
         }
 
-    error_output = (result.stderr or result.stdout or "")[-3000:]
+    # Capture stdout + stderr pour voir si le bundle est caché ou recompilé
+    error_output = ((result.stderr or "") + (result.stdout or ""))[-4000:]
     logger.error("force_render failed (code %d): %s", result.returncode, error_output)
     return {"status": "error", "error": f"Exit {result.returncode}\n\n{error_output}"}
 

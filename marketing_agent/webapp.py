@@ -38,6 +38,7 @@ from tools.remotion import (
     update_post_props, create_post_composition, repair_root_tsx,
     delete_composition, list_src_files, read_project_file, scan_register_root,
     normalize_root_tsx, force_render, _clear_all_remotion_caches,
+    list_remotion_compositions,
 )
 from tools.shopify import get_products, get_store_analytics
 from tools.social import post_video_to_facebook, post_reels_to_instagram, post_video_to_tiktok
@@ -1171,6 +1172,18 @@ async def api_clear_remotion_cache():
         return {"status": "ok", "message": "Tous les caches Remotion vidés"}
     except Exception as exc:
         raise HTTPException(500, str(exc))
+
+
+@app.get("/api/debug-remotion-compositions")
+async def api_debug_remotion_compositions():
+    """Lance `npx remotion compositions` et retourne la liste brute vue par Remotion.
+    Diagnostic clé : si Multiple composition apparaît ici, le problème est dans le bundle.
+    """
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        _executor, lambda: list_remotion_compositions(VIDEO_ASSETS_PATH)
+    )
+    return result
 
 
 @app.get("/api/force-render/{composition_id}")

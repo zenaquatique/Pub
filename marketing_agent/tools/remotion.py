@@ -613,7 +613,6 @@ def _find_npx() -> str:
     found = shutil.which("npx")
     if found:
         return found
-    # Emplacements Windows courants
     candidates = [
         r"C:\Program Files\nodejs\npx.cmd",
         r"C:\Program Files (x86)\nodejs\npx.cmd",
@@ -623,7 +622,46 @@ def _find_npx() -> str:
     for c in candidates:
         if Path(c).exists():
             return c
-    return "npx"  # fallback — laisse le shell le trouver
+    return "npx"
+
+
+def list_remotion_compositions(project_path: str) -> dict:
+    """Exécute `npx remotion compositions` et retourne ce que Remotion voit réellement.
+
+    C'est le diagnostic ultime : si la commande lève aussi 'Multiple composition',
+    le problème est dans le bundle/webpack, pas dans le rendu.
+    Si elle liste les compositions normalement, le problème est spécifique au rendu.
+    """
+    project = Path(project_path)
+    if not project.exists():
+        return {"status": "error", "error": f"Dossier introuvable : {project_path}"}
+
+    npx = _find_npx()
+    env = os.environ.copy()
+    env["PATH"] = os.pathsep.join([
+        r"C:\Program Files\nodejs",
+        os.path.expandvars(r"%APPDATA%\npm"),
+    ]) + os.pathsep + env.get("PATH", "")
+
+    cmd = f'"{npx}" remotion compositions'
+    logger.info("remotion compositions : %s (cwd=%s)", cmd, project)
+    try:
+        result = subprocess.run(
+            cmd, cwd=str(project), shell=True, env=env,
+            capture_output=True, text=True, timeout=120,
+            encoding="utf-8", errors="replace",
+        )
+        output = (result.stdout or "") + (result.stderr or "")
+        return {
+            "status": "ok" if result.returncode == 0 else "error",
+            "returncode": result.returncode,
+            "output": output,
+            "has_multiple_error": "Multiple composition" in output,
+        }
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "Timeout >2 min"}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 def render_video(composition_id: str, project_path: str, output_filename: str = "") -> dict:

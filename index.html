@@ -205,6 +205,10 @@ input[type=file]:hover{border-color:var(--accent)}
     <div class="note" style="margin-bottom:12px"><strong>Besoin d'une connexion internet</strong> au premier chargement pour lire les fichiers .xlsx (bibliothèque SheetJS). Les fichiers .csv fonctionnent sans connexion.</div>
     <label>Fichier Excel (.xlsx) ou CSV</label>
     <input type="file" id="catalogFile" accept=".xlsx,.xls,.csv" onchange="importCatalog(this)">
+    <div id="sheetSelector" style="display:none;margin-top:14px">
+      <label>Quelle feuille contient tes produits ?</label>
+      <select id="sheetSelect" onchange="loadSheet(this.value)"></select>
+    </div>
     <div id="catalogMapping" style="display:none">
       <p style="font-size:.82rem;color:var(--muted);margin-top:14px;margin-bottom:4px">Associe tes colonnes :</p>
       <div class="cmap">
@@ -282,32 +286,51 @@ function saveSettings(){const s={};Object.keys(DEFS).forEach(k=>{const e=documen
 
 // ── Catalogue Excel ───────────────────────────────────────────────────────────
 let _raw=null;
+let _wb=null;
 
 function importCatalog(input){
   const file=input.files[0];if(!file)return;
   const isCsv=file.name.toLowerCase().endsWith('.csv');
+  document.getElementById('sheetSelector').style.display='none';
+  document.getElementById('catalogMapping').style.display='none';
+  document.getElementById('catalogPreview').innerHTML='';
   const reader=new FileReader();
   reader.onload=e=>{
     try{
-      let headers,rows;
       if(isCsv){
         const lines=e.target.result.split('\n');
-        headers=parseRow(lines[0]).map(h=>h.trim());
-        rows=lines.slice(1).filter(l=>l.trim()).map(parseRow);
+        const headers=parseRow(lines[0]).map(h=>h.trim());
+        const rows=lines.slice(1).filter(l=>l.trim()).map(parseRow);
+        _raw={headers,rows};
+        buildMapping(headers);
+        showRawPreview(headers,rows.slice(0,5));
       }else{
         if(typeof XLSX==='undefined'){alert('SheetJS non chargé. Vérifie ta connexion internet ou utilise un fichier CSV.');return}
-        const wb=XLSX.read(e.target.result,{type:'binary'});
-        const ws=wb.Sheets[wb.SheetNames[0]];
-        const data=XLSX.utils.sheet_to_json(ws,{header:1});
-        headers=data[0].map(h=>String(h||'').trim());
-        rows=data.slice(1).filter(r=>r.some(c=>c!==undefined&&c!==''));
+        _wb=XLSX.read(e.target.result,{type:'binary'});
+        if(_wb.SheetNames.length>1){
+          const sel=document.getElementById('sheetSelect');
+          sel.innerHTML=_wb.SheetNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+          document.getElementById('sheetSelector').style.display='block';
+          loadSheet(_wb.SheetNames[0]);
+        }else{
+          loadSheet(_wb.SheetNames[0]);
+        }
       }
-      _raw={headers,rows};
-      buildMapping(headers);
-      showRawPreview(headers,rows.slice(0,5));
     }catch(err){alert('Erreur : '+err.message)}
   };
   isCsv?reader.readAsText(file,'UTF-8'):reader.readAsBinaryString(file);
+}
+
+function loadSheet(sheetName){
+  if(!_wb)return;
+  const ws=_wb.Sheets[sheetName];
+  const data=XLSX.utils.sheet_to_json(ws,{header:1});
+  if(!data||data.length<2){alert('Feuille vide ou sans données.');return}
+  const headers=data[0].map(h=>String(h||'').trim());
+  const rows=data.slice(1).filter(r=>r.some(c=>c!==undefined&&c!==''));
+  _raw={headers,rows};
+  buildMapping(headers);
+  showRawPreview(headers,rows.slice(0,5));
 }
 
 function buildMapping(h){

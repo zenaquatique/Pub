@@ -229,7 +229,10 @@ input[type=file]:hover{border-color:var(--accent)}
 <div id="tab-tableau" class="tab-content">
   <div class="hrow">
     <h2>Toutes les commandes</h2>
-    <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn btn-danger btn-sm" onclick="clearHistory();renderTableau()">🗑 Tout effacer</button>
+    </div>
   </div>
   <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px">
     <table class="dtable">

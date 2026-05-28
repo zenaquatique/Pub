@@ -326,9 +326,12 @@ function loadSheet(sheetName){
   const ws=_wb.Sheets[sheetName];
   const data=XLSX.utils.sheet_to_json(ws,{header:1});
   if(!data||data.length<2){alert('Feuille vide ou sans données.');return}
-  const headers=data[0].map(h=>String(h||'').trim());
-  const rows=data.slice(1).filter(r=>r.some(c=>c!==undefined&&c!==''));
-  _raw={headers,rows};
+  // Trouver la première ligne non vide → en-têtes réels
+  const headerRowIdx=data.findIndex(r=>r.some(c=>c!==undefined&&String(c).trim()!==''));
+  if(headerRowIdx<0){alert('Aucune donnée trouvée.');return}
+  const headers=data[headerRowIdx].map(h=>String(h||'').trim());
+  const rows=data.slice(headerRowIdx+1).filter(r=>r.some(c=>c!==undefined&&c!==''));
+  _raw={headers,rows,headerRowIdx};
   buildMapping(headers);
   showRawPreview(headers,rows.slice(0,5));
 }
@@ -337,10 +340,10 @@ function buildMapping(h){
   const opts=['— Aucune —',...h].map((n,i)=>`<option value="${i-1}">${n}</option>`).join('');
   ['mapNom','mapPrix','mapMargePct','mapMargeEur'].forEach(id=>document.getElementById(id).innerHTML=opts);
   const auto={
-    mapNom:['nom','name','produit','article','libellé','désignation'],
-    mapPrix:['achat','coût','cout','cost','pa ','prix achat'],
-    mapMargePct:['marge %','marge%','% marge','taux marge','margin %'],
-    mapMargeEur:['marge €','marge eur','margin €','marge montant','marge brute €']
+    mapNom:['produits','nom','name','article','libellé','désignation'],
+    mapPrix:['bouture','achat','coût','cout','cost','prix achat'],
+    mapMargePct:['en %','marge %','marge%','% marge','taux marge','margin %'],
+    mapMargeEur:['marge brut/b','marge brut ','marge €','marge eur','margin €','marge montant']
   };
   Object.entries(auto).forEach(([id,kws])=>{
     const idx=h.findIndex(col=>kws.some(kw=>col.toLowerCase().includes(kw)));
@@ -363,12 +366,15 @@ function confirmCatalog(){
   const gi=id=>parseInt(document.getElementById(id).value);
   const [iN,iP,iMp,iMe]=[gi('mapNom'),gi('mapPrix'),gi('mapMargePct'),gi('mapMargeEur')];
   if(iN<0){alert('Sélectionne la colonne Nom.');return}
+  // Détecter si la marge % est en décimal (ex: 0.43) ou en % (ex: 43)
+  const samplePct=iMp>=0?_raw.rows.filter(r=>r[iMp]!=null&&r[iMp]!=='').map(r=>parseFloat(r[iMp])||0).filter(v=>v>0):[];
+  const isDecimal=samplePct.length>0&&samplePct.every(v=>v<=1.0001);
   const catalog=_raw.rows.map(r=>({
     nom:String(r[iN]||'').trim(),
     prixAchat:iP>=0?parseFloat(r[iP])||0:0,
-    margePct:iMp>=0?parseFloat(r[iMp])||0:0,
+    margePct:iMp>=0?(isDecimal?(parseFloat(r[iMp])||0)*100:(parseFloat(r[iMp])||0)):0,
     margeEur:iMe>=0?parseFloat(r[iMe])||0:0
-  })).filter(p=>p.nom);
+  })).filter(p=>p.nom&&p.nom.toLowerCase()!=='moyenne'&&p.nom.toLowerCase()!=='total');
   localStorage.setItem('zaq_catalog',JSON.stringify(catalog));
   document.getElementById('catalogMapping').style.display='none';
   renderCatalogSaved(catalog);

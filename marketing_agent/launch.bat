@@ -22,8 +22,23 @@ color 0b
 echo.
 echo  ============================================
 echo    ZenAquatique  ^|  Agent Marketing IA
-echo    http://localhost:8000
 echo  ============================================
+echo.
+
+:: ── Tunnel Cloudflare (acces depuis n'importe ou) ────────────────────────
+where cloudflared >nul 2>&1
+if %errorlevel%==0 (
+    echo  Lancement du tunnel Cloudflare...
+    start "Cloudflare Tunnel" cmd /k "cloudflared tunnel --url http://localhost:8000"
+    echo  L'URL publique s'affiche dans la fenetre [Cloudflare Tunnel].
+) else (
+    echo  [!] cloudflared non installe.
+    echo      Pour acceder depuis un autre reseau, installe-le :
+    echo      winget install Cloudflare.cloudflared
+    echo.
+    echo  Acces local uniquement : http://localhost:8000
+)
+
 echo.
 echo  Demarrage du serveur...
 echo.

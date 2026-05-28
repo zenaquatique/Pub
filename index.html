@@ -222,6 +222,12 @@ input[type=file]:hover{border-color:var(--accent)}
     <h2>Fichier CSV Shopify</h2>
     <input type="file" id="shopifyFile" accept=".csv" onchange="importShopify(this)">
   </div>
+  <div class="card" style="margin-top:10px">
+    <h2>Frais de port réels (CSV Mondial Relay)</h2>
+    <p style="font-size:.85rem;color:var(--muted);margin:4px 0 10px">Colonnes attendues : <em>Numéro de commande, Frais de port payés (€)</em> — les valeurs seront pré-remplies automatiquement dans le tableau ci-dessous.</p>
+    <input type="file" id="portFile" accept=".csv" onchange="importPortCSV(this)">
+    <div id="portImportResult" style="margin-top:8px;font-size:.85rem"></div>
+  </div>
   <div id="shopifyResult"></div>
 </div>
 
@@ -623,6 +629,41 @@ function saveOrder(){
   renderHistory();
 }
 
+// ── Import frais de port réels ────────────────────────────────────────────────
+function importPortCSV(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const lines=e.target.result.split('\n');
+      const map={};
+      let count=0;
+      for(let i=1;i<lines.length;i++){
+        const l=lines[i].trim();if(!l)continue;
+        const cols=parseRow(l);
+        const ref=(cols[0]||'').replace(/"/g,'').trim();
+        const port=parseFloat((cols[1]||'').replace(/[^0-9.,-]/g,'').replace(',','.'))||0;
+        if(!ref||!ref.startsWith('#'))continue;
+        map[ref]=port;count++;
+      }
+      localStorage.setItem('zaq_ports',JSON.stringify(map));
+      document.getElementById('portImportResult').innerHTML=
+        `<span style="color:var(--success)">✓ ${count} commandes chargées — les frais de port seront pré-remplis à l'import Shopify.</span>`;
+      // Si commandes déjà affichées, mettre à jour les inputs
+      if(window._shopifyOrders){
+        window._shopifyOrders.forEach((_,i)=>{
+          const ref=window._shopifyOrders[i].ref;
+          const inp=document.getElementById('sport_'+i);
+          if(inp&&map[ref]!==undefined){inp.value=map[ref].toFixed(2);updateShopifyRow(i);}
+        });
+      }
+    }catch(err){
+      document.getElementById('portImportResult').innerHTML=`<span style="color:var(--danger)">Erreur : ${err.message}</span>`;
+    }
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
 // ── Import Shopify CSV ────────────────────────────────────────────────────────
 function parseRow(line){
   const r=[];let c='';let q=false;
@@ -684,17 +725,18 @@ function renderShopifyOrders(orders){
 
   const s=getSettings();
   const existingRefs=new Set(JSON.parse(localStorage.getItem('zaq_orders')||'[]').map(o=>o.ref));
-  const defaultPort=(s.s_carton?10.80:0); // suggestion port
+  const portMap=JSON.parse(localStorage.getItem('zaq_ports')||'{}');
+  const hasPortMap=Object.keys(portMap).length>0;
 
   el.innerHTML=`
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="font-size:.85rem;color:var(--muted)">Port par défaut :</span>
+        ${hasPortMap?`<span style="font-size:.85rem;color:var(--success)">✓ Frais de port réels chargés</span>`:`<span style="font-size:.85rem;color:var(--muted)">Port par défaut :</span>
         <div class="sfx" style="width:100px">
           <input type="number" id="defaultPort" value="10.80" step="0.01" style="padding:7px 22px 7px 8px">
           <span>€</span>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="applyDefaultPort()">→ Appliquer à toutes</button>
+        <button class="btn btn-outline btn-sm" onclick="applyDefaultPort()">→ Appliquer à toutes</button>`}
         <button class="btn btn-primary" onclick="bulkSaveShopifyOrders()">
           ✓ Tout enregistrer (${orders.length} commandes)
         </button>
@@ -708,7 +750,7 @@ function renderShopifyOrders(orders){
             <th style="text-align:left">Date</th>
             <th>CA</th>
             <th style="text-align:left">Produits</th>
-            <th>Port (€)</th>
+            <th>Port réel (€)</th>
             <th>Bénéfice est.</th>
             <th>Marge</th>
             <th></th>
@@ -719,16 +761,18 @@ function renderShopifyOrders(orders){
             const date=o.date?new Date(o.date).toLocaleDateString('fr-FR'):'—';
             const items=o.items.map(it=>`${it.qty}× ${it.name}`).join(' · ');
             const already=existingRefs.has(o.ref);
-            const r=calcOrderBenefit(o,10.80);
+            const portVal=portMap[o.ref]!==undefined?portMap[o.ref]:10.80;
+            const r=calcOrderBenefit(o,portVal);
             const cls=r.benefice<0?'neg':r.marge>=30?'pos':'neu';
+            const portHighlight=portMap[o.ref]!==undefined?'border-color:var(--success)':'';
             return`<tr id="srow_${i}" style="${already?'opacity:.5':''}">
               <td>${o.ref}${already?' <small style="color:var(--warning)">(déjà enreg.)</small>':''}</td>
               <td>${date}</td>
               <td class="pos">+${o.total.toFixed(2)} €</td>
               <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${items||'—'}</td>
               <td>
-                <input type="number" id="sport_${i}" value="10.80" step="0.01" min="0"
-                  style="width:75px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 7px;font-size:.82rem;text-align:right;-moz-appearance:textfield"
+                <input type="number" id="sport_${i}" value="${portVal.toFixed(2)}" step="0.01" min="0"
+                  style="width:75px;background:var(--bg);border:1px solid var(--border);${portHighlight};border-radius:6px;color:var(--text);padding:5px 7px;font-size:.82rem;text-align:right;-moz-appearance:textfield"
                   oninput="updateShopifyRow(${i})">
               </td>
               <td id="sben_${i}" class="${cls}">${r.benefice>=0?'+':''}${r.benefice.toFixed(2)} €</td>

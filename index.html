@@ -261,6 +261,9 @@ input[type=file]:hover{border-color:var(--accent)}
     </div>
     <div id="recapKpis" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
+
+  <div id="comparatifSection" style="margin-top:20px"></div>
+  <div id="recoSection" style="margin-top:16px"></div>
 </div>
 
 <!-- ═══ HISTORIQUE ═══ -->
@@ -859,6 +862,8 @@ function renderTableau(){
     document.getElementById('recapRows').innerHTML='';
     document.getElementById('recapFoot').innerHTML='';
     document.getElementById('recapKpis').innerHTML='';
+    document.getElementById('comparatifSection').innerHTML='';
+    document.getElementById('recoSection').innerHTML='';
     return;
   }
 
@@ -951,6 +956,138 @@ function renderTableau(){
     {l:'Bénéfice / commande',v:(avgCmd>=0?'+':'')+avgCmd.toFixed(2)+' €',c:avgCmd>=0?'pos':'neg'},
     {l:'Nb commandes',v:nb,c:''},
   ].map(k=>`<div class="scard"><div class="sl">${k.l}</div><div class="sv ${k.c}">${k.v}</div></div>`).join('');
+
+  // Comparatif mensuel
+  const now=new Date();
+  const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const curKey=monthKey(now);
+  const lastDate=new Date(now.getFullYear(),now.getMonth()-1,1);
+  const lastKey=monthKey(lastDate);
+  const byMonth={};
+  orders.forEach(o=>{const k=monthKey(new Date(o.date));if(!byMonth[k])byMonth[k]=[];byMonth[k].push(o);});
+  const mstats=ords=>({
+    n:ords.length,
+    ca:ords.reduce((s,o)=>s+o.pv,0),
+    ben:ords.reduce((s,o)=>s+o.benefice,0),
+    mg:ords.length?ords.reduce((s,o)=>s+o.marge,0)/ords.length:0,
+    port:ords.reduce((s,o)=>s+(o.port||0),0),
+    emb:ords.reduce((s,o)=>s+(o.emballage||0),0),
+    prod:ords.reduce((s,o)=>s+(o.coutProduits||0),0),
+    urs:ords.reduce((s,o)=>s+(o.urssaf||0),0),
+  });
+  const cur=mstats(byMonth[curKey]||[]);
+  const last=mstats(byMonth[lastKey]||[]);
+  const monthName=d=>d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const delta=(c,l,unit='%',isPoint=false)=>{
+    if(!l)return'<span style="color:var(--muted)">—</span>';
+    const d=isPoint?(c-l):(c-l)/l*100;
+    const sign=d>=0?'+':'';
+    const cls=d>0?'pos':d<0?'neg':'';
+    const arrow=d>0?' ↑':d<0?' ↓':'';
+    return`<span class="${cls}">${sign}${isPoint?d.toFixed(1)+' pts':d.toFixed(1)+' %'}${arrow}</span>`;
+  };
+  const fmtM=v=>v.toFixed(2)+' €';
+
+  document.getElementById('comparatifSection').innerHTML=`
+    <div class="card">
+      <h2>Comparatif mensuel</h2>
+      <div style="overflow-x:auto">
+        <table class="dtable" style="font-size:.88rem">
+          <thead><tr>
+            <th style="text-align:left">Indicateur</th>
+            <th>${monthName(now)}</th>
+            <th>${monthName(lastDate)}</th>
+            <th>Évolution</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="lb" style="text-align:left">Commandes</td>
+              <td>${cur.n}</td><td>${last.n}</td>
+              <td>${last.n?`<span class="${cur.n>=last.n?'pos':'neg'}">${cur.n>=last.n?'+':''}${cur.n-last.n} (${((cur.n-last.n)/last.n*100).toFixed(0)} %)${cur.n>=last.n?' ↑':' ↓'}</span>`:'—'}</td></tr>
+            <tr><td class="lb" style="text-align:left">CA encaissé</td>
+              <td class="pos">+${fmtM(cur.ca)}</td><td class="pos">+${fmtM(last.ca)}</td>
+              <td>${delta(cur.ca,last.ca)}</td></tr>
+            <tr><td class="lb" style="text-align:left">Bénéfice net</td>
+              <td class="${cur.ben>=0?'pos':'neg'}">${cur.ben>=0?'+':''}${fmtM(cur.ben)}</td>
+              <td class="${last.ben>=0?'pos':'neg'}">${last.ben>=0?'+':''}${fmtM(last.ben)}</td>
+              <td>${delta(cur.ben,last.ben)}</td></tr>
+            <tr><td class="lb" style="text-align:left">Marge moyenne</td>
+              <td class="${cur.mg>=30?'pos':cur.mg>=15?'neu':'neg'}">${cur.mg.toFixed(1)} %</td>
+              <td class="${last.mg>=30?'pos':last.mg>=15?'neu':'neg'}">${last.mg.toFixed(1)} %</td>
+              <td>${delta(cur.mg,last.mg,'pts',true)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // Recommandations
+  const recos=[];
+  const S=getSettings();
+  const hasCur=cur.n>0,hasLast=last.n>0;
+
+  // Tendance CA
+  if(hasCur&&hasLast){
+    const dCA=(cur.ca-last.ca)/last.ca*100;
+    if(dCA>=20)recos.push({ico:'🟢',txt:`Ton CA a bondi de <strong>+${dCA.toFixed(0)} %</strong> ce mois — excellente dynamique.`});
+    else if(dCA>0)recos.push({ico:'🟢',txt:`Ton CA progresse de <strong>+${dCA.toFixed(0)} %</strong> par rapport au mois dernier.`});
+    else if(dCA<-15)recos.push({ico:'🔴',txt:`Ton CA est en baisse de <strong>${dCA.toFixed(0)} %</strong> ce mois. Vérifie ta visibilité ou tes stocks.`});
+    else if(dCA<0)recos.push({ico:'🟡',txt:`Léger recul du CA ce mois (<strong>${dCA.toFixed(0)} %</strong>). À surveiller.`});
+  }
+
+  // Tendance marge
+  if(hasCur&&hasLast){
+    const dMg=cur.mg-last.mg;
+    if(dMg>=5)recos.push({ico:'🟢',txt:`Ta marge a progressé de <strong>+${dMg.toFixed(1)} points</strong> — tes coûts sont mieux maîtrisés.`});
+    else if(dMg<=-5)recos.push({ico:'🔴',txt:`Ta marge a reculé de <strong>${dMg.toFixed(1)} points</strong> — vérifie si tes prix d'achat ont augmenté.`});
+  }
+
+  // Marge globale trop basse
+  if(hasCur&&cur.mg<20)recos.push({ico:'🔴',txt:`Ta marge nette ce mois est de <strong>${cur.mg.toFixed(1)} %</strong> — en dessous de 20 % c'est serré. Revois tes prix de vente ou tes coûts produits.`});
+  else if(hasCur&&cur.mg>=35)recos.push({ico:'🟢',txt:`Excellente marge nette ce mois : <strong>${cur.mg.toFixed(1)} %</strong>. Tu gardes plus d'1 € sur 3 encaissés.`});
+
+  // Poste dominant dans les coûts (sur total)
+  if(hasBreakdown&&totCA>0){
+    const postes=[
+      {n:'Produits',v:totProd},{n:'Port',v:totPort},
+      {n:'Emballage',v:totEmb},{n:'URSSAF',v:totUrs}
+    ].filter(p=>p.v>0).sort((a,b)=>b.v-a.v);
+    if(postes.length){
+      const top=postes[0];
+      const pct=(top.v/totCA*100).toFixed(1);
+      if(top.n==='Port')recos.push({ico:'🟡',txt:`Le <strong>port</strong> est ton 1er poste de coût : <strong>${pct} % du CA</strong>. Négocie tes tarifs transporteur ou ajuste tes seuils de livraison offerte.`});
+      else if(top.n==='Produits')recos.push({ico:'💡',txt:`Les <strong>coûts produits</strong> représentent <strong>${pct} % de ton CA</strong>. Cherche des fournisseurs ou augmente tes volumes pour obtenir de meilleurs prix.`});
+    }
+  }
+
+  // Frais fixes bien absorbés ou non
+  const fixTotal=S.s_hosting+S.s_claude+S.s_banque+S.s_autres;
+  if(fixTotal>0&&totCA>0){
+    const fixPct=fixTotal/totCA*100;
+    if(fixPct<3)recos.push({ico:'🟢',txt:`Tes frais fixes (<strong>${fixTotal.toFixed(0)} €/mois</strong>) ne représentent que <strong>${fixPct.toFixed(1)} %</strong> de ton CA — ils sont parfaitement absorbés.`});
+    else if(fixPct>10)recos.push({ico:'🟡',txt:`Tes frais fixes (<strong>${fixTotal.toFixed(0)} €/mois</strong>) pèsent <strong>${fixPct.toFixed(1)} %</strong> de ton CA. Augmente le volume de commandes pour mieux les diluer.`});
+  }
+
+  // Cadence commandes
+  if(hasCur){
+    const obj=S.s_nbCmd;
+    const resteMois=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate();
+    if(cur.n<obj*0.5&&resteMois<10)recos.push({ico:'🟡',txt:`Tu es à <strong>${cur.n} commandes</strong> ce mois pour un objectif de <strong>${obj}</strong>. Il reste ${resteMois} jours — actionne ta visibilité.`});
+    else if(cur.n>=obj)recos.push({ico:'🟢',txt:`Objectif atteint ! <strong>${cur.n} commandes</strong> ce mois pour un objectif de <strong>${obj}</strong>.`});
+  }
+
+  // URSSAF note
+  if(hasCur&&cur.urs>0)recos.push({ico:'💡',txt:`L'URSSAF te coûte <strong>${cur.urs.toFixed(2)} €</strong> ce mois (${S.s_urssaf} % du CA). C'est incompressible — intègre-la dès la fixation de tes prix.`});
+
+  const icoCls={🟢:'good',🔴:'bad',🟡:'ok',💡:'info'};
+  document.getElementById('recoSection').innerHTML=`
+    <div class="card">
+      <h2>Recommandations</h2>
+      ${!recos.length?'<div class="empty">Enregistre des commandes pour obtenir des recommandations.</div>':
+      recos.map(r=>`
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:1.2rem;flex-shrink:0">${r.ico}</span>
+          <span style="font-size:.88rem;line-height:1.5;color:var(--text)">${r.txt}</span>
+        </div>`).join('')}
+    </div>`;
 }
 
 function exportCSV(){

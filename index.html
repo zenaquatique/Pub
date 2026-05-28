@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bénéfice par commande</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3e;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --danger: #ff6b6b;
+    --success: #51cf66;
+    --warning: #ffd43b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; color: var(--accent2); }
+  header span { font-size: 0.8rem; color: var(--muted); }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 16px 24px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .tab-btn {
+    padding: 8px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all .2s;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  .tab-content { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+  .tab-content.active { display: block; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 16px; }
+
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+  label:first-of-type { margin-top: 0; }
+  input[type="number"], input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: 0.95rem;
+    transition: border-color .2s;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  .suffix-input { position: relative; }
+  .suffix-input input { padding-right: 32px; }
+  .suffix-input span {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.85rem;
+    pointer-events: none;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all .2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #5a52e0; }
+  .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); padding: 6px 14px; font-size: 0.8rem; }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+
+  .result-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-row.total {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 2px solid var(--border);
+    border-bottom: none;
+  }
+  .result-row .label { color: var(--muted); }
+  .result-row .val { font-weight: 600; }
+  .pos { color: var(--success); }
+  .neg { color: var(--danger); }
+  .neu { color: var(--warning); }
+
+  .big-result {
+    text-align: center;
+    padding: 20px;
+    border-radius: 12px;
+    margin-top: 16px;
+  }
+  .big-result.good { background: rgba(81,207,102,.08); border: 1px solid rgba(81,207,102,.3); }
+  .big-result.ok   { background: rgba(255,212,59,.08);  border: 1px solid rgba(255,212,59,.3); }
+  .big-result.bad  { background: rgba(255,107,107,.08); border: 1px solid rgba(255,107,107,.3); }
+  .big-result .amount { font-size: 2.2rem; font-weight: 700; }
+  .big-result .margin { font-size: 0.9rem; color: var(--muted); margin-top: 4px; }
+
+  /* Historique */
+  .history-list { display: flex; flex-direction: column; gap: 12px; }
+  .history-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .history-item .hi-info { flex: 1; }
+  .history-item .hi-ref { font-weight: 600; font-size: 0.95rem; }
+  .history-item .hi-date { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+  .history-item .hi-ca { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+  .history-item .hi-profit { text-align: right; }
+  .history-item .hi-profit .amount { font-size: 1.3rem; font-weight: 700; }
+  .history-item .hi-profit .margin { font-size: 0.78rem; color: var(--muted); }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 0; font-size: 0.9rem; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 600px) { .stats-grid { grid-template-columns: 1fr; } }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .s-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .stat-card .s-val { font-size: 1.5rem; font-weight: 700; margin-top: 6px; }
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .section-title { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 20px 0 10px; }
+
+  .save-btn-row { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+  .saved-badge { display: none; color: var(--success); font-size: 0.85rem; }
+  .saved-badge.show { display: inline; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🐟 Zen Aquatique — Suivi des commandes</h1>
+  <span id="headerDate"></span>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('calc')">Calculer</button>
+  <button class="tab-btn" onclick="showTab('history')">Historique</button>
+  <button class="tab-btn" onclick="showTab('settings')">Paramètres</button>
+</div>
+
+<!-- ===== CALCULER ===== -->
+<div id="tab-calc" class="tab-content active">
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <h2>Commande</h2>
+        <label>Référence / N° commande</label>
+        <input type="text" id="ref" placeholder="ex: CMD-2024-001">
+        <label>Prix payé par le client</label>
+        <div class="suffix-input"><input type="number" id="prixVente" placeholder="0.00" step="0.01" oninput="calc()"><span>€</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Produits</h2>
+        <label>Coût unitaire produit</label>
+        <div class="suffix-input"><input type="number" id="coutProduit" step="0.01" oninput="calc()"><span>€</span></div>
+        <label>Quantité</label>
+        <input type="number" id="qte" min="1" oninput="calc()">
+      </div>
+
+      <div class="card">
+        <h2>Emballage &amp; expédition</h2>
+        <label>Frais de port (payé par toi)</label>
+        <div class="suffix-input"><input type="number" id="port" step="0.01" oninput="calc()"><span>€</span></div>
+        <label>Carton</label>
+        <div class="suffix-input"><input type="number" id="carton" step="0.01" oninput="calc()"><span>€</span></div>
+        <label>Polystyrène</label>
+        <div class="suffix-input"><input type="number" id="polystyrene" step="0.01" oninput="calc()"><span>€</span></div>
+        <label>Poche crevettes</label>
+        <div class="suffix-input"><input type="number" id="poche" step="0.01" oninput="calc()"><span>€</span></div>
+        <label>Étiquette fragile</label>
+        <div class="suffix-input"><input type="number" id="etiqFragile" step="0.01" oninput="calc()"><span>€</span></div>
+        <label>Étiquette expédition</label>
+        <div class="suffix-input"><input type="number" id="etiqExped" step="0.01" oninput="calc()"><span>€</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Résultat</h2>
+        <div id="resultBox">
+          <div class="empty">Remplis les champs pour calculer.</div>
+        </div>
+        <div class="save-btn-row">
+          <button class="btn btn-primary" onclick="saveOrder()">💾 Enregistrer</button>
+          <span class="saved-badge" id="savedBadge">✓ Enregistré !</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HISTORIQUE ===== -->
+<div id="tab-history" class="tab-content">
+  <div class="header-row">
+    <h2 style="font-size:1rem;font-weight:600;">Commandes enregistrées</h2>
+    <button class="btn btn-danger" onclick="clearHistory()">Tout effacer</button>
+  </div>
+  <div class="stats-grid" id="statsGrid"></div>
+  <div class="history-list" id="historyList"></div>
+</div>
+
+<!-- ===== PARAMÈTRES ===== -->
+<div id="tab-settings" class="tab-content">
+  <div class="card">
+    <h2>Frais fixes mensuels</h2>
+    <label>Hébergement web</label>
+    <div class="suffix-input"><input type="number" id="s_hosting" step="0.01" oninput="saveSettings()"><span>€/mois</span></div>
+    <label>Claude Code</label>
+    <div class="suffix-input"><input type="number" id="s_claude" step="0.01" oninput="saveSettings()"><span>€/mois</span></div>
+    <label>Frais de compte bancaire</label>
+    <div class="suffix-input"><input type="number" id="s_banque" step="0.01" oninput="saveSettings()"><span>€/mois</span></div>
+    <label>Autres frais fixes mensuels</label>
+    <div class="suffix-input"><input type="number" id="s_autres" step="0.01" oninput="saveSettings()"><span>€/mois</span></div>
+    <label>Nombre de commandes/mois (pour répartition)</label>
+    <input type="number" id="s_nbCmd" min="1" oninput="saveSettings()">
+  </div>
+
+  <div class="card">
+    <h2>Frais variables (appliqués à chaque commande)</h2>
+    <label>Taux URSSAF</label>
+    <div class="suffix-input"><input type="number" id="s_urssaf" step="0.1" oninput="saveSettings()"><span>%</span></div>
+    <label>Frais fixe carte par transaction</label>
+    <div class="suffix-input"><input type="number" id="s_carteFix" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Frais carte % de la transaction</label>
+    <div class="suffix-input"><input type="number" id="s_cartePct" step="0.01" oninput="saveSettings()"><span>%</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Valeurs par défaut emballage</h2>
+    <label>Carton</label>
+    <div class="suffix-input"><input type="number" id="s_carton" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Polystyrène</label>
+    <div class="suffix-input"><input type="number" id="s_polystyrene" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Poche crevettes</label>
+    <div class="suffix-input"><input type="number" id="s_poche" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Étiquette fragile</label>
+    <div class="suffix-input"><input type="number" id="s_etiqFragile" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Étiquette expédition</label>
+    <div class="suffix-input"><input type="number" id="s_etiqExped" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Coût produit par défaut</label>
+    <div class="suffix-input"><input type="number" id="s_coutProduit" step="0.01" oninput="saveSettings()"><span>€</span></div>
+    <label>Quantité par défaut</label>
+    <input type="number" id="s_qte" min="1" oninput="saveSettings()">
+  </div>
+
+  <p style="font-size:0.8rem;color:var(--muted);margin-top:8px;">Les paramètres sont sauvegardés automatiquement dans ce navigateur.</p>
+</div>
+
+<script>
+// ─── Paramètres par défaut ───
+const DEFAULTS = {
+  s_hosting: 80, s_claude: 20, s_banque: 16.90, s_autres: 0, s_nbCmd: 45,
+  s_urssaf: 12.6, s_carteFix: 1.50, s_cartePct: 0,
+  s_carton: 1.50, s_polystyrene: 1.00, s_poche: 0.10,
+  s_etiqFragile: 0.05, s_etiqExped: 0.10, s_coutProduit: 1.55, s_qte: 20
+};
+
+function loadSettings() {
+  const saved = JSON.parse(localStorage.getItem('zaq_settings') || '{}');
+  const s = { ...DEFAULTS, ...saved };
+  Object.keys(DEFAULTS).forEach(k => {
+    const el = document.getElementById(k);
+    if (el) el.value = s[k];
+  });
+  return s;
+}
+
+function saveSettings() {
+  const s = {};
+  Object.keys(DEFAULTS).forEach(k => {
+    const el = document.getElementById(k);
+    if (el) s[k] = parseFloat(el.value) || 0;
+  });
+  localStorage.setItem('zaq_settings', JSON.stringify(s));
+  calc();
+}
+
+function getSettings() {
+  const saved = JSON.parse(localStorage.getItem('zaq_settings') || '{}');
+  return { ...DEFAULTS, ...saved };
+}
+
+// ─── Remplir les valeurs par défaut dans le formulaire ───
+function applyDefaults() {
+  const s = getSettings();
+  const set = (id, val) => { const el = document.getElementById(id); if (el && !el.value) el.value = val; };
+  set('coutProduit', s.s_coutProduit);
+  set('qte', s.s_qte);
+  set('carton', s.s_carton);
+  set('polystyrene', s.s_polystyrene);
+  set('poche', s.s_poche);
+  set('etiqFragile', s.s_etiqFragile);
+  set('etiqExped', s.s_etiqExped);
+}
+
+// ─── Calcul ───
+function v(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+function calc() {
+  const s = getSettings();
+  const pv = v('prixVente');
+  if (!pv) { document.getElementById('resultBox').innerHTML = '<div class="empty">Remplis les champs pour calculer.</div>'; return; }
+
+  const produits     = v('coutProduit') * (v('qte') || 1);
+  const port         = v('port');
+  const emballage    = v('carton') + v('polystyrene') + v('poche') + v('etiqFragile') + v('etiqExped');
+  const urssaf       = pv * s.s_urssaf / 100;
+  const carte        = s.s_carteFix + pv * s.s_cartePct / 100;
+  const fixTotal     = s.s_hosting + s.s_claude + s.s_banque + s.s_autres;
+  const fixParCmd    = fixTotal / (s.s_nbCmd || 1);
+
+  const totalCouts   = produits + port + emballage + urssaf + carte + fixParCmd;
+  const benefice     = pv - totalCouts;
+  const marge        = (benefice / pv * 100);
+
+  let cls = benefice >= 0 ? (marge >= 30 ? 'good' : 'ok') : 'bad';
+  let emoji = benefice >= 0 ? (marge >= 30 ? '🟢' : '🟡') : '🔴';
+
+  document.getElementById('resultBox').innerHTML = `
+    <div class="result-box">
+      <div class="result-row"><span class="label">Prix de vente</span><span class="val pos">+${fmt(pv)}</span></div>
+      <div class="result-row"><span class="label">Produits (${v('qte')||1} × ${fmt(v('coutProduit'))})</span><span class="val neg">-${fmt(produits)}</span></div>
+      ${port ? `<div class="result-row"><span class="label">Frais de port</span><span class="val neg">-${fmt(port)}</span></div>` : ''}
+      ${emballage ? `<div class="result-row"><span class="label">Emballage</span><span class="val neg">-${fmt(emballage)}</span></div>` : ''}
+      <div class="result-row"><span class="label">URSSAF (${s.s_urssaf}%)</span><span class="val neg">-${fmt(urssaf)}</span></div>
+      <div class="result-row"><span class="label">Frais carte</span><span class="val neg">-${fmt(carte)}</span></div>
+      <div class="result-row"><span class="label">Frais fixes (÷${s.s_nbCmd} cmd)</span><span class="val neg">-${fmt(fixParCmd)}</span></div>
+      <div class="result-row total"><span class="label">Total coûts</span><span class="val neg">${fmt(totalCouts)}</span></div>
+    </div>
+    <div class="big-result ${cls}">
+      <div class="amount ${benefice >= 0 ? 'pos' : 'neg'}">${benefice >= 0 ? '+' : ''}${fmt(benefice)}</div>
+      <div class="margin">${emoji} Marge nette : ${marge.toFixed(1)} %</div>
+    </div>
+  `;
+}
+
+function fmt(n) { return (Math.round(n*100)/100).toFixed(2) + ' €'; }
+
+// ─── Sauvegarde ───
+function saveOrder() {
+  const ref  = document.getElementById('ref').value.trim() || ('CMD-' + Date.now());
+  const pv   = v('prixVente');
+  if (!pv) { alert('Entre au moins le prix de vente.'); return; }
+
+  const s = getSettings();
+  const produits  = v('coutProduit') * (v('qte') || 1);
+  const port      = v('port');
+  const emballage = v('carton') + v('polystyrene') + v('poche') + v('etiqFragile') + v('etiqExped');
+  const urssaf    = pv * s.s_urssaf / 100;
+  const carte     = s.s_carteFix + pv * s.s_cartePct / 100;
+  const fixParCmd = (s.s_hosting + s.s_claude + s.s_banque + s.s_autres) / (s.s_nbCmd || 1);
+  const totalCouts = produits + port + emballage + urssaf + carte + fixParCmd;
+  const benefice  = pv - totalCouts;
+  const marge     = benefice / pv * 100;
+
+  const orders = JSON.parse(localStorage.getItem('zaq_orders') || '[]');
+  orders.unshift({ ref, date: new Date().toISOString(), pv, totalCouts, benefice, marge });
+  localStorage.setItem('zaq_orders', JSON.stringify(orders));
+
+  const badge = document.getElementById('savedBadge');
+  badge.classList.add('show');
+  setTimeout(() => badge.classList.remove('show'), 2500);
+  renderHistory();
+}
+
+// ─── Historique ───
+function renderHistory() {
+  const orders = JSON.parse(localStorage.getItem('zaq_orders') || '[]');
+  const list = document.getElementById('historyList');
+  const grid = document.getElementById('statsGrid');
+
+  if (!orders.length) {
+    list.innerHTML = '<div class="empty">Aucune commande enregistrée.</div>';
+    grid.innerHTML = '';
+    return;
+  }
+
+  const totalBenef = orders.reduce((a,o) => a + o.benefice, 0);
+  const totalCA    = orders.reduce((a,o) => a + o.pv, 0);
+  const avgMarge   = orders.reduce((a,o) => a + o.marge, 0) / orders.length;
+
+  grid.innerHTML = `
+    <div class="stat-card"><div class="s-label">Commandes</div><div class="s-val">${orders.length}</div></div>
+    <div class="stat-card"><div class="s-label">Bénéfice total</div><div class="s-val ${totalBenef>=0?'pos':'neg'}">${totalBenef>=0?'+':''}${(Math.round(totalBenef*100)/100).toFixed(2)} €</div></div>
+    <div class="stat-card"><div class="s-label">Marge moy.</div><div class="s-val ${avgMarge>=30?'pos':avgMarge>=15?'neu':'neg'}">${avgMarge.toFixed(1)} %</div></div>
+  `;
+
+  list.innerHTML = orders.map((o, i) => {
+    const d = new Date(o.date);
+    const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+    const cls = o.benefice >= 0 ? (o.marge >= 30 ? 'pos' : 'neu') : 'neg';
+    return `
+      <div class="history-item">
+        <div class="hi-info">
+          <div class="hi-ref">${o.ref}</div>
+          <div class="hi-date">${dateStr}</div>
+          <div class="hi-ca">CA : ${o.pv.toFixed(2)} € — Coûts : ${o.totalCouts.toFixed(2)} €</div>
+        </div>
+        <div class="hi-profit">
+          <div class="amount ${cls}">${o.benefice>=0?'+':''}${o.benefice.toFixed(2)} €</div>
+          <div class="margin">${o.marge.toFixed(1)} %</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${i})">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function deleteOrder(i) {
+  const orders = JSON.parse(localStorage.getItem('zaq_orders') || '[]');
+  orders.splice(i, 1);
+  localStorage.setItem('zaq_orders', JSON.stringify(orders));
+  renderHistory();
+}
+
+function clearHistory() {
+  if (confirm('Effacer tout l\'historique ?')) {
+    localStorage.removeItem('zaq_orders');
+    renderHistory();
+  }
+}
+
+// ─── Tabs ───
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'history') renderHistory();
+}
+
+// ─── Init ───
+document.getElementById('headerDate').textContent = new Date().toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+loadSettings();
+applyDefaults();
+calc();
+renderHistory();
+</script>
+</body>
+</html>

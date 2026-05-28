@@ -117,6 +117,25 @@ input[type=file]:hover{border-color:var(--accent)}
 .saved-msg{color:var(--success);font-size:.82rem;display:none}
 .cmap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 @media(max-width:560px){.cmap{grid-template-columns:1fr}}
+
+/* Tableau de bord */
+.dtable{width:100%;border-collapse:collapse;font-size:.82rem;white-space:nowrap}
+.dtable th{background:var(--card);color:var(--muted);text-align:right;padding:8px 10px;border-bottom:2px solid var(--border);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+.dtable th:first-child,.dtable th:nth-child(2){text-align:left}
+.dtable td{padding:7px 10px;border-bottom:1px solid rgba(42,45,62,.4);text-align:right;color:var(--text)}
+.dtable td:first-child,.dtable td:nth-child(2){text-align:left}
+.dtable tbody tr:hover td{background:rgba(255,255,255,.025)}
+.dtable tfoot td{font-weight:700;background:rgba(108,99,255,.08);border-top:2px solid var(--accent);padding:9px 10px}
+.dtable .dash{color:var(--muted)}
+.recap-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+@media(max-width:640px){.recap-grid{grid-template-columns:1fr}}
+.recap-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.recap-table td{padding:9px 12px;border-bottom:1px solid var(--border)}
+.recap-table tr:last-child td{border-bottom:none}
+.recap-table .rt-label{color:var(--muted)}
+.recap-table .rt-val{text-align:right;font-weight:600;font-family:monospace}
+.recap-table .rt-pct{text-align:right;color:var(--muted);font-size:.82rem;width:70px}
+.recap-table tfoot td{font-weight:700;font-size:.95rem;border-top:2px solid var(--border);padding-top:12px}
 </style>
 </head>
 <body>
@@ -129,6 +148,7 @@ input[type=file]:hover{border-color:var(--accent)}
 <div class="tabs">
   <button class="tab-btn active" data-tab="calc" onclick="showTab(this)">Calculer</button>
   <button class="tab-btn" data-tab="shopify" onclick="showTab(this)">Import Shopify</button>
+  <button class="tab-btn" data-tab="tableau" onclick="showTab(this)">Tableau de bord</button>
   <button class="tab-btn" data-tab="history" onclick="showTab(this)">Historique</button>
   <button class="tab-btn" data-tab="settings" onclick="showTab(this)">Paramètres</button>
 </div>
@@ -203,6 +223,41 @@ input[type=file]:hover{border-color:var(--accent)}
     <input type="file" id="shopifyFile" accept=".csv" onchange="importShopify(this)">
   </div>
   <div id="shopifyResult"></div>
+</div>
+
+<!-- ═══ TABLEAU DE BORD ═══ -->
+<div id="tab-tableau" class="tab-content">
+  <div class="hrow">
+    <h2>Toutes les commandes</h2>
+    <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+  </div>
+  <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px">
+    <table class="dtable">
+      <thead>
+        <tr>
+          <th>Commande</th><th>Date</th>
+          <th>CA</th><th>Produits</th><th>Port</th>
+          <th>Emballage</th><th>URSSAF</th><th>Carte</th>
+          <th>Frais fixes</th><th>Bénéfice</th><th>Marge</th>
+        </tr>
+      </thead>
+      <tbody id="tableauBody"></tbody>
+      <tfoot id="tableauFoot"></tfoot>
+    </table>
+  </div>
+
+  <div class="recap-grid">
+    <div class="card" style="margin-bottom:0">
+      <h2>Récapitulatif par poste</h2>
+      <div style="overflow-x:auto">
+        <table class="recap-table">
+          <tbody id="recapRows"></tbody>
+          <tfoot id="recapFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+    <div id="recapKpis" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
 </div>
 
 <!-- ═══ HISTORIQUE ═══ -->
@@ -542,17 +597,19 @@ function saveOrder(){
   const pv=fv('prixVente');if(!pv){alert('Entre au moins le prix de vente.');return}
   const s=getSettings();
   const lines=getProductLines();
-  const prodTotal=lines.reduce((sum,l)=>sum+l.qte*l.cout,0);
+  const coutProduits=lines.reduce((sum,l)=>sum+l.qte*l.cout,0);
   const port=fv('port');
-  const emb=fv('carton')+fv('polystyrene')+fv('poche')+fv('etiqFragile')+fv('etiqExped');
+  const emballage=fv('carton')+fv('polystyrene')+fv('poche')+fv('etiqFragile')+fv('etiqExped');
   const urssaf=pv*s.s_urssaf/100;
   const carte=s.s_carteFix+pv*s.s_cartePct/100;
-  const fix=(s.s_hosting+s.s_claude+s.s_banque+s.s_autres)/(s.s_nbCmd||1);
-  const tot=prodTotal+port+emb+urssaf+carte+fix;
-  const ben=pv-tot;
+  const fixParCmd=(s.s_hosting+s.s_claude+s.s_banque+s.s_autres)/(s.s_nbCmd||1);
+  const totalCouts=coutProduits+port+emballage+urssaf+carte+fixParCmd;
+  const benefice=pv-totalCouts;
   const ref=document.getElementById('ref').value.trim()||'CMD-'+Date.now();
   const orders=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
-  orders.unshift({ref,date:new Date().toISOString(),pv,totalCouts:tot,benefice:ben,marge:ben/pv*100,
+  orders.unshift({ref,date:new Date().toISOString(),
+    pv,coutProduits,port,emballage,urssaf,carte,fixParCmd,
+    totalCouts,benefice,marge:benefice/pv*100,
     produits:lines.map(l=>l.nom).join(', ')});
   localStorage.setItem('zaq_orders',JSON.stringify(orders));
   const msg=document.getElementById('savedMsg');
@@ -681,6 +738,135 @@ function renderHistory(){
 function deleteOrder(i){const o=JSON.parse(localStorage.getItem('zaq_orders')||'[]');o.splice(i,1);localStorage.setItem('zaq_orders',JSON.stringify(o));renderHistory()}
 function clearHistory(){if(confirm('Effacer tout l\'historique ?')){localStorage.removeItem('zaq_orders');renderHistory()}}
 
+// ── Tableau de bord ───────────────────────────────────────────────────────────
+function renderTableau(){
+  const orders=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
+  const body=document.getElementById('tableauBody');
+  const foot=document.getElementById('tableauFoot');
+  if(!orders.length){
+    body.innerHTML='<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Aucune commande enregistrée.</td></tr>';
+    foot.innerHTML='';
+    document.getElementById('recapRows').innerHTML='';
+    document.getElementById('recapFoot').innerHTML='';
+    document.getElementById('recapKpis').innerHTML='';
+    return;
+  }
+
+  const m=n=>n!=null?n.toFixed(2)+' €':'<span class="dash">—</span>';
+  const cls=o=>o.benefice<0?'neg':o.marge>=30?'pos':'neu';
+
+  body.innerHTML=orders.map(o=>{
+    const date=new Date(o.date).toLocaleDateString('fr-FR');
+    const hb=o.coutProduits!=null; // has full breakdown
+    return`<tr>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${o.ref}</td>
+      <td>${date}</td>
+      <td class="pos">+${o.pv.toFixed(2)} €</td>
+      <td class="neg">${hb?'-'+m(o.coutProduits):'<span class="dash">—</span>'}</td>
+      <td class="neg">${hb?'-'+m(o.port):'<span class="dash">—</span>'}</td>
+      <td class="neg">${hb?'-'+m(o.emballage):'<span class="dash">—</span>'}</td>
+      <td class="neg">${hb?'-'+m(o.urssaf):'<span class="dash">—</span>'}</td>
+      <td class="neg">${hb?'-'+m(o.carte):'<span class="dash">—</span>'}</td>
+      <td class="neg">${hb?'-'+m(o.fixParCmd):'<span class="dash">—</span>'}</td>
+      <td class="${cls(o)}">${o.benefice>=0?'+':''}${o.benefice.toFixed(2)} €</td>
+      <td class="${cls(o)}">${o.marge.toFixed(1)} %</td>
+    </tr>`;
+  }).join('');
+
+  // Totaux
+  const sum=k=>orders.reduce((s,o)=>s+(o[k]??0),0);
+  const totCA=sum('pv');
+  const totProd=sum('coutProduits');
+  const totPort=sum('port');
+  const totEmb=sum('emballage');
+  const totUrs=sum('urssaf');
+  const totCarte=sum('carte');
+  const totFix=sum('fixParCmd');
+  const totBen=sum('benefice');
+  const totMg=totCA>0?totBen/totCA*100:0;
+  const hasBreakdown=orders.some(o=>o.coutProduits!=null);
+  const nb=orders.length;
+
+  foot.innerHTML=`<tr>
+    <td colspan="2">TOTAL (${nb} cmd)</td>
+    <td class="pos">+${totCA.toFixed(2)} €</td>
+    <td class="neg">${hasBreakdown?'-'+totProd.toFixed(2)+' €':'—'}</td>
+    <td class="neg">${hasBreakdown?'-'+totPort.toFixed(2)+' €':'—'}</td>
+    <td class="neg">${hasBreakdown?'-'+totEmb.toFixed(2)+' €':'—'}</td>
+    <td class="neg">${hasBreakdown?'-'+totUrs.toFixed(2)+' €':'—'}</td>
+    <td class="neg">${hasBreakdown?'-'+totCarte.toFixed(2)+' €':'—'}</td>
+    <td class="neg">${hasBreakdown?'-'+totFix.toFixed(2)+' €':'—'}</td>
+    <td class="${totBen>=0?'pos':'neg'}">${totBen>=0?'+':''}${totBen.toFixed(2)} €</td>
+    <td class="${totMg>=30?'pos':totMg>=15?'neu':'neg'}">${totMg.toFixed(1)} %</td>
+  </tr>`;
+
+  // Récapitulatif par poste
+  const pct=v=>totCA>0?'('+((v/totCA)*100).toFixed(1)+' %)':'';
+  const postes=hasBreakdown?[
+    {label:'Coût produits',    v:totProd},
+    {label:'Frais de port',    v:totPort},
+    {label:'Emballage',        v:totEmb},
+    {label:`URSSAF (${getSettings().s_urssaf}%)`, v:totUrs},
+    {label:'Frais carte',      v:totCarte},
+    {label:'Frais fixes répartis', v:totFix},
+  ]:[];
+  const totCouts=postes.reduce((s,p)=>s+p.v,0);
+
+  document.getElementById('recapRows').innerHTML=postes.map(p=>`<tr>
+    <td class="rt-label">${p.label}</td>
+    <td class="rt-val neg">-${p.v.toFixed(2)} €</td>
+    <td class="rt-pct">${pct(p.v)}</td>
+  </tr>`).join('')+(hasBreakdown?`<tr>
+    <td class="rt-label" style="color:var(--text)">Total dépenses</td>
+    <td class="rt-val neg">-${totCouts.toFixed(2)} €</td>
+    <td class="rt-pct">${pct(totCouts)}</td>
+  </tr>`:'<tr><td colspan="3" style="color:var(--muted);font-size:.8rem;padding:12px">Enregistre de nouvelles commandes pour voir le détail par poste.</td></tr>');
+
+  document.getElementById('recapFoot').innerHTML=`<tr>
+    <td class="rt-label" style="color:var(--text)">CA total encaissé</td>
+    <td class="rt-val pos">+${totCA.toFixed(2)} €</td><td></td>
+  </tr><tr>
+    <td class="rt-label" style="color:var(--text);font-size:1rem;font-weight:700">BÉNÉFICE NET</td>
+    <td class="rt-val ${totBen>=0?'pos':'neg'}" style="font-size:1rem">${totBen>=0?'+':''}${totBen.toFixed(2)} €</td>
+    <td class="rt-pct ${totBen>=0?'pos':'neg'}" style="font-size:.88rem">${pct(Math.abs(totBen))}</td>
+  </tr>`;
+
+  // KPI cards
+  const avgCmd=nb>0?totBen/nb:0;
+  const avgMg=orders.reduce((s,o)=>s+o.marge,0)/nb;
+  document.getElementById('recapKpis').innerHTML=[
+    {l:'CA total',v:'+'+totCA.toFixed(2)+' €',c:'pos'},
+    {l:'Bénéfice total',v:(totBen>=0?'+':'')+totBen.toFixed(2)+' €',c:totBen>=0?'pos':'neg'},
+    {l:'Marge moyenne',v:avgMg.toFixed(1)+' %',c:avgMg>=30?'pos':avgMg>=15?'neu':'neg'},
+    {l:'Bénéfice / commande',v:(avgCmd>=0?'+':'')+avgCmd.toFixed(2)+' €',c:avgCmd>=0?'pos':'neg'},
+    {l:'Nb commandes',v:nb,c:''},
+  ].map(k=>`<div class="scard"><div class="sl">${k.l}</div><div class="sv ${k.c}">${k.v}</div></div>`).join('');
+}
+
+function exportCSV(){
+  const orders=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
+  if(!orders.length){alert('Aucune commande à exporter.');return}
+  const cols=['Commande','Date','CA','Produits','Port','Emballage','URSSAF','Carte','Frais fixes','Bénéfice','Marge %'];
+  const rows=orders.map(o=>[
+    o.ref,
+    new Date(o.date).toLocaleDateString('fr-FR'),
+    o.pv.toFixed(2),
+    o.coutProduits!=null?(-o.coutProduits).toFixed(2):'',
+    o.port!=null?(-o.port).toFixed(2):'',
+    o.emballage!=null?(-o.emballage).toFixed(2):'',
+    o.urssaf!=null?(-o.urssaf).toFixed(2):'',
+    o.carte!=null?(-o.carte).toFixed(2):'',
+    o.fixParCmd!=null?(-o.fixParCmd).toFixed(2):'',
+    o.benefice.toFixed(2),
+    o.marge.toFixed(2)
+  ].map(v=>`"${v}"`).join(','));
+  const csv=[cols.join(','),...rows].join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download='commandes_zenaquatique_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 function showTab(btn){
   showTabById(btn.dataset.tab);
@@ -691,6 +877,7 @@ function showTabById(name){
   document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   if(name==='history')renderHistory();
+  if(name==='tableau')renderTableau();
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

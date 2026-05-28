@@ -639,7 +639,7 @@ function importShopify(input){
       const headers=parseRow(lines[0]).map(h=>h.replace(/"/g,'').trim());
       const col=kw=>headers.findIndex(h=>h.toLowerCase().includes(kw.toLowerCase()));
       const iName=Math.max(col('Name'),col('Nom'));
-      const iTotal=Math.max(col('Total'),col('Montant'));
+      const iTotal=headers.findIndex(h=>{const l=h.toLowerCase().trim();return l==='total'||l==='total price'||l==='montant total'||l==='montant';});
       const iPaid=Math.max(col('Paid at'),col('Payé le'));
       const iIN=Math.max(col('Lineitem name'),col('Nom article'),col('Article'));
       const iIQ=Math.max(col('Lineitem quantity'),col('Quantité article'),col('Qté article'));

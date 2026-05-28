@@ -645,7 +645,7 @@ function importShopify(input){
       const iIQ=Math.max(col('Lineitem quantity'),col('Quantité article'),col('Qté article'));
       const iIP=Math.max(col('Lineitem price'),col('Prix article'));
       if(iName<0){
-        document.getElementById('shopifyResult').innerHTML='<div class="card"><div class="empty">Format non reconnu — exporte bien en <strong>CSV standard</strong> depuis Shopify.</div></div>';
+        document.getElementById('shopifyResult').innerHTML=`<div class="card"><div class="empty">Format non reconnu — colonne "Name"/"Nom" introuvable.<br><small>Colonnes détectées : ${headers.slice(0,10).join(' | ')}</small></div></div>`;
         return;
       }
       const map={};

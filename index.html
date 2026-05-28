@@ -1077,7 +1077,6 @@ function renderTableau(){
   // URSSAF note
   if(hasCur&&cur.urs>0)recos.push({ico:'💡',txt:`L'URSSAF te coûte <strong>${cur.urs.toFixed(2)} €</strong> ce mois (${S.s_urssaf} % du CA). C'est incompressible — intègre-la dès la fixation de tes prix.`});
 
-  const icoCls={🟢:'good',🔴:'bad',🟡:'ok',💡:'info'};
   document.getElementById('recoSection').innerHTML=`
     <div class="card">
       <h2>Recommandations</h2>

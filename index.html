@@ -6,33 +6,22 @@
 <title>Zen Aquatique — Commandes</title>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-:root {
-  --bg:#0f1117; --card:#1a1d27; --border:#2a2d3e;
-  --accent:#6c63ff; --accent2:#00d4aa;
-  --text:#e2e8f0; --muted:#8892a4;
-  --danger:#ff6b6b; --success:#51cf66; --warning:#ffd43b;
-}
+:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3e;--accent:#6c63ff;--accent2:#00d4aa;--text:#e2e8f0;--muted:#8892a4;--danger:#ff6b6b;--success:#51cf66;--warning:#ffd43b}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
-
 header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
 header h1{font-size:1rem;font-weight:600;color:var(--accent2)}
 header span{font-size:.8rem;color:var(--muted)}
-
 .tabs{display:flex;gap:2px;padding:14px 24px 0;border-bottom:1px solid var(--border);background:var(--bg);overflow-x:auto;position:sticky;top:49px;z-index:9}
 .tab-btn{padding:8px 18px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:.88rem;white-space:nowrap;transition:all .2s}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .tab-btn:hover:not(.active){color:var(--text)}
-
 .tab-content{display:none;padding:24px;max-width:960px;margin:0 auto}
 .tab-content.active{display:block}
-
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:680px){.grid2{grid-template-columns:1fr}}
-
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px}
 .card h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px}
-
 label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px;margin-top:12px}
 label:first-of-type{margin-top:0}
 input[type=number],input[type=text],select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 11px;font-size:.9rem;transition:border-color .2s;-moz-appearance:textfield}
@@ -41,39 +30,57 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 select option{background:var(--card)}
 input[type=file]{width:100%;background:var(--bg);border:1px dashed var(--border);border-radius:8px;color:var(--muted);padding:10px;font-size:.85rem;cursor:pointer}
 input[type=file]:hover{border-color:var(--accent)}
-
 .sfx{position:relative}
-.sfx input{padding-right:34px}
-.sfx span{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem;pointer-events:none}
-
+.sfx input{padding-right:24px}
+.sfx span{position:absolute;right:7px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.78rem;pointer-events:none}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:8px;border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:all .2s}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#5a52e0}
 .btn-success{background:var(--success);color:#000}.btn-success:hover{filter:brightness(1.1)}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
 .btn-danger{background:transparent;border:1px solid var(--danger);color:var(--danger)}.btn-danger:hover{background:var(--danger);color:#fff}
+.btn-ghost{background:transparent;border:none;color:var(--muted);padding:5px 8px;font-size:.82rem;cursor:pointer}.btn-ghost:hover{color:var(--text)}
 .btn-sm{padding:5px 12px;font-size:.78rem}
 
+/* Lignes de produits */
+.pl-header{display:flex;gap:6px;margin-bottom:4px;padding:0 2px}
+.pl-header span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pl-header .ph-cat{flex:1;min-width:0}
+.pl-header .ph-qte{width:54px;flex-shrink:0;text-align:center}
+.pl-header .ph-prix{width:88px;flex-shrink:0;text-align:right}
+.pl-header .ph-del{width:28px;flex-shrink:0}
+.pline{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.pline select{flex:1;min-width:0;font-size:.82rem;padding:7px 8px}
+.pline .pl-qte{width:54px;flex-shrink:0;text-align:center;padding:7px 6px}
+.pline .pl-prix-w{width:88px;flex-shrink:0;position:relative}
+.pline .pl-prix-w input{padding-right:20px;padding:7px 20px 7px 8px}
+.pline .pl-prix-w span{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:.75rem;color:var(--muted);pointer-events:none}
+.pline .pl-del{width:28px;flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0;line-height:1;transition:color .2s}
+.pline .pl-del:hover{color:var(--danger)}
+.add-line-btn{display:flex;align-items:center;gap:6px;background:none;border:1px dashed var(--border);border-radius:8px;color:var(--muted);padding:7px 12px;font-size:.82rem;cursor:pointer;width:100%;justify-content:center;transition:all .2s;margin-top:4px}
+.add-line-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Résultats */
 .rbox{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px}
 .rrow{display:flex;justify-content:space-between;padding:5px 0;font-size:.87rem;border-bottom:1px solid var(--border)}
 .rrow:last-child{border-bottom:none}
 .rrow.tot{font-weight:700;font-size:.95rem;margin-top:4px;padding-top:8px;border-top:2px solid var(--border);border-bottom:none}
-.rrow .lb{color:var(--muted)}
-
+.rrow .lb{color:var(--muted);flex:1;padding-right:8px}
 .big{text-align:center;padding:18px;border-radius:12px;margin-top:12px}
 .big.good{background:rgba(81,207,102,.08);border:1px solid rgba(81,207,102,.3)}
 .big.ok{background:rgba(255,212,59,.08);border:1px solid rgba(255,212,59,.3)}
 .big.bad{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3)}
 .big .amt{font-size:2rem;font-weight:700}
 .big .mrg{font-size:.85rem;color:var(--muted);margin-top:4px}
-
 .pos{color:var(--success)}.neg{color:var(--danger)}.neu{color:var(--warning)}
 
+/* Stats */
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
 @media(max-width:560px){.sgrid{grid-template-columns:1fr}}
 .scard{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
 .scard .sl{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .scard .sv{font-size:1.4rem;font-weight:700;margin-top:4px}
 
+/* Historique */
 .hlist{display:flex;flex-direction:column;gap:10px}
 .hitem{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;align-items:center;gap:14px}
 .hitem .hi{flex:1;min-width:0}
@@ -84,6 +91,7 @@ input[type=file]:hover{border-color:var(--accent)}
 .hitem .hp .amt{font-size:1.2rem;font-weight:700}
 .hitem .hp .mg{font-size:.75rem;color:var(--muted)}
 
+/* Shopify */
 .slist{display:flex;flex-direction:column;gap:10px}
 .sitem{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .2s}
 .sitem:hover{border-color:var(--accent)}
@@ -93,17 +101,19 @@ input[type=file]:hover{border-color:var(--accent)}
 .sitem .sc{font-size:.8rem;color:var(--muted);margin-top:5px}
 .sitem .st{text-align:right;font-size:1.2rem;font-weight:700;flex-shrink:0}
 
+/* Catalogue */
 .ctable{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:10px}
 .ctable th{color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase}
 .ctable td{padding:6px 8px;border-bottom:1px solid rgba(42,45,62,.5)}
 .ctable tr:last-child td{border-bottom:none}
 
+/* Misc */
 .note{background:rgba(108,99,255,.08);border:1px solid rgba(108,99,255,.2);border-radius:8px;padding:12px;font-size:.82rem;color:var(--muted);line-height:1.5;margin-bottom:14px}
 .note strong{color:var(--text)}
 .empty{text-align:center;color:var(--muted);padding:40px 0;font-size:.88rem}
 .hrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .hrow h2{font-size:.95rem;font-weight:600}
-.save-row{display:flex;align-items:center;gap:10px;margin-top:16px}
+.save-row{display:flex;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap}
 .saved-msg{color:var(--success);font-size:.82rem;display:none}
 .cmap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 @media(max-width:560px){.cmap{grid-template-columns:1fr}}
@@ -123,28 +133,32 @@ input[type=file]:hover{border-color:var(--accent)}
   <button class="tab-btn" data-tab="settings" onclick="showTab(this)">Paramètres</button>
 </div>
 
-<!-- CALCULER -->
+<!-- ═══ CALCULER ═══ -->
 <div id="tab-calc" class="tab-content active">
   <div class="grid2">
+
+    <!-- Colonne gauche -->
     <div>
       <div class="card">
         <h2>Commande</h2>
         <label>Référence / N° commande</label>
         <input type="text" id="ref" placeholder="ex: #1001">
-        <label>Produit du catalogue <small style="color:var(--muted)">(optionnel)</small></label>
-        <select id="productSelect" onchange="selectProduct()">
-          <option value="">— Sélectionner pour pré-remplir —</option>
-        </select>
         <label>Prix payé par le client</label>
         <div class="sfx"><input type="number" id="prixVente" placeholder="0.00" step="0.01" oninput="calc()"><span>€</span></div>
       </div>
+
       <div class="card">
         <h2>Produits</h2>
-        <label>Coût unitaire (prix d'achat)</label>
-        <div class="sfx"><input type="number" id="coutProduit" step="0.01" oninput="calc()"><span>€</span></div>
-        <label>Quantité</label>
-        <input type="number" id="qte" min="1" oninput="calc()">
+        <div class="pl-header">
+          <span class="ph-cat">Produit (catalogue)</span>
+          <span class="ph-qte">Qté</span>
+          <span class="ph-prix">Coût/u</span>
+          <span class="ph-del"></span>
+        </div>
+        <div id="productLines"></div>
+        <button class="add-line-btn" onclick="addProductLine()">+ Ajouter un produit</button>
       </div>
+
       <div class="card">
         <h2>Emballage &amp; expédition</h2>
         <label>Frais de port payé par toi</label>
@@ -161,12 +175,15 @@ input[type=file]:hover{border-color:var(--accent)}
         <div class="sfx"><input type="number" id="etiqExped" step="0.01" oninput="calc()"><span>€</span></div>
       </div>
     </div>
+
+    <!-- Colonne droite -->
     <div>
       <div class="card">
         <h2>Résultat</h2>
         <div id="resultBox"><div class="empty">Remplis les champs pour calculer.</div></div>
         <div class="save-row">
           <button class="btn btn-primary" onclick="saveOrder()">💾 Enregistrer</button>
+          <button class="btn btn-outline btn-sm" onclick="resetCalc()">↺ Nouveau</button>
           <span class="saved-msg" id="savedMsg">✓ Enregistré !</span>
         </div>
       </div>
@@ -174,11 +191,11 @@ input[type=file]:hover{border-color:var(--accent)}
   </div>
 </div>
 
-<!-- SHOPIFY -->
+<!-- ═══ SHOPIFY ═══ -->
 <div id="tab-shopify" class="tab-content">
   <div class="note">
     <strong>Comment exporter tes commandes Shopify :</strong><br>
-    Admin Shopify → Commandes → Exporter → sélectionner la période → <strong>CSV standard</strong><br>
+    Admin Shopify → Commandes → Exporter → choisir la période → <strong>CSV standard</strong><br>
     Importe le fichier ici — rien n'est envoyé sur internet.
   </div>
   <div class="card">
@@ -188,7 +205,7 @@ input[type=file]:hover{border-color:var(--accent)}
   <div id="shopifyResult"></div>
 </div>
 
-<!-- HISTORIQUE -->
+<!-- ═══ HISTORIQUE ═══ -->
 <div id="tab-history" class="tab-content">
   <div class="hrow">
     <h2>Commandes enregistrées</h2>
@@ -198,24 +215,25 @@ input[type=file]:hover{border-color:var(--accent)}
   <div class="hlist" id="historyList"></div>
 </div>
 
-<!-- PARAMÈTRES -->
+<!-- ═══ PARAMÈTRES ═══ -->
 <div id="tab-settings" class="tab-content">
+
   <div class="card">
     <h2>Catalogue produits — import Excel</h2>
-    <div class="note" style="margin-bottom:12px"><strong>Besoin d'une connexion internet</strong> au premier chargement pour lire les fichiers .xlsx (bibliothèque SheetJS). Les fichiers .csv fonctionnent sans connexion.</div>
-    <label>Fichier Excel (.xlsx) ou CSV</label>
+    <div class="note" style="margin-bottom:12px"><strong>Connexion internet requise</strong> au premier chargement pour lire les .xlsx. Les .csv fonctionnent sans connexion.</div>
+    <label>Fichier Excel (.xlsx / .xls) ou CSV</label>
     <input type="file" id="catalogFile" accept=".xlsx,.xls,.csv" onchange="importCatalog(this)">
     <div id="sheetSelector" style="display:none;margin-top:14px">
       <label>Quelle feuille contient tes produits ?</label>
       <select id="sheetSelect" onchange="loadSheet(this.value)"></select>
     </div>
     <div id="catalogMapping" style="display:none">
-      <p style="font-size:.82rem;color:var(--muted);margin-top:14px;margin-bottom:4px">Associe tes colonnes :</p>
+      <p style="font-size:.82rem;color:var(--muted);margin-top:14px;margin-bottom:2px">Associe tes colonnes :</p>
       <div class="cmap">
         <div><label>Nom produit</label><select id="mapNom"></select></div>
-        <div><label>Prix d'achat (€)</label><select id="mapPrix"></select></div>
-        <div><label>Marge % <small>(optionnel)</small></label><select id="mapMargePct"></select></div>
-        <div><label>Marge € <small>(optionnel)</small></label><select id="mapMargeEur"></select></div>
+        <div><label>Prix d'achat unitaire (€)</label><select id="mapPrix"></select></div>
+        <div><label>Marge brute % <small>(optionnel)</small></label><select id="mapMargePct"></select></div>
+        <div><label>Marge brute € <small>(optionnel)</small></label><select id="mapMargeEur"></select></div>
       </div>
       <button class="btn btn-success" style="margin-top:14px" onclick="confirmCatalog()">✓ Importer le catalogue</button>
     </div>
@@ -232,7 +250,7 @@ input[type=file]:hover{border-color:var(--accent)}
     <div class="sfx"><input type="number" id="s_banque" step="0.01" oninput="saveSettings()"><span>€/mois</span></div>
     <label>Autres frais fixes</label>
     <div class="sfx"><input type="number" id="s_autres" step="0.01" oninput="saveSettings()"><span>€/mois</span></div>
-    <label>Nombre de commandes/mois</label>
+    <label>Nombre de commandes/mois (pour répartition)</label>
     <input type="number" id="s_nbCmd" min="1" oninput="saveSettings()">
   </div>
 
@@ -262,10 +280,6 @@ input[type=file]:hover{border-color:var(--accent)}
         <div class="sfx"><input type="number" id="s_etiqFragile" step="0.01" oninput="saveSettings()"><span>€</span></div>
         <label>Étiquette expédition</label>
         <div class="sfx"><input type="number" id="s_etiqExped" step="0.01" oninput="saveSettings()"><span>€</span></div>
-        <label>Coût produit par défaut</label>
-        <div class="sfx"><input type="number" id="s_coutProduit" step="0.01" oninput="saveSettings()"><span>€</span></div>
-        <label>Quantité par défaut</label>
-        <input type="number" id="s_qte" min="1" oninput="saveSettings()">
       </div>
     </div>
   </div>
@@ -274,89 +288,87 @@ input[type=file]:hover{border-color:var(--accent)}
 
 <script>
 // ── Paramètres ────────────────────────────────────────────────────────────────
-const DEFS = {
-  s_hosting:80,s_claude:20,s_banque:16.90,s_autres:0,s_nbCmd:45,
-  s_urssaf:12.6,s_carteFix:1.50,s_cartePct:0,
-  s_carton:1.50,s_polystyrene:1.00,s_poche:0.10,
-  s_etiqFragile:0.05,s_etiqExped:0.10,s_coutProduit:1.55,s_qte:20
-};
+const DEFS={s_hosting:80,s_claude:20,s_banque:16.90,s_autres:0,s_nbCmd:45,s_urssaf:12.6,s_carteFix:1.50,s_cartePct:0,s_carton:1.50,s_polystyrene:1.00,s_poche:0.10,s_etiqFragile:0.05,s_etiqExped:0.10};
 function getSettings(){return{...DEFS,...JSON.parse(localStorage.getItem('zaq_s')||'{}')}}
 function loadSettings(){const s=getSettings();Object.keys(DEFS).forEach(k=>{const e=document.getElementById(k);if(e)e.value=s[k]})}
 function saveSettings(){const s={};Object.keys(DEFS).forEach(k=>{const e=document.getElementById(k);if(e)s[k]=parseFloat(e.value)||0});localStorage.setItem('zaq_s',JSON.stringify(s));calc()}
 
 // ── Catalogue Excel ───────────────────────────────────────────────────────────
-let _raw=null;
-let _wb=null;
+let _raw=null,_wb=null;
 
 function importCatalog(input){
   const file=input.files[0];if(!file)return;
-  const isCsv=file.name.toLowerCase().endsWith('.csv');
   document.getElementById('sheetSelector').style.display='none';
   document.getElementById('catalogMapping').style.display='none';
   document.getElementById('catalogPreview').innerHTML='';
+  const isCsv=file.name.toLowerCase().endsWith('.csv');
   const reader=new FileReader();
   reader.onload=e=>{
     try{
       if(isCsv){
         const lines=e.target.result.split('\n');
-        const headers=parseRow(lines[0]).map(h=>h.trim());
-        const rows=lines.slice(1).filter(l=>l.trim()).map(parseRow);
+        // Chercher la première ligne non vide
+        const hIdx=lines.findIndex(l=>l.trim().length>0);
+        if(hIdx<0){alert('Fichier vide.');return}
+        const headers=parseRow(lines[hIdx]).map(h=>h.replace(/"/g,'').trim());
+        const rows=lines.slice(hIdx+1).filter(l=>l.trim()).map(parseRow);
         _raw={headers,rows};
         buildMapping(headers);
         showRawPreview(headers,rows.slice(0,5));
       }else{
-        if(typeof XLSX==='undefined'){alert('SheetJS non chargé. Vérifie ta connexion internet ou utilise un fichier CSV.');return}
+        if(typeof XLSX==='undefined'){alert('SheetJS non chargé. Vérifie ta connexion internet ou utilise un .csv.');return}
         _wb=XLSX.read(e.target.result,{type:'binary'});
-        if(_wb.SheetNames.length>1){
-          const sel=document.getElementById('sheetSelect');
-          sel.innerHTML=_wb.SheetNames.map(n=>`<option value="${n}">${n}</option>`).join('');
-          document.getElementById('sheetSelector').style.display='block';
-          loadSheet(_wb.SheetNames[0]);
-        }else{
-          loadSheet(_wb.SheetNames[0]);
-        }
+        const sel=document.getElementById('sheetSelect');
+        sel.innerHTML=_wb.SheetNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+        if(_wb.SheetNames.length>1)document.getElementById('sheetSelector').style.display='block';
+        loadSheet(_wb.SheetNames[0]);
       }
-    }catch(err){alert('Erreur : '+err.message)}
+    }catch(err){alert('Erreur lecture fichier : '+err.message)}
   };
   isCsv?reader.readAsText(file,'UTF-8'):reader.readAsBinaryString(file);
 }
 
-function loadSheet(sheetName){
+function loadSheet(name){
   if(!_wb)return;
-  const ws=_wb.Sheets[sheetName];
-  const data=XLSX.utils.sheet_to_json(ws,{header:1});
-  if(!data||data.length<2){alert('Feuille vide ou sans données.');return}
-  // Trouver la première ligne non vide → en-têtes réels
-  const headerRowIdx=data.findIndex(r=>r.some(c=>c!==undefined&&String(c).trim()!==''));
-  if(headerRowIdx<0){alert('Aucune donnée trouvée.');return}
-  const headers=data[headerRowIdx].map(h=>String(h||'').trim());
-  const rows=data.slice(headerRowIdx+1).filter(r=>r.some(c=>c!==undefined&&c!==''));
-  _raw={headers,rows,headerRowIdx};
+  const data=XLSX.utils.sheet_to_json(_wb.Sheets[name],{header:1});
+  if(!data||data.length<2){alert('Feuille vide.');return}
+  // Ignorer les lignes entièrement vides au début
+  const hIdx=data.findIndex(r=>r.some(c=>c!=null&&String(c).trim()!=''));
+  if(hIdx<0){alert('Aucune donnée.');return}
+  const headers=data[hIdx].map(h=>String(h||'').trim());
+  const rows=data.slice(hIdx+1).filter(r=>r.some(c=>c!=null&&c!=''));
+  _raw={headers,rows};
   buildMapping(headers);
   showRawPreview(headers,rows.slice(0,5));
 }
 
 function buildMapping(h){
-  const opts=['— Aucune —',...h].map((n,i)=>`<option value="${i-1}">${n}</option>`).join('');
+  const opts=['— Aucune —',...h].map((n,i)=>`<option value="${i-1}">${n||'(vide)'}</option>`).join('');
   ['mapNom','mapPrix','mapMargePct','mapMargeEur'].forEach(id=>document.getElementById(id).innerHTML=opts);
+  // Mots-clés par ordre de priorité — le plus spécifique en premier
   const auto={
-    mapNom:['produits','nom','name','article','libellé','désignation'],
-    mapPrix:['bouture','achat','coût','cout','cost','prix achat'],
-    mapMargePct:['en %','marge %','marge%','% marge','taux marge','margin %'],
-    mapMargeEur:['marge brut/b','marge brut ','marge €','marge eur','margin €','marge montant']
+    mapNom:['produits','produit','nom','article','désignation','name'],
+    mapPrix:["d'achat / bouture","achat / bouture","cout d'achat","coût d'achat","prix achat","achat","coût","cout","cost"],
+    mapMargePct:['en %','marge %','marge%','taux marge','margin %','% marge'],
+    mapMargeEur:['marge brut/b','marge brut/bouture','marge brut ','marge €','margin €','marge eur']
   };
   Object.entries(auto).forEach(([id,kws])=>{
-    const idx=h.findIndex(col=>kws.some(kw=>col.toLowerCase().includes(kw)));
-    if(idx>=0)document.getElementById(id).value=idx;
+    // Chercher par ordre de priorité : premier mot-clé qui matche une colonne
+    let found=-1;
+    for(const kw of kws){
+      const idx=h.findIndex(col=>col.toLowerCase().includes(kw.toLowerCase()));
+      if(idx>=0){found=idx;break}
+    }
+    if(found>=0)document.getElementById(id).value=found;
   });
   document.getElementById('catalogMapping').style.display='block';
 }
 
 function showRawPreview(headers,rows){
   document.getElementById('catalogPreview').innerHTML=`
-    <p style="font-size:.78rem;color:var(--muted);margin-bottom:6px">Aperçu</p>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:6px">Aperçu (5 premières lignes)</p>
     <div style="overflow-x:auto"><table class="ctable">
-      <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <thead><tr>${headers.map(h=>`<th>${h||'—'}</th>`).join('')}</tr></thead>
       <tbody>${rows.map(r=>`<tr>${headers.map((_,i)=>`<td>${r[i]??''}</td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -365,88 +377,136 @@ function confirmCatalog(){
   if(!_raw)return;
   const gi=id=>parseInt(document.getElementById(id).value);
   const [iN,iP,iMp,iMe]=[gi('mapNom'),gi('mapPrix'),gi('mapMargePct'),gi('mapMargeEur')];
-  if(iN<0){alert('Sélectionne la colonne Nom.');return}
-  // Détecter si la marge % est en décimal (ex: 0.43) ou en % (ex: 43)
-  const samplePct=iMp>=0?_raw.rows.filter(r=>r[iMp]!=null&&r[iMp]!=='').map(r=>parseFloat(r[iMp])||0).filter(v=>v>0):[];
-  const isDecimal=samplePct.length>0&&samplePct.every(v=>v<=1.0001);
+  if(iN<0){alert('Sélectionne au moins la colonne Nom.');return}
+  // Détecte si marge % est en décimal (0.43 = 43%)
+  const sample=iMp>=0?_raw.rows.map(r=>parseFloat(r[iMp])||0).filter(v=>v>0):[];
+  const isDecimal=sample.length>0&&sample.every(v=>v<=1.001);
+  const SKIP=['moyenne','total','sous-total',''];
   const catalog=_raw.rows.map(r=>({
     nom:String(r[iN]||'').trim(),
     prixAchat:iP>=0?parseFloat(r[iP])||0:0,
-    margePct:iMp>=0?(isDecimal?(parseFloat(r[iMp])||0)*100:(parseFloat(r[iMp])||0)):0,
+    margePct:iMp>=0?(isDecimal?(parseFloat(r[iMp])||0)*100:parseFloat(r[iMp])||0):0,
     margeEur:iMe>=0?parseFloat(r[iMe])||0:0
-  })).filter(p=>p.nom&&p.nom.toLowerCase()!=='moyenne'&&p.nom.toLowerCase()!=='total');
+  })).filter(p=>p.nom&&!SKIP.includes(p.nom.toLowerCase()));
   localStorage.setItem('zaq_catalog',JSON.stringify(catalog));
   document.getElementById('catalogMapping').style.display='none';
   renderCatalogSaved(catalog);
-  populateProductSelect();
-  alert('✓ '+catalog.length+' produits importés.');
+  refreshCatalogDropdowns();
+  alert('✓ '+catalog.length+' produits importés !');
 }
 
 function renderCatalogSaved(catalog){
   document.getElementById('catalogPreview').innerHTML=`
     <div class="hrow" style="margin-top:12px">
-      <p style="font-size:.82rem;color:var(--muted)">${catalog.length} produits</p>
+      <p style="font-size:.82rem;color:var(--muted)">${catalog.length} produits importés</p>
       <button class="btn btn-danger btn-sm" onclick="clearCatalog()">Effacer</button>
     </div>
     <div style="overflow-x:auto"><table class="ctable">
       <thead><tr><th>Produit</th><th>Prix achat</th><th>Marge %</th><th>Marge €</th></tr></thead>
-      <tbody>${catalog.slice(0,8).map(p=>`<tr>
-        <td>${p.nom}</td>
-        <td>${p.prixAchat?p.prixAchat.toFixed(2)+' €':'—'}</td>
-        <td>${p.margePct?p.margePct.toFixed(1)+' %':'—'}</td>
-        <td>${p.margeEur?p.margeEur.toFixed(2)+' €':'—'}</td>
+      <tbody>${catalog.slice(0,10).map(p=>`<tr>
+        <td>${p.nom}</td><td>${p.prixAchat?p.prixAchat.toFixed(2)+' €':'—'}</td>
+        <td>${p.margePct?p.margePct.toFixed(1)+' %':'—'}</td><td>${p.margeEur?p.margeEur.toFixed(2)+' €':'—'}</td>
       </tr>`).join('')}
-      ${catalog.length>8?`<tr><td colspan="4" style="color:var(--muted);text-align:center">+${catalog.length-8} autres</td></tr>`:''}
-      </tbody>
-    </table></div>`;
+      ${catalog.length>10?`<tr><td colspan="4" style="color:var(--muted);text-align:center">+${catalog.length-10} autres...</td></tr>`:''}
+      </tbody></table></div>`;
 }
 
 function clearCatalog(){
   if(!confirm('Effacer le catalogue ?'))return;
   localStorage.removeItem('zaq_catalog');
   document.getElementById('catalogPreview').innerHTML='';
-  populateProductSelect();
+  refreshCatalogDropdowns();
 }
 
-function populateProductSelect(){
+// ── Lignes de produits ────────────────────────────────────────────────────────
+function getCatalogOpts(){
   const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
-  const sel=document.getElementById('productSelect');
-  sel.innerHTML='<option value="">— Sélectionner pour pré-remplir —</option>';
-  catalog.forEach((p,i)=>sel.innerHTML+=`<option value="${i}">${p.nom}${p.prixAchat?' ('+p.prixAchat.toFixed(2)+' €)':''}</option>`);
+  return'<option value="-1">— Catalogue —</option>'+catalog.map((p,i)=>
+    `<option value="${i}">${p.nom}${p.prixAchat?' ('+p.prixAchat.toFixed(2)+'€)':''}</option>`
+  ).join('');
 }
 
-function selectProduct(){
+function addProductLine(nom='',qte=1,cout=0){
   const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
-  const idx=parseInt(document.getElementById('productSelect').value);
-  if(isNaN(idx)||!catalog[idx])return;
-  const p=catalog[idx];
-  if(p.prixAchat)document.getElementById('coutProduit').value=p.prixAchat;
+  const div=document.createElement('div');
+  div.className='pline';
+  if(nom)div.dataset.nom=nom;
+  div.innerHTML=`
+    <select onchange="onCatalogPick(this)">${getCatalogOpts()}</select>
+    <input class="pl-qte" type="number" min="1" value="${qte}" oninput="calc()" style="width:54px">
+    <div class="pl-prix-w"><input class="pl-prix" type="number" step="0.01" value="${cout||''}" placeholder="0.00" oninput="calc()"><span>€</span></div>
+    <button class="pl-del" onclick="this.closest('.pline').remove();calc()" title="Supprimer">✕</button>`;
+  // Auto-match catalog by name
+  if(nom&&catalog.length){
+    const n=nom.toLowerCase();
+    const idx=catalog.findIndex(p=>{
+      const pn=p.nom.toLowerCase();
+      return pn.includes(n.slice(0,7))||n.includes(pn.slice(0,7));
+    });
+    if(idx>=0){
+      div.querySelector('select').value=idx;
+      if(!cout&&catalog[idx].prixAchat)div.querySelector('.pl-prix').value=catalog[idx].prixAchat;
+    }
+  }
+  document.getElementById('productLines').appendChild(div);
   calc();
 }
 
+function onCatalogPick(sel){
+  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
+  const idx=parseInt(sel.value);
+  if(idx<0||!catalog[idx])return;
+  const line=sel.closest('.pline');
+  if(catalog[idx].prixAchat)line.querySelector('.pl-prix').value=catalog[idx].prixAchat;
+  calc();
+}
+
+function getProductLines(){
+  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
+  return Array.from(document.querySelectorAll('.pline')).map(line=>{
+    const catIdx=parseInt(line.querySelector('select').value);
+    const catNom=catIdx>=0&&catalog[catIdx]?catalog[catIdx].nom:'';
+    return{
+      nom:catNom||(line.dataset.nom||'Produit'),
+      qte:parseFloat(line.querySelector('.pl-qte').value)||0,
+      cout:parseFloat(line.querySelector('.pl-prix').value)||0
+    };
+  });
+}
+
+function refreshCatalogDropdowns(){
+  const opts=getCatalogOpts();
+  document.querySelectorAll('.pline select').forEach(sel=>{
+    const v=sel.value;sel.innerHTML=opts;sel.value=v;
+  });
+}
+
 // ── Calcul ────────────────────────────────────────────────────────────────────
-const v=id=>parseFloat(document.getElementById(id).value)||0;
+const fv=id=>parseFloat(document.getElementById(id).value)||0;
 const fmt=n=>(Math.round(n*100)/100).toFixed(2)+' €';
 
 function calc(){
   const s=getSettings();
-  const pv=v('prixVente');
+  const pv=fv('prixVente');
   if(!pv){document.getElementById('resultBox').innerHTML='<div class="empty">Remplis les champs pour calculer.</div>';return}
-  const prod=v('coutProduit')*Math.max(v('qte'),1);
-  const port=v('port');
-  const emb=v('carton')+v('polystyrene')+v('poche')+v('etiqFragile')+v('etiqExped');
+  const lines=getProductLines();
+  const prodTotal=lines.reduce((sum,l)=>sum+l.qte*l.cout,0);
+  const port=fv('port');
+  const emb=fv('carton')+fv('polystyrene')+fv('poche')+fv('etiqFragile')+fv('etiqExped');
   const urssaf=pv*s.s_urssaf/100;
   const carte=s.s_carteFix+pv*s.s_cartePct/100;
   const fix=(s.s_hosting+s.s_claude+s.s_banque+s.s_autres)/(s.s_nbCmd||1);
-  const tot=prod+port+emb+urssaf+carte+fix;
+  const tot=prodTotal+port+emb+urssaf+carte+fix;
   const ben=pv-tot;
   const mg=ben/pv*100;
   const cls=ben<0?'bad':mg>=30?'good':'ok';
   const ico=ben<0?'🔴':mg>=30?'🟢':'🟡';
+  const prodRows=lines.filter(l=>l.qte>0||l.cout>0).map(l=>`
+    <div class="rrow"><span class="lb">${l.nom} (${l.qte} × ${fmt(l.cout)})</span><span class="neg">-${fmt(l.qte*l.cout)}</span></div>`).join('');
   document.getElementById('resultBox').innerHTML=`
     <div class="rbox">
       <div class="rrow"><span class="lb">Prix de vente</span><span class="pos">+${fmt(pv)}</span></div>
-      <div class="rrow"><span class="lb">Produits (${Math.max(v('qte'),1)} × ${fmt(v('coutProduit'))})</span><span class="neg">-${fmt(prod)}</span></div>
+      ${prodRows}
       ${port?`<div class="rrow"><span class="lb">Port</span><span class="neg">-${fmt(port)}</span></div>`:''}
       ${emb?`<div class="rrow"><span class="lb">Emballage</span><span class="neg">-${fmt(emb)}</span></div>`:''}
       <div class="rrow"><span class="lb">URSSAF ${s.s_urssaf}%</span><span class="neg">-${fmt(urssaf)}</span></div>
@@ -463,26 +523,37 @@ function calc(){
 function applyDefaults(){
   const s=getSettings();
   const set=(id,val)=>{const e=document.getElementById(id);if(e&&!e.value)e.value=val};
-  set('coutProduit',s.s_coutProduit);set('qte',s.s_qte);
   set('carton',s.s_carton);set('polystyrene',s.s_polystyrene);
   set('poche',s.s_poche);set('etiqFragile',s.s_etiqFragile);set('etiqExped',s.s_etiqExped);
+  if(!document.querySelectorAll('.pline').length)addProductLine();
+}
+
+function resetCalc(){
+  document.getElementById('ref').value='';
+  document.getElementById('prixVente').value='';
+  document.getElementById('port').value='';
+  document.getElementById('productLines').innerHTML='';
+  applyDefaults();
+  document.getElementById('resultBox').innerHTML='<div class="empty">Remplis les champs pour calculer.</div>';
 }
 
 // ── Sauvegarde ────────────────────────────────────────────────────────────────
 function saveOrder(){
-  const pv=v('prixVente');if(!pv){alert('Entre au moins le prix de vente.');return}
+  const pv=fv('prixVente');if(!pv){alert('Entre au moins le prix de vente.');return}
   const s=getSettings();
-  const prod=v('coutProduit')*Math.max(v('qte'),1);
-  const port=v('port');
-  const emb=v('carton')+v('polystyrene')+v('poche')+v('etiqFragile')+v('etiqExped');
+  const lines=getProductLines();
+  const prodTotal=lines.reduce((sum,l)=>sum+l.qte*l.cout,0);
+  const port=fv('port');
+  const emb=fv('carton')+fv('polystyrene')+fv('poche')+fv('etiqFragile')+fv('etiqExped');
   const urssaf=pv*s.s_urssaf/100;
   const carte=s.s_carteFix+pv*s.s_cartePct/100;
   const fix=(s.s_hosting+s.s_claude+s.s_banque+s.s_autres)/(s.s_nbCmd||1);
-  const tot=prod+port+emb+urssaf+carte+fix;
+  const tot=prodTotal+port+emb+urssaf+carte+fix;
   const ben=pv-tot;
   const ref=document.getElementById('ref').value.trim()||'CMD-'+Date.now();
   const orders=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
-  orders.unshift({ref,date:new Date().toISOString(),pv,totalCouts:tot,benefice:ben,marge:ben/pv*100});
+  orders.unshift({ref,date:new Date().toISOString(),pv,totalCouts:tot,benefice:ben,marge:ben/pv*100,
+    produits:lines.map(l=>l.nom).join(', ')});
   localStorage.setItem('zaq_orders',JSON.stringify(orders));
   const msg=document.getElementById('savedMsg');
   msg.style.display='inline';setTimeout(()=>msg.style.display='none',2500);
@@ -492,11 +563,7 @@ function saveOrder(){
 // ── Import Shopify CSV ────────────────────────────────────────────────────────
 function parseRow(line){
   const r=[];let c='';let q=false;
-  for(const ch of line){
-    if(ch==='"'){q=!q}
-    else if(ch===','&&!q){r.push(c);c=''}
-    else c+=ch;
-  }
+  for(const ch of line){if(ch==='"'){q=!q}else if(ch===','&&!q){r.push(c);c=''}else c+=ch}
   r.push(c);return r;
 }
 
@@ -509,33 +576,40 @@ function importShopify(input){
       const headers=parseRow(lines[0]).map(h=>h.replace(/"/g,'').trim());
       const col=kw=>headers.findIndex(h=>h.toLowerCase().includes(kw.toLowerCase()));
       const iName=Math.max(col('Name'),col('Nom'));
-      const iTotal=Math.max(col('Total'),col('Montant total'));
+      const iTotal=Math.max(col('Total'),col('Montant'));
       const iPaid=Math.max(col('Paid at'),col('Payé le'));
-      const iIN=Math.max(col('Lineitem name'),col('Nom article'));
-      const iIQ=Math.max(col('Lineitem quantity'),col('Qté article'));
+      const iIN=Math.max(col('Lineitem name'),col('Nom article'),col('Article'));
+      const iIQ=Math.max(col('Lineitem quantity'),col('Quantité article'),col('Qté article'));
       const iIP=Math.max(col('Lineitem price'),col('Prix article'));
-      if(iName<0){document.getElementById('shopifyResult').innerHTML='<div class="card"><div class="empty">Format non reconnu. Exporte en "CSV standard" depuis Shopify.</div></div>';return}
+      if(iName<0){
+        document.getElementById('shopifyResult').innerHTML='<div class="card"><div class="empty">Format non reconnu — exporte bien en <strong>CSV standard</strong> depuis Shopify.</div></div>';
+        return;
+      }
       const map={};
       for(let i=1;i<lines.length;i++){
         const l=lines[i].trim();if(!l)continue;
         const row=parseRow(l);
         const name=(row[iName]||'').replace(/"/g,'').trim();if(!name)continue;
-        if(!map[name]){
-          map[name]={ref:name,
-            date:iPaid>=0?(row[iPaid]||'').replace(/"/g,'').trim():'',
-            total:iTotal>=0?parseFloat((row[iTotal]||'').replace(/"/g,''))||0:0,
-            items:[]};
-        }
+        if(!map[name])map[name]={
+          ref:name,
+          date:iPaid>=0?(row[iPaid]||'').replace(/"/g,'').trim():'',
+          total:iTotal>=0?parseFloat((row[iTotal]||'').replace(/[^0-9.,-]/g,'').replace(',','.'))||0:0,
+          items:[]
+        };
         const iname=iIN>=0?(row[iIN]||'').replace(/"/g,'').trim():'';
-        if(iname)map[name].items.push({
-          name:iname,
-          qty:iIQ>=0?parseInt(row[iIQ])||0:0,
-          price:iIP>=0?parseFloat(row[iIP])||0:0
-        });
+        if(iname){
+          // Fusionner si même produit déjà dans la liste
+          const existing=map[name].items.find(it=>it.name===iname);
+          const qty=iIQ>=0?parseInt(row[iIQ])||0:0;
+          if(existing)existing.qty+=qty;
+          else map[name].items.push({name:iname,qty,price:iIP>=0?parseFloat(row[iIP])||0:0});
+        }
       }
       const orders=Object.values(map).sort((a,b)=>(b.date?new Date(b.date):0)-(a.date?new Date(a.date):0));
       renderShopifyOrders(orders);
-    }catch(err){document.getElementById('shopifyResult').innerHTML=`<div class="card"><div class="empty">Erreur : ${err.message}</div></div>`}
+    }catch(err){
+      document.getElementById('shopifyResult').innerHTML=`<div class="card"><div class="empty">Erreur : ${err.message}</div></div>`;
+    }
   };
   reader.readAsText(file,'UTF-8');
 }
@@ -548,7 +622,7 @@ function renderShopifyOrders(orders){
     <div class="hrow"><h2>${orders.length} commande${orders.length>1?'s':''}</h2></div>
     <div class="slist">${orders.map((o,i)=>{
       const date=o.date?new Date(o.date).toLocaleDateString('fr-FR'):'';
-      const items=o.items.map(it=>`${it.qty}× ${it.name}`).join(', ');
+      const items=o.items.map(it=>`${it.qty}× ${it.name}`).join(' · ');
       return`<div class="sitem" onclick="loadShopifyOrder(${i})">
         <div class="si">
           <div class="sr">${o.ref}</div>
@@ -563,17 +637,13 @@ function renderShopifyOrders(orders){
 
 function loadShopifyOrder(i){
   const o=window._shopifyOrders[i];if(!o)return;
-  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
   document.getElementById('ref').value=o.ref;
   document.getElementById('prixVente').value=o.total||'';
+  document.getElementById('productLines').innerHTML='';
   if(o.items.length){
-    const totalQty=o.items.reduce((s,it)=>s+it.qty,0);
-    document.getElementById('qte').value=totalQty||o.items[0].qty||'';
-    const match=catalog.find(p=>{
-      const pn=p.nom.toLowerCase(),in_=o.items[0].name.toLowerCase();
-      return pn.includes(in_.slice(0,6))||in_.includes(pn.slice(0,6));
-    });
-    if(match?.prixAchat)document.getElementById('coutProduit').value=match.prixAchat;
+    o.items.forEach(it=>addProductLine(it.name,it.qty,0));
+  }else{
+    addProductLine();
   }
   showTabById('calc');
   calc();
@@ -597,7 +667,11 @@ function renderHistory(){
     const ds=d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const cls=o.benefice<0?'neg':o.marge>=30?'pos':'neu';
     return`<div class="hitem">
-      <div class="hi"><div class="hr">${o.ref}</div><div class="hd">${ds}</div><div class="hc">CA ${o.pv.toFixed(2)} € — Coûts ${o.totalCouts.toFixed(2)} €</div></div>
+      <div class="hi">
+        <div class="hr">${o.ref}</div>
+        <div class="hd">${ds}</div>
+        <div class="hc">CA ${o.pv.toFixed(2)} € — Coûts ${o.totalCouts.toFixed(2)} €${o.produits?' · '+o.produits:''}</div>
+      </div>
       <div class="hp"><div class="amt ${cls}">${o.benefice>=0?'+':''}${o.benefice.toFixed(2)} €</div><div class="mg">${o.marge.toFixed(1)} %</div></div>
       <button class="btn btn-danger btn-sm" onclick="deleteOrder(${i})">✕</button>
     </div>`;
@@ -623,11 +697,9 @@ function showTabById(name){
 document.getElementById('hDate').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 loadSettings();
 applyDefaults();
-calc();
 renderHistory();
-populateProductSelect();
-const existingCatalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
-if(existingCatalog.length)renderCatalogSaved(existingCatalog);
+const ec=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
+if(ec.length)renderCatalogSaved(ec);
 </script>
 </body>
 </html>

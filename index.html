@@ -675,35 +675,142 @@ function renderShopifyOrders(orders){
   window._shopifyOrders=orders;
   const el=document.getElementById('shopifyResult');
   if(!orders.length){el.innerHTML='<div class="empty">Aucune commande trouvée.</div>';return}
+
+  const s=getSettings();
+  const existingRefs=new Set(JSON.parse(localStorage.getItem('zaq_orders')||'[]').map(o=>o.ref));
+  const defaultPort=(s.s_carton?10.80:0); // suggestion port
+
   el.innerHTML=`
-    <div class="hrow"><h2>${orders.length} commande${orders.length>1?'s':''}</h2></div>
-    <div class="slist">${orders.map((o,i)=>{
-      const date=o.date?new Date(o.date).toLocaleDateString('fr-FR'):'';
-      const items=o.items.map(it=>`${it.qty}× ${it.name}`).join(' · ');
-      return`<div class="sitem" onclick="loadShopifyOrder(${i})">
-        <div class="si">
-          <div class="sr">${o.ref}</div>
-          ${date?`<div class="sd">${date}</div>`:''}
-          ${items?`<div class="sc">${items}</div>`:''}
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:.85rem;color:var(--muted)">Port par défaut :</span>
+        <div class="sfx" style="width:100px">
+          <input type="number" id="defaultPort" value="10.80" step="0.01" style="padding:7px 22px 7px 8px">
+          <span>€</span>
         </div>
-        <div class="st">${o.total.toFixed(2)} €</div>
-        <button class="btn btn-outline btn-sm">→ Charger</button>
-      </div>`;
-    }).join('')}</div>`;
+        <button class="btn btn-outline btn-sm" onclick="applyDefaultPort()">→ Appliquer à toutes</button>
+        <button class="btn btn-primary" onclick="bulkSaveShopifyOrders()">
+          ✓ Tout enregistrer (${orders.length} commandes)
+        </button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px">
+      <table class="dtable">
+        <thead>
+          <tr>
+            <th style="text-align:left">Commande</th>
+            <th style="text-align:left">Date</th>
+            <th>CA</th>
+            <th style="text-align:left">Produits</th>
+            <th>Port (€)</th>
+            <th>Bénéfice est.</th>
+            <th>Marge</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${orders.map((o,i)=>{
+            const date=o.date?new Date(o.date).toLocaleDateString('fr-FR'):'—';
+            const items=o.items.map(it=>`${it.qty}× ${it.name}`).join(' · ');
+            const already=existingRefs.has(o.ref);
+            const r=calcOrderBenefit(o,10.80);
+            const cls=r.benefice<0?'neg':r.marge>=30?'pos':'neu';
+            return`<tr id="srow_${i}" style="${already?'opacity:.5':''}">
+              <td>${o.ref}${already?' <small style="color:var(--warning)">(déjà enreg.)</small>':''}</td>
+              <td>${date}</td>
+              <td class="pos">+${o.total.toFixed(2)} €</td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${items||'—'}</td>
+              <td>
+                <input type="number" id="sport_${i}" value="10.80" step="0.01" min="0"
+                  style="width:75px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 7px;font-size:.82rem;text-align:right;-moz-appearance:textfield"
+                  oninput="updateShopifyRow(${i})">
+              </td>
+              <td id="sben_${i}" class="${cls}">${r.benefice>=0?'+':''}${r.benefice.toFixed(2)} €</td>
+              <td id="smg_${i}" class="${cls}">${r.marge.toFixed(1)} %</td>
+              <td><button class="btn btn-outline btn-sm" onclick="loadShopifyOrder(${i})">Modifier</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function calcOrderBenefit(o,port){
+  const s=getSettings();
+  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
+  const pv=o.total||0;
+  const coutProduits=o.items.reduce((sum,it)=>{
+    const n=it.name.toLowerCase();
+    const match=catalog.find(p=>{const pn=p.nom.toLowerCase();return pn.includes(n.slice(0,7))||n.includes(pn.slice(0,7))});
+    return sum+(match?.prixAchat||0)*it.qty;
+  },0);
+  const emballage=s.s_carton+s.s_polystyrene+s.s_poche+s.s_etiqFragile+s.s_etiqExped;
+  const urssaf=pv*s.s_urssaf/100;
+  const carte=s.s_carteFix+pv*s.s_cartePct/100;
+  const fixParCmd=(s.s_hosting+s.s_claude+s.s_banque+s.s_autres)/(s.s_nbCmd||1);
+  const totalCouts=coutProduits+port+emballage+urssaf+carte+fixParCmd;
+  const benefice=pv-totalCouts;
+  return{pv,coutProduits,port,emballage,urssaf,carte,fixParCmd,totalCouts,benefice,marge:pv>0?benefice/pv*100:0};
+}
+
+function updateShopifyRow(i){
+  const o=window._shopifyOrders[i];if(!o)return;
+  const port=parseFloat(document.getElementById('sport_'+i).value)||0;
+  const r=calcOrderBenefit(o,port);
+  const cls=r.benefice<0?'neg':r.marge>=30?'pos':'neu';
+  document.getElementById('sben_'+i).className=cls;
+  document.getElementById('sben_'+i).textContent=(r.benefice>=0?'+':'')+r.benefice.toFixed(2)+' €';
+  document.getElementById('smg_'+i).className=cls;
+  document.getElementById('smg_'+i).textContent=r.marge.toFixed(1)+' %';
+}
+
+function applyDefaultPort(){
+  const val=document.getElementById('defaultPort').value;
+  window._shopifyOrders.forEach((_,i)=>{
+    const el=document.getElementById('sport_'+i);
+    if(el){el.value=val;updateShopifyRow(i);}
+  });
+}
+
+function bulkSaveShopifyOrders(){
+  const orders=window._shopifyOrders;
+  if(!orders||!orders.length)return;
+  const existing=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
+  const existingRefs=new Set(existing.map(o=>o.ref));
+  const toAdd=[];
+  orders.forEach((o,i)=>{
+    if(existingRefs.has(o.ref))return; // ignorer les doublons
+    const port=parseFloat(document.getElementById('sport_'+i)?.value)||0;
+    const r=calcOrderBenefit(o,port);
+    toAdd.push({
+      ref:o.ref,
+      date:o.date||new Date().toISOString(),
+      produits:o.items.map(it=>it.name).join(', '),
+      pv:r.pv,coutProduits:r.coutProduits,port:r.port,
+      emballage:r.emballage,urssaf:r.urssaf,carte:r.carte,
+      fixParCmd:r.fixParCmd,totalCouts:r.totalCouts,
+      benefice:r.benefice,marge:r.marge
+    });
+  });
+  const skipped=orders.length-toAdd.length;
+  const combined=[...toAdd,...existing].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  localStorage.setItem('zaq_orders',JSON.stringify(combined));
+  const msg=`✓ ${toAdd.length} commande(s) enregistrée(s)${skipped?` · ${skipped} ignorée(s) car déjà présentes`:''}`;
+  alert(msg);
+  // Aller au tableau de bord
+  document.querySelectorAll('.tab-btn').forEach(b=>{if(b.dataset.tab==='tableau')b.click()});
 }
 
 function loadShopifyOrder(i){
   const o=window._shopifyOrders[i];if(!o)return;
   document.getElementById('ref').value=o.ref;
   document.getElementById('prixVente').value=o.total||'';
+  const port=parseFloat(document.getElementById('sport_'+i)?.value)||0;
+  document.getElementById('port').value=port||'';
   document.getElementById('productLines').innerHTML='';
-  if(o.items.length){
-    o.items.forEach(it=>addProductLine(it.name,it.qty,0));
-  }else{
-    addProductLine();
-  }
-  showTabById('calc');
-  calc();
+  if(o.items.length)o.items.forEach(it=>addProductLine(it.name,it.qty,0));
+  else addProductLine();
+  showTabById('calc');calc();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 

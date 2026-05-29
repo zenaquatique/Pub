@@ -772,8 +772,29 @@ def _generate_with_groq(
             ))
             if not isinstance(props, dict):
                 props = {}
-        except Exception:
-            props = {}
+        except Exception as _llm_err:
+            logger.warning("[_generate_with_groq] LLM error (prompt complet) : %s", str(_llm_err)[:200])
+            # Retry avec un prompt minimal (sans vault ni mémoire) pour contourner 413
+            slim_sys = (
+                f"Tu travailles pour ZenAquatique (zen-aquatique.fr), boutique française de plantes aquatiques.\n"
+                f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
+                f"Règle absolue : ne jamais mentionner de concurrents, d'animaleries, ni de plantes qui meurent.\n"
+                f"Réponds UNIQUEMENT en JSON valide selon le schéma."
+            )
+            try:
+                props = json.loads(_llm_chat_json(
+                    messages=[
+                        {"role": "system", "content": slim_sys},
+                        {"role": "user",   "content": props_prompt},
+                    ],
+                    temperature=0.7, max_tokens=2048,
+                ))
+                if not isinstance(props, dict):
+                    props = {}
+                logger.info("[_generate_with_groq] Retry slim prompt OK")
+            except Exception as _slim_err:
+                logger.error("[_generate_with_groq] Slim retry failed : %s", str(_slim_err)[:200])
+                props = {}
 
         # ── Filtre : retry si mots interdits dans les props ───────────────────────
         props_text = json.dumps(props, ensure_ascii=False)
@@ -932,6 +953,36 @@ async def api_debug_script_raw(composition_id: str):
         "props_keys": list((cached.get("props") or {}).keys()),
         "props": cached.get("props"),
         "voiceover_preview": voiceover[:500] if voiceover else "",
+    }
+
+
+@app.get("/api/debug-generate/{composition_id}")
+async def api_debug_generate(composition_id: str):
+    """Diagnostic complet : appelle _generate_with_groq et retourne le résultat brut avec logs."""
+    import io, logging as _logging
+    buf = io.StringIO()
+    handler = _logging.StreamHandler(buf)
+    handler.setLevel(_logging.DEBUG)
+    root_logger = _logging.getLogger("marketing_agent")
+    webapp_logger = _logging.getLogger(__name__)
+    root_logger.addHandler(handler)
+    webapp_logger.addHandler(handler)
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            _executor, _generate_with_groq, composition_id, "", True, ""
+        )
+    except Exception as exc:
+        result = {"status": "exception", "error": str(exc)}
+    finally:
+        root_logger.removeHandler(handler)
+        webapp_logger.removeHandler(handler)
+    logs = buf.getvalue()
+    return {
+        "composition_id": composition_id,
+        "result": result,
+        "props_keys": list((result.get("props") or {}).keys()),
+        "logs": logs[-3000:] if logs else "",
     }
 
 

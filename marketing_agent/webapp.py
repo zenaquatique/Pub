@@ -762,6 +762,7 @@ def _generate_with_groq(
                 f"Schéma :\n{schema}"
             )
 
+        _last_gen_error: Exception | None = None
         try:
             props = json.loads(_llm_chat_json(
                 messages=[
@@ -773,6 +774,7 @@ def _generate_with_groq(
             if not isinstance(props, dict):
                 props = {}
         except Exception as _llm_err:
+            _last_gen_error = _llm_err
             logger.warning("[_generate_with_groq] LLM error (prompt complet) : %s", str(_llm_err)[:200])
             # Retry avec un prompt minimal (sans vault ni mémoire) pour contourner 413
             slim_sys = (
@@ -791,10 +793,21 @@ def _generate_with_groq(
                 ))
                 if not isinstance(props, dict):
                     props = {}
+                _last_gen_error = None
                 logger.info("[_generate_with_groq] Retry slim prompt OK")
             except Exception as _slim_err:
+                _last_gen_error = _slim_err
                 logger.error("[_generate_with_groq] Slim retry failed : %s", str(_slim_err)[:200])
                 props = {}
+
+        # Si props est vide après tous les essais, propager l'erreur clairement
+        _content_keys = {k for k in props if k not in ("template_type", "composition_id")}
+        if not _content_keys:
+            err_detail = str(_last_gen_error) if _last_gen_error else "réponse JSON vide ou invalide"
+            raise RuntimeError(
+                f"La génération IA a échoué pour {composition_id} ({template_type}). "
+                f"Détail : {err_detail[:300]}"
+            )
 
         # ── Filtre : retry si mots interdits dans les props ───────────────────────
         props_text = json.dumps(props, ensure_ascii=False)

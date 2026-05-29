@@ -1,19 +1,10 @@
 @echo off
 title ZenAquatique — Agent Marketing IA
 
-set "APP_DIR=C:\Users\ec\Desktop\Pub\marketing_agent"
-
-if not exist "%APP_DIR%" (
-    color 4f
-    echo.
-    echo  ERREUR : dossier introuvable.
-    echo  Chemin : %APP_DIR%
-    echo.
-    echo  Modifie la ligne APP_DIR dans ce fichier .bat
-    echo.
-    pause
-    exit /b 1
-)
+:: Detecte automatiquement le dossier du script (fonctionne sur tous les PC)
+set "APP_DIR=%~dp0"
+:: Supprime le \ final
+if "%APP_DIR:~-1%"=="\" set "APP_DIR=%APP_DIR:~0,-1%"
 
 cd /d "%APP_DIR%"
 

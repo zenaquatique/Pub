@@ -2,8 +2,11 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Charge toujours le .env du même dossier que config.py, quel que soit le CWD
-load_dotenv(Path(__file__).parent / ".env")
+# Cherche .env dans OneDrive en priorité (sync automatique multi-PC),
+# sinon fallback sur le .env local dans le même dossier que config.py
+_onedrive_env = Path.home() / "OneDrive" / ".env"
+_local_env    = Path(__file__).parent / ".env"
+load_dotenv(_onedrive_env if _onedrive_env.exists() else _local_env)
 
 # Groq (génération scripts vidéo)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")

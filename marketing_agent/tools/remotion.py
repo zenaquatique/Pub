@@ -732,6 +732,13 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
     def _check_output(res: subprocess.CompletedProcess, suffix: str = "") -> dict | None:
         """Retourne un dict succès si le fichier existe, None sinon."""
         combined = (res.stdout or "") + (res.stderr or "")
+
+        def _truncated_log(text: str, max_chars: int = 5000) -> str:
+            if len(text) <= max_chars:
+                return text
+            half = max_chars // 2
+            return text[:half] + f"\n...[{len(text) - max_chars} chars tronqués]...\n" + text[-half:]
+
         if res.returncode == 0:
             if output_path.exists():
                 return {
@@ -739,11 +746,14 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
                     "composition_id": composition_id,
                     "output_path": str(output_path),
                     "message": f"Vidéo rendue → {output_path}{suffix}",
-                    "remotion_log": combined[-2000:],
+                    "remotion_log": _truncated_log(combined),
                 }
             # returncode 0 mais fichier absent — cherche où Remotion l'a mis
             alt = _find_rendered_file(project, composition_id, combined)
-            debug = f"returncode=0 mais {output_path} introuvable. Log Remotion :\n{combined[-3000:]}"
+            debug = (
+                f"returncode=0 mais {output_path} introuvable.\n"
+                f"Log Remotion (total {len(combined)} chars) :\n{_truncated_log(combined)}"
+            )
             if alt:
                 debug = f"Fichier trouvé ailleurs : {alt}\n\n" + debug
             logger.error("render_video: %s", debug)
@@ -751,7 +761,7 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
         return None
 
     try:
-        cmd = f'"{npx}" remotion render "{composition_id}" --output "{output_path}"'
+        cmd = f'"{npx}" remotion render --log=verbose "{composition_id}" "{output_path}"'
         result = _run(cmd)
 
         r = _check_output(result)
@@ -759,26 +769,13 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
             return r
 
         error_output = ((result.stderr or "") + (result.stdout or ""))
-        # "Multiple composition" → vide TOUS les caches connus et relance sans cache bundle
+        # "Multiple composition" → vide les caches webpack et relance sans cache bundle
         if "Multiple composition" in error_output:
-            # 1. Cache webpack local
-            for cache_subdir in ["node_modules/.cache", ".remotion"]:
-                cache_dir = project / cache_subdir
-                if cache_dir.exists():
-                    shutil.rmtree(cache_dir)
-            # 2. Cache temp système (Windows)
-            import tempfile as _tmp
-            tmp = Path(_tmp.gettempdir())
-            for entry in tmp.glob("remotion-*"):
-                try:
-                    shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
-                except Exception:
-                    pass
-            logger.warning("Tous les caches Remotion vidés — retry avec --bundle-cache=false")
-            # Relance sans cache bundle
+            _clear_all_remotion_caches(project_path)
+            logger.warning("Caches webpack vidés — retry avec --bundle-cache=false")
             cmd_no_cache = (
-                f'"{npx}" remotion render --bundle-cache=false '
-                f'"{composition_id}" --output "{output_path}"'
+                f'"{npx}" remotion render --bundle-cache=false --log=verbose '
+                f'"{composition_id}" "{output_path}"'
             )
             result = _run(cmd_no_cache)
             r = _check_output(result, " (cache vidé)")
@@ -796,18 +793,39 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
 
 
 def _clear_all_remotion_caches(project_path: str) -> None:
-    """Vide tous les caches Remotion/webpack connus (projet + système + home user)."""
+    """Vide les caches webpack/bundle Remotion — PAS le binaire Chrome.
+
+    Chrome headless shell est stocké dans ~/.remotion et %LOCALAPPDATA%\remotion.
+    Le supprimer force un re-téléchargement de 113 Mo à chaque rendu et peut
+    laisser le binaire dans un état invalide si l'extraction est interrompue.
+    On ne supprime QUE les caches webpack/bundle.
+    """
     project = Path(project_path)
-    # Cache webpack du projet
-    for subdir in ["node_modules/.cache", ".remotion"]:
-        d = project / subdir
-        if d.exists():
+
+    # ── Cache webpack du projet (bundle compilé) ──────────────────────────────
+    # Supprime node_modules/.cache/webpack et node_modules/.cache/remotion-*
+    # MAIS garde node_modules/.cache/puppeteer (Chrome)
+    nm_cache = project / "node_modules" / ".cache"
+    if nm_cache.exists():
+        for entry in nm_cache.iterdir():
+            if entry.name.lower() in ("puppeteer", "chromium", "chrome"):
+                continue  # ne pas toucher au binaire Chrome
             try:
-                shutil.rmtree(d)
-                logger.info("Cache supprimé : %s", d)
+                shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
+                logger.info("Cache supprimé : %s", entry)
             except Exception as e:
-                logger.warning("Impossible de supprimer %s : %s", d, e)
-    # Cache temp système (Windows/Linux)
+                logger.warning("Impossible de supprimer %s : %s", entry, e)
+
+    # Bundle cache dans le dossier .remotion/ du projet
+    dot_remotion = project / ".remotion"
+    if dot_remotion.exists():
+        try:
+            shutil.rmtree(dot_remotion)
+            logger.info("Cache supprimé : %s", dot_remotion)
+        except Exception as e:
+            logger.warning("Impossible de supprimer %s : %s", dot_remotion, e)
+
+    # Cache temp système (Windows/Linux) — fichiers bundle temporaires uniquement
     import tempfile as _tmp
     tmp = Path(_tmp.gettempdir())
     for entry in tmp.glob("remotion-*"):
@@ -815,20 +833,9 @@ def _clear_all_remotion_caches(project_path: str) -> None:
             shutil.rmtree(entry) if entry.is_dir() else entry.unlink()
         except Exception:
             pass
-    # Cache home user (~/.remotion, ~/AppData/Local/Remotion)
-    home = Path.home()
-    for user_cache in [
-        home / ".remotion",
-        home / "AppData" / "Local" / "remotion",
-        home / "AppData" / "Local" / "Temp" / "remotion",
-        home / "AppData" / "Roaming" / "remotion",
-    ]:
-        if user_cache.exists():
-            try:
-                shutil.rmtree(user_cache)
-                logger.info("Cache user supprimé : %s", user_cache)
-            except Exception as e:
-                logger.warning("Impossible de supprimer %s : %s", user_cache, e)
+
+    # NOTE : on ne supprime PLUS ~/.remotion ni %LOCALAPPDATA%\remotion
+    # car c'est là que Remotion stocke le binaire Chrome (149 Mo).
 
 
 def rebuild_jsx_section(project_path: str) -> dict:
@@ -1060,7 +1067,7 @@ def force_render(composition_id: str, project_path: str,
     out_dir.mkdir(exist_ok=True)
     output_path = out_dir / f"{composition_id}.mp4"
 
-    cmd = f'"{npx}" remotion render --bundle-cache=false "{composition_id}" --output "{output_path}"'
+    cmd = f'"{npx}" remotion render --bundle-cache=false --log=verbose "{composition_id}" "{output_path}"'
     logger.info("force_render: lancement → %s", cmd)
     result = None
     try:
@@ -1081,6 +1088,13 @@ def force_render(composition_id: str, project_path: str,
         return {"status": "error", "error": "Subprocess non démarré"}
 
     combined = ((result.stderr or "") + (result.stdout or ""))
+
+    def _log_snippet(text: str, max_chars: int = 5000) -> str:
+        if len(text) <= max_chars:
+            return text
+        half = max_chars // 2
+        return text[:half] + f"\n...[{len(text) - max_chars} chars tronqués]...\n" + text[-half:]
+
     if result.returncode == 0:
         if output_path.exists():
             return {
@@ -1088,17 +1102,20 @@ def force_render(composition_id: str, project_path: str,
                 "composition_id": composition_id,
                 "output_path": str(output_path),
                 "message": f"Vidéo rendue → {output_path}",
-                "remotion_log": combined[-2000:],
+                "remotion_log": _log_snippet(combined),
             }
         # returncode 0 mais fichier absent
         alt = _find_rendered_file(project, composition_id, combined)
-        debug = f"returncode=0 mais {output_path} introuvable.\nLog Remotion :\n{combined[-3000:]}"
+        debug = (
+            f"returncode=0 mais {output_path} introuvable.\n"
+            f"Log Remotion (total {len(combined)} chars) :\n{_log_snippet(combined)}"
+        )
         if alt:
             debug = f"Fichier trouvé ailleurs : {alt}\n\n" + debug
         logger.error("force_render: %s", debug)
         return {"status": "error", "error": debug}
 
-    error_output = combined[-4000:]
+    error_output = _log_snippet(combined, 5000)
     logger.error("force_render failed (code %d): %s", result.returncode, error_output)
     return {"status": "error", "error": f"Exit {result.returncode}\n\n{error_output}"}
 

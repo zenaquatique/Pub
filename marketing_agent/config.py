@@ -94,7 +94,7 @@ POSTING_TIMEZONE = os.environ.get("POSTING_TIMEZONE", "Europe/Paris")
 
 # Claude API (optionnel — priorité sur Groq si clé fournie)
 ANTHROPIC_API_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
-CLAUDE_SCRIPT_MODEL = os.environ.get("CLAUDE_SCRIPT_MODEL", "claude-opus-4-7")
+CLAUDE_SCRIPT_MODEL = os.environ.get("CLAUDE_SCRIPT_MODEL", "claude-haiku-4-5-20251001")
 
 # OpenAI (fallback quand Groq est rate-limitée)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")

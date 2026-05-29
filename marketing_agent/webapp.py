@@ -833,6 +833,24 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
+@app.get("/api/debug-ai-config")
+async def api_debug_ai_config():
+    """Montre quelle clé API est active et quel modèle Claude est configuré."""
+    return {
+        "ANTHROPIC_API_KEY": "✅ définie" if ANTHROPIC_API_KEY else "❌ absente",
+        "CLAUDE_SCRIPT_MODEL": CLAUDE_SCRIPT_MODEL,
+        "GROQ_API_KEY": "✅ définie" if GROQ_API_KEY else "❌ absente",
+        "GROQ_MODEL": GROQ_MODEL,
+        "OPENAI_API_KEY": "✅ définie" if OPENAI_API_KEY else "❌ absente",
+        "OPENAI_MODEL": OPENAI_MODEL,
+        "generation_path": (
+            "Claude → Groq fallback" if ANTHROPIC_API_KEY
+            else "Groq → OpenAI fallback" if GROQ_API_KEY
+            else "❌ AUCUNE CLÉ"
+        ),
+    }
+
+
 @app.get("/api/debug-versus/{composition_id}")
 async def api_debug_versus(composition_id: str):
     """Appelle le LLM pour un post Versus et retourne tout : prompt, réponse brute, props parsées."""

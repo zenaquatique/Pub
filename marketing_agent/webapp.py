@@ -1217,6 +1217,36 @@ async def api_root_tsx_lines(start: int = 385, end: int = 410):
     return {"total_lines": len(lines), "lines": snippet}
 
 
+@app.get("/api/repair-root-tsx-syntax")
+async def api_repair_root_tsx_syntax():
+    """Supprime les propriétés TypeScript invalides (noms avec espaces) de Root.tsx.
+
+    Ex: '  tip title: "..."'  → supprimé  (identifiant TypeScript interdit).
+    Ces lignes sont générées par le LLM quand il confond PromoVideoProps et
+    EducatifVideoProps et insère des champs tips au format invalide.
+    """
+    import re as _re
+    tsx = Path(VIDEO_ASSETS_PATH) / "src" / "Root.tsx"
+    if not tsx.exists():
+        raise HTTPException(404, "Root.tsx introuvable")
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+    lines = content.splitlines(keepends=True)
+    # Ligne invalide : espace(s) + mot + espace + mot + ":" (propriété avec espace dans le nom)
+    bad_re = _re.compile(r'^\s+\w+\s+\w+\s*:')
+    removed = []
+    kept = []
+    for i, line in enumerate(lines, 1):
+        if bad_re.match(line):
+            removed.append({"line": i, "content": line.rstrip()})
+        else:
+            kept.append(line)
+    if not removed:
+        return {"status": "ok", "message": "Aucune propriété invalide trouvée", "removed": []}
+    tsx.write_text("".join(kept), encoding="utf-8")
+    return {"status": "fixed", "removed": removed,
+            "message": f"{len(removed)} ligne(s) invalide(s) supprimée(s)"}
+
+
 @app.get("/api/git-restore-root-tsx")
 async def api_git_restore_root_tsx():
     """Restaure Root.tsx depuis le dernier commit git du projet Remotion."""

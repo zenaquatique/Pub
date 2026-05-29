@@ -112,12 +112,13 @@ def generate_voiceover(props: dict) -> str:
     lines: list[str] = []
 
     if "VersusVideoProps" in t:
-        hook       = props.get("hookText", "")
-        l_label    = props.get("leftLabel", "Option A")
-        r_label    = props.get("rightLabel", "Option B")
-        l_items    = props.get("leftItems", [])
-        r_items    = props.get("rightItems", [])
-        verdict    = props.get("verdict", "")
+        hook      = props.get("hookText", "")
+        l_label   = props.get("leftLabel", "") or "Option A"
+        r_label   = props.get("rightLabel", "") or "Option B"
+        l_items   = props.get("leftItems", [])
+        r_items   = props.get("rightItems", [])
+        verdict   = props.get("verdict", "")
+        cta       = props.get("ctaText", "Découvre nos plantes sur zen-aquatique.fr")
 
         lines = [
             "🎬 SCRIPT VOIX OFF — Versus",
@@ -135,7 +136,7 @@ def generate_voiceover(props: dict) -> str:
             f'« {verdict} »',
             "",
             "[CTA — 20 à 23 s]",
-            '« Clique sur le lien en bio ! »',
+            f'« {cta} »',
         ]
 
     elif "EducatifVideoProps" in t:

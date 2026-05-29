@@ -357,14 +357,22 @@ async def api_calendar(file_index: int = 0):
 
 _VOICEOVER_SCHEMAS = {
     "VersusVideoProps": """{
-  "hookText": "accroche courte (max 8 mots)",
-  "hookEmoji": "1 emoji",
-  "leftLabel": "label option gauche",
-  "leftItems": ["avantage 1", "avantage 2", "avantage 3"],
-  "rightLabel": "label option droite",
-  "rightItems": ["avantage 1", "avantage 2", "avantage 3"],
-  "verdict": "verdict final court",
-  "ctaText": "call-to-action"
+  "hookText": "accroche 6-8 mots — pose la comparaison. Ex: 'Bac planté vs bac nu : qui gagne ?'",
+  "hookEmoji": "1 emoji aquatique",
+  "leftLabel": "nom court option GAUCHE (2-3 mots). Ex: 'Bac planté', 'Plantes vivantes', 'Boutures'",
+  "leftItems": [
+    "avantage 1 en 4-6 mots — spécifique et concret. Ex: 'Eau naturellement purifiée'",
+    "avantage 2 en 4-6 mots. Ex: 'Bactéries bénéfiques fixées'",
+    "avantage 3 en 4-6 mots. Ex: 'Décor vivant et évolutif'"
+  ],
+  "rightLabel": "nom court option DROITE (2-3 mots). Ex: 'Bac nu', 'Déco artificielle', 'Pot'",
+  "rightItems": [
+    "caractéristique option droite en 4-6 mots. Ex: 'Entretien réduit au minimum'",
+    "caractéristique 2 en 4-6 mots. Ex: 'Pas de taille ni de fertilisation'",
+    "caractéristique 3 en 4-6 mots. Ex: 'Aspect statique, jamais vivant'"
+  ],
+  "verdict": "conclusion forte en 6-10 mots qui valorise ZenAquatique. Ex: 'Le bac planté gagne haut la main — dès 0,99€'",
+  "ctaText": "appel à l'action 10-14 mots en 2 phrases. Ex: 'Transforme ton aquarium dès aujourd'hui. Découvre nos boutures sur zen-aquatique.fr'"
 }""",
     "EducatifVideoProps": """{
   "hookText": "10-14 mots — 2 phrases : contexte accrocheur + bénéfice clé ZenAquatique. Ex: 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'",

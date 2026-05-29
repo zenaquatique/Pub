@@ -830,6 +830,38 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
+@app.delete("/api/scripts-cache")
+async def api_clear_scripts_cache():
+    """Vide tout le cache de scripts générés (data/scripts/*.json)."""
+    deleted = []
+    if SCRIPTS_DIR.exists():
+        for f in SCRIPTS_DIR.glob("*.json"):
+            f.unlink(missing_ok=True)
+            deleted.append(f.name)
+    return {"status": "ok", "deleted": deleted, "count": len(deleted)}
+
+
+@app.get("/api/debug-script-raw/{composition_id}")
+async def api_debug_script_raw(composition_id: str):
+    """Diagnostic : montre les props brutes en cache + le voiceover généré."""
+    cached = _load_script(composition_id)
+    from tools.remotion import generate_voiceover
+    voiceover = ""
+    if cached.get("props"):
+        try:
+            voiceover = generate_voiceover(cached["props"])
+        except Exception as e:
+            voiceover = f"Erreur: {e}"
+    return {
+        "composition_id": composition_id,
+        "cached_status": cached.get("status"),
+        "template_type": (cached.get("props") or {}).get("template_type"),
+        "props_keys": list((cached.get("props") or {}).keys()),
+        "props": cached.get("props"),
+        "voiceover_preview": voiceover[:500] if voiceover else "",
+    }
+
+
 # POST /api/script — génère TOUJOURS un nouveau script (vide le cache d'abord)
 def _write_props_to_roots(composition_id: str, props: dict) -> None:
     """Écrit les props dans Root.tsx (crée la composition si absente). Silencieux en cas d'erreur."""

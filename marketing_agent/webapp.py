@@ -449,30 +449,41 @@ def _detect_template(text: str) -> str:
 
 
 def _llm_chat_json(messages: list, temperature: float = 0.7, max_tokens: int = 2048) -> str:
-    """Appelle Groq en JSON; bascule automatiquement sur OpenAI si rate-limitée (429)."""
+    """Appelle Groq en JSON; bascule automatiquement sur des modèles plus légers puis OpenAI."""
+    # Ordre de préférence : modèle principal → modèles légers (limites journalières bien plus élevées)
+    _GROQ_FALLBACK_MODELS = [
+        "llama-3.1-8b-instant",   # 14 400 req/jour (vs 1000 pour 70B)
+        "gemma2-9b-it",            # 14 400 req/jour
+        "llama-3.2-3b-preview",   # très léger, dernier recours Groq
+    ]
+
     if GROQ_API_KEY:
-        try:
-            from groq import Groq
-            resp = Groq(api_key=GROQ_API_KEY).chat.completions.create(
-                model=GROQ_MODEL,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return resp.choices[0].message.content
-        except Exception as exc:
-            is_rate_limit = (
-                "429" in str(exc) or "413" in str(exc)
-                or getattr(exc, "status_code", None) in (413, 429)
-            )
-            if not is_rate_limit:
-                raise
-            logger.warning("Groq bloquée (%s) → bascule sur OpenAI", str(exc)[:80])
+        from groq import Groq
+        _groq_client = Groq(api_key=GROQ_API_KEY)
+        for _model in [GROQ_MODEL] + _GROQ_FALLBACK_MODELS:
+            try:
+                resp = _groq_client.chat.completions.create(
+                    model=_model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                if _model != GROQ_MODEL:
+                    logger.info("Fallback Groq utilisé : %s", _model)
+                return resp.choices[0].message.content
+            except Exception as exc:
+                is_rate_limit = (
+                    "429" in str(exc) or "413" in str(exc)
+                    or getattr(exc, "status_code", None) in (413, 429)
+                )
+                if not is_rate_limit:
+                    raise
+                logger.warning("Groq %s rate-limitée (%s) → modèle suivant", _model, str(exc)[:60])
 
     if not OPENAI_API_KEY:
         raise RuntimeError(
-            "Limite quotidienne Groq atteinte et OPENAI_API_KEY absent du .env — "
+            "Limite Groq atteinte sur tous les modèles et OPENAI_API_KEY absent du .env — "
             "attends ~24h ou ajoute ta clé OpenAI dans le fichier .env"
         )
 

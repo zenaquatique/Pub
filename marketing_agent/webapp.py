@@ -397,17 +397,34 @@ _VOICEOVER_SCHEMAS = {
   "ctaText": "10-14 mots — 2 phrases : appel à l'action fort + zen-aquatique.fr. Ex: 'Crée l'aquarium de tes rêves dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'"
 }""",
     "PromoVideoProps": """{
-  "hookText": "10-14 mots — 2 phrases : accroche + angle de la sélection. Ex: 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout dans un aquascape.'",
+  "hookText": "10-14 mots — 2 phrases : accroche + angle de la sélection. Adapte au sujet (plantes ou crevettes).",
   "plants": [
-    {"emoji": "🌿", "name": "Nom précis (latin + commun si possible)", "description": "12-15 mots — 2 phrases : effet visuel ou bénéfice principal + usage. Ex: 'Un tapis dense et vert éclatant, incontournable en aquascape. Idéal pour couvrir l'avant-plan.'", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom précis (latin + commun si possible)", "description": "12-15 mots — 2 phrases : effet visuel ou bénéfice + usage", "price": "X,XX€"},
-    {"emoji": "🌿", "name": "Nom précis (latin + commun si possible)", "description": "12-15 mots — 2 phrases : effet visuel ou bénéfice + usage", "price": "X,XX€"}
+    {"emoji": "🌿 ou 🦐 selon le sujet", "name": "Nom précis du produit actif (du catalogue)", "description": "12-15 mots — 2 phrases : effet visuel / bénéfice + usage. Ex plante: 'Un tapis vert dense, incontournable en aquascape. Idéal pour couvrir l'avant-plan.' Ex crevette: 'Une couleur jaune éclatante qui illumine ton bac. Idéale pour débuter avec les crevettes.'", "price": "X,XX€"},
+    {"emoji": "🌿 ou 🦐", "name": "Nom précis du produit actif (du catalogue)", "description": "12-15 mots — 2 phrases", "price": "X,XX€"},
+    {"emoji": "🌿 ou 🦐", "name": "Nom précis du produit actif (du catalogue)", "description": "12-15 mots — 2 phrases", "price": "X,XX€"}
   ],
-  "ctaText": "10-14 mots — 2 phrases : appel à l'action + zen-aquatique.fr. Ex: 'Crée l'avant-plan parfait dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'"
+  "ctaText": "10-14 mots — 2 phrases : appel à l'action + zen-aquatique.fr."
 }""",
 }
 
 # ── Filtre post-génération partagé ────────────────────────────────────────────
+
+# Catalogue produits injecté dans les prompts pour forcer la variété et éviter les inventions
+_CATALOGUE_HINT = (
+    "Produits ACTIFS — choisir UNIQUEMENT parmi ceux-ci, adaptés au sujet :\n"
+    "Plantes : Hygrophila Polysperma 1,50€ · Limnophilia Sessiliflora 0,99€ · "
+    "Valisneria Spiralis 1,99€ · Sagittaria Subulata 1,50€ · Cryptocoryne Lucens 1,99€ · "
+    "Rotala H'ra 1,50€ · Rotala Laos 1,50€ · Cryptocoryne Beckettii 1,99€ · "
+    "Lysimachia Nummularia Aurea 1,99€ · Ludwigia Repens 1,50€ · Egeria Densa 0,99€ · "
+    "Rotala Rotundifolia 1,50€ · Anubias Barteri Nana 4,99€ · Pogostemon Helferi 1,99€ · "
+    "Alternanthera Reinekii Red Ruby 1,99€ · Bucephalandra Red Scorpio 3,99€ · "
+    "Nymphaea Lotus Red 4,99€ · Taxiphyllum Taïwan Moss 2,99€ · Mayaca Fluviatilis 1,50€ · "
+    "Microsorium Pteroptus 2,99€ · Hygrophila Disformis 1,99€ · Echinodorus Bleheri 1,99€ · "
+    "Hygrophila Corymbosa 1,99€ · Taxiphyllum Bogor Moss 2,99€ · Micranthemum Monte Carlo 2,99€\n"
+    "Crevettes : Neocaridina Yellow Néon 3,99€ · Neocaridina Orange Cherry 3,99€ · "
+    "Neocaridina Blue Velvette 3,99€\n"
+    "⚠️ Choisis des produits VARIÉS. Ne répète pas toujours les mêmes."
+)
 
 _BANNED_WORDS = [
     "pesticide", "traitement", "traitée", "traitées", "traité", "traités",
@@ -445,6 +462,8 @@ def _detect_template(text: str) -> str:
         return "VersusVideoProps"
     if "🔥" in text or "promo" in tl or "%" in text:
         return "PromoVideoProps"
+    if "🦐" in text or "crevette" in tl:
+        return "PromoVideoProps"  # crevettes → 3 produits avec prix
     return "EducatifVideoProps"
 
 
@@ -751,24 +770,24 @@ def _generate_with_groq(
         else:
             props_prompt = (
                 f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
+                f"{_CATALOGUE_HINT}\n\n"
                 f"Génère les overlays visuels selon ce schéma exact.\n\n"
                 f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde :\n"
                 f"  • hookText : 10-14 mots — 2 phrases courtes\n"
-                f"  • tip title : 2-4 mots SPÉCIFIQUES AU SUJET (affiché à l'écran)\n"
+                f"  • tip/product title : 2-4 mots SPÉCIFIQUES AU SUJET (affiché à l'écran)\n"
                 f"  • tip desc  : 14-18 mots — 2 phrases précises\n"
                 f"  • ctaText   : 10-14 mots — action + zen-aquatique.fr\n\n"
                 f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
                 f"  1. hookText = 2 phrases avec verbe fort, liées au sujet\n"
-                f"     ✅ 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout dans un aquascape.'\n"
-                f"     ❌ 'Transforme ton aquarium avec des plantes fraîches. Cultivées en France pour toi.'\n\n"
-                f"  2. tip title = SPÉCIFIQUE AU SUJET — nom de plante, conseil précis, caractéristique unique\n"
-                f"     ✅ (sujet plantes) : 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
-                f"     ✅ (sujet conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
-                f"     ❌ JAMAIS ces titres génériques : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches'\n"
-                f"        (ces arguments vont dans la desc ou le CTA, PAS dans les titres)\n\n"
-                f"  3. tip desc = 2 phrases avec fait concret lié au sujet + 1 argument ZenAquatique\n"
-                f"     ✅ 'Tapis vert dense, idéal pour couvrir le sol en aquascape. Cultivée en France, dès 2,99€.'\n"
-                f"     ❌ 'Des boutures de qualité à partir de 0,99€, fraîches garanties vivantes.'\n\n"
+                f"     ✅ (plantes) : 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout.'\n"
+                f"     ✅ (crevettes) : 'Ces crevettes vont colorer ton bac instantanément. Neocaridina, la star des aquariums.'\n\n"
+                f"  2. titre = SPÉCIFIQUE AU SUJET — nom de produit précis du catalogue, conseil ou caractéristique\n"
+                f"     ✅ (plantes) : noms réels comme 'Rotala Laos' / 'Egeria Densa' / 'Sagittaria Subulata'\n"
+                f"     ✅ (crevettes) : 'Yellow Néon' / 'Blue Velvette' / 'Orange Cherry'\n"
+                f"     ✅ (conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
+                f"     ❌ JAMAIS : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches' en titre\n\n"
+                f"  3. desc = 2 phrases avec fait concret lié au sujet + 1 argument ZenAquatique\n"
+                f"     ✅ 'Tapis vert dense, idéal pour couvrir le sol en aquascape. Cultivée en France, dès 2,99€.'\n\n"
                 f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases\n\n"
                 f"Schéma :\n{schema}"
             )

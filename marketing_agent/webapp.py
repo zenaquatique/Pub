@@ -830,6 +830,58 @@ async def api_generate_voiceover_ai(request: Request):
     return result
 
 
+@app.get("/api/debug-versus/{composition_id}")
+async def api_debug_versus(composition_id: str):
+    """Appelle le LLM pour un post Versus et retourne tout : prompt, réponse brute, props parsées."""
+    from tools.knowledge import find_calendar_files, read_agent_memory
+
+    cal_entry, template_type = _build_cal_entry(composition_id, "")
+    schema = _VOICEOVER_SCHEMAS.get("VersusVideoProps")
+    memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
+    memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory}\n" if memory else ""
+
+    sys_base = (
+        f"Tu travailles pour ZenAquatique (zen-aquatique.fr).\n"
+        f"Ton : {BRAND_VOICE} | Audience : {TARGET_AUDIENCE}\n"
+        f"{memory_block}\n{CONTENT_RULES}\n"
+    )
+    user_prompt = (
+        f"Sujet : {cal_entry or composition_id}\nTemplate : VersusVideoProps\n\n"
+        f"Génère les overlays d'une vidéo VERSUS selon ce schéma exact :\n{schema}\n\n"
+        f"⚠️ VERSUS = comparaison entre DEUX APPROCHES AQUARISTIQUES — jamais entre des boutiques.\n"
+        f"Exemples : leftLabel='Bac planté' vs rightLabel='Bac nu'\n"
+        f"leftItems = 3 avantages option gauche (4-6 mots chacun)\n"
+        f"rightItems = 3 caractéristiques option droite (4-6 mots chacun)\n"
+        f"verdict = conclusion 6-10 mots valorisant ZenAquatique\n"
+        f"ctaText = 2 phrases action + zen-aquatique.fr\n"
+    )
+
+    raw_response = ""
+    error = ""
+    parsed_props = {}
+
+    try:
+        raw_response = _llm_chat_json(
+            messages=[
+                {"role": "system", "content": sys_base + "\nRéponds UNIQUEMENT en JSON valide selon le schéma."},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7, max_tokens=2048,
+        )
+        parsed_props = json.loads(raw_response)
+    except Exception as e:
+        error = str(e)
+
+    return {
+        "composition_id": composition_id,
+        "detected_template": template_type,
+        "calendar_entry": cal_entry,
+        "raw_llm_response": raw_response,
+        "parsed_props": parsed_props,
+        "error": error,
+    }
+
+
 @app.delete("/api/scripts-cache")
 async def api_clear_scripts_cache():
     """Vide tout le cache de scripts générés (data/scripts/*.json)."""

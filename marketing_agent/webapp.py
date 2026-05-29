@@ -1206,6 +1206,17 @@ async def api_restore_root_tsx_backup():
     return result
 
 
+@app.get("/api/root-tsx-lines")
+async def api_root_tsx_lines(start: int = 385, end: int = 410):
+    """Retourne les lignes start..end de Root.tsx pour diagnostic."""
+    tsx = Path(VIDEO_ASSETS_PATH) / "src" / "Root.tsx"
+    if not tsx.exists():
+        raise HTTPException(404, "Root.tsx introuvable")
+    lines = tsx.read_text(encoding="utf-8", errors="ignore").splitlines()
+    snippet = {i + 1: lines[i] for i in range(max(0, start - 1), min(len(lines), end))}
+    return {"total_lines": len(lines), "lines": snippet}
+
+
 @app.get("/api/git-restore-root-tsx")
 async def api_git_restore_root_tsx():
     """Restaure Root.tsx depuis le dernier commit git du projet Remotion."""

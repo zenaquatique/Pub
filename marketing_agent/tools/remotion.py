@@ -668,7 +668,14 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
     """Lance npx remotion render <composition_id> dans le dossier du projet."""
     project = Path(project_path)
     if not project.exists():
-        return {"status": "error", "error": f"Dossier projet introuvable : {project_path}"}
+        return {
+            "status": "error",
+            "error": (
+                f"Le rendu vidéo n'est disponible que sur le PC principal.\n"
+                f"Le dossier Remotion est introuvable : {project_path}\n"
+                f"Configure VIDEO_ASSETS_PATH dans ton .env pour pointer vers le projet zenaquatique-video."
+            ),
+        }
 
     # Normalise Root.tsx avant le rendu : aplatit les tags multi-lignes qui
     # provoquent "Multiple composition registered" dans Remotion

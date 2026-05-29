@@ -11,6 +11,7 @@ from config import (
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
     CONTENT_RULES, ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
+    OPENAI_API_KEY, OPENAI_MODEL,
 )
 from tools import shopify, social, email_campaigns, customer
 from tools.knowledge import (
@@ -444,58 +445,48 @@ def execute_tool(name: str, inputs: dict) -> Any:
 
 # ─── Prompt système ───────────────────────────────────────────────────────────
 
-def build_system_prompt() -> str:
+def build_system_prompt(compact: bool = False) -> str:
     today = datetime.now().strftime("%A %d %B %Y")
 
-    vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
-    assets = list_video_assets(VIDEO_ASSETS_PATH)
     memory = read_agent_memory(OBSIDIAN_VAULT_PATH)
-
+    # En mode compact (Groq TPM), on tronque agressivement la mémoire
+    _mem_max = 800 if compact else 4000
     if memory:
+        mem_trimmed = memory[:_mem_max] + ("\n[... tronqué ...]" if len(memory) > _mem_max else "")
         memory_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  MÉMOIRE PERSISTANTE — CONTRAINTES ABSOLUES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{memory}
+{mem_trimmed}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RÈGLE CRITIQUE : Avant de générer ou modifier TOUT contenu (script,
-post, vidéo, calendrier), relis chaque ligne ci-dessus et vérifie que
-ton contenu ne viole AUCUNE de ces contraintes. Si une note dit
-"ne jamais écrire X" → X est INTERDIT dans tout le contenu généré.
+RÈGLE CRITIQUE : relis ci-dessus et ne viole AUCUNE contrainte.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
     else:
-        memory_section = """
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MÉMOIRE PERSISTANTE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-(vide pour l'instant — les préférences de l'utilisateur seront
- enregistrées ici via save_to_memory au fil des sessions)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
+        memory_section = "\n(mémoire vide — utilise save_to_memory pour enregistrer des préférences)\n"
 
+    # Vault et assets : inclus uniquement hors mode compact (Claude/OpenAI)
     vault_section = ""
-    if vault_content:
-        # Tronqué à 4000 chars pour rester sous la limite TPM de Groq (12 000 tokens/min)
-        _max = 4000
-        vault_trimmed = vault_content[:_max] + ("\n[... tronqué ...]" if len(vault_content) > _max else "")
-        vault_section = f"""
+    assets_section = ""
+    if not compact:
+        vault_content = read_obsidian_vault(OBSIDIAN_VAULT_PATH)
+        assets = list_video_assets(VIDEO_ASSETS_PATH)
+        if vault_content:
+            vault_trimmed = vault_content[:6000] + ("\n[... tronqué ...]" if len(vault_content) > 6000 else "")
+            vault_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VAULT OBSIDIAN — CONNAISSANCES DE LA MARQUE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {vault_trimmed}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
-
-    assets_section = ""
-    if assets:
-        shown = assets[:15]  # limite pour rester sous le TPM Groq
-        lines = "\n".join(
-            f"  - [{a['type'].upper()}] {a['name']}  ({a['size_kb']} KB)  → {a['path']}"
-            for a in shown
-        )
-        extra = f"\n  (+ {len(assets) - len(shown)} autres...)" if len(assets) > len(shown) else ""
-        assets_section = f"""
+        if assets:
+            lines = "\n".join(
+                f"  - [{a['type'].upper()}] {a['name']}  ({a['size_kb']} KB)  → {a['path']}"
+                for a in assets[:20]
+            )
+            extra = f"\n  (+ {len(assets) - 20} autres...)" if len(assets) > 20 else ""
+            assets_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ASSETS VIDÉO / IMAGES DISPONIBLES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -503,10 +494,12 @@ ASSETS VIDÉO / IMAGES DISPONIBLES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
+    compact_note = "\n(Mode compact : utilise get_brand_knowledge pour charger vault et assets.)\n" if compact else ""
+
     return f"""Tu es l'agent marketing IA de "{STORE_NAME}" ({STORE_NICHE}).
 Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
 Boutique : https://{SHOPIFY_SHOP_URL} | Aujourd'hui : {today}
-{memory_section}{vault_section}{assets_section}
+{compact_note}{memory_section}{vault_section}{assets_section}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {CONTENT_RULES}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -584,9 +577,11 @@ PUBLICATIONS
 # ─── Boucle agent principale ──────────────────────────────────────────────────
 
 def run_marketing_session(task: str = None) -> str:
-    """Lance une session marketing. Utilise Claude si dispo, sinon Groq."""
+    """Lance une session marketing. Priorité : Claude → OpenAI → Groq."""
     if ANTHROPIC_API_KEY:
         return _run_session_claude(task)
+    if OPENAI_API_KEY:
+        return _run_session_openai(task)
     return _run_session_groq(task)
 
 
@@ -594,7 +589,7 @@ def _run_session_groq(task: str = None) -> str:
     from groq import Groq
 
     groq_client = Groq(api_key=GROQ_API_KEY)
-    system_prompt = build_system_prompt()
+    system_prompt = build_system_prompt(compact=True)
     user_message = task or "Lance la routine marketing quotidienne complète."
 
     logger.info("=== Session Groq | %s ===", datetime.now().isoformat())
@@ -637,6 +632,73 @@ def _run_session_groq(task: str = None) -> str:
 
         if not tool_calls:
             logger.info("=== Session Groq terminée après %d tours ===", iteration)
+            return msg.content or "(aucune réponse)"
+
+        for tc in tool_calls:
+            try:
+                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                tool_result = execute_tool(tc.function.name, args)
+            except Exception as exc:
+                logger.warning("Outil %s échoué : %s", tc.function.name, exc)
+                tool_result = {"status": "error", "reason": str(exc)}
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": json.dumps(tool_result, ensure_ascii=False, default=str),
+            })
+
+    logger.warning("Limite d'itérations atteinte (%d)", max_iterations)
+    return "Session interrompue : limite d'itérations atteinte."
+
+
+def _run_session_openai(task: str = None) -> str:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    system_prompt = build_system_prompt()
+    user_message = task or "Lance la routine marketing quotidienne complète."
+
+    logger.info("=== Session OpenAI | %s ===", datetime.now().isoformat())
+
+    # Convertit TOOLS_GROQ en format OpenAI (identique, c'est déjà le même format)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+    iteration = 0
+    max_iterations = 20
+
+    while iteration < max_iterations:
+        iteration += 1
+        logger.info("Tour OpenAI %d", iteration)
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=messages,
+            tools=TOOLS_GROQ,
+            tool_choice="auto",
+            temperature=0.6,
+            max_tokens=4096,
+        )
+
+        msg = response.choices[0].message
+        tool_calls = msg.tool_calls or []
+
+        assistant_entry: dict = {"role": "assistant", "content": msg.content or ""}
+        if tool_calls:
+            assistant_entry["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in tool_calls
+            ]
+        messages.append(assistant_entry)
+
+        if not tool_calls:
+            logger.info("=== Session OpenAI terminée après %d tours ===", iteration)
             return msg.content or "(aucune réponse)"
 
         for tc in tool_calls:

@@ -13,7 +13,10 @@ _MEMORY_FOLDER = "Mémoire Agent"
 _MEMORY_FILE   = "memoire.md"
 
 # Dossier de contexte local (commité dans le repo, toujours disponible)
-_LOCAL_CONTEXT_DIR = Path(__file__).parent.parent / "data" / "context"
+_LOCAL_CONTEXT_DIR  = Path(__file__).parent.parent / "data" / "context"
+
+# Dossier calendrier local (commité dans le repo, sync via git — pas besoin d'Obsidian)
+_LOCAL_CALENDAR_DIR = Path(__file__).parent.parent / "data" / "calendrier"
 
 
 def read_local_context() -> str:
@@ -85,66 +88,91 @@ _CALENDAR_FILE_KEYWORDS   = {"calendrier", "calendar", "planning", "editorial", 
 
 
 def find_calendar_files(vault_path: str) -> list[dict]:
-    """Retourne les fichiers Obsidian liés au calendrier éditorial.
+    """Retourne les fichiers liés au calendrier éditorial.
 
-    Priorité :
-    1. Fichiers dont un dossier parent contient un mot-clé calendrier (ex: 'Calendrier Publication/mai-2026.md')
-    2. Fichiers dont le nom contient un mot-clé calendrier
+    Sources (fusionnées, dédupliquées par nom de fichier) :
+    1. data/calendrier/ du repo Git  ← toujours disponible, sync via git
+    2. Vault Obsidian (si vault_path existe)  ← optionnel, PC principal
     """
-    p = Path(vault_path)
-    if not vault_path or not p.exists():
-        return []
+    results: dict[str, dict] = {}  # filename → entry (déduplique)
 
-    priority: list[dict] = []   # dossier parent calendrier
-    fallback: list[dict] = []   # nom de fichier calendrier
+    # ── Source 1 : dossier local Git (priorité) ───────────────────────────────
+    if _LOCAL_CALENDAR_DIR.exists():
+        for f in sorted(_LOCAL_CALENDAR_DIR.rglob("*.md")):
+            try:
+                content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                if content:
+                    results[f.name] = {
+                        "file": f"calendrier/{f.name}",
+                        "path": str(f),
+                        "content": content,
+                        "source": "git",
+                    }
+            except Exception as exc:
+                logger.warning("Lecture calendrier local ignorée %s : %s", f, exc)
 
-    for f in sorted(p.rglob("*.md")):
-        try:
-            rel = f.relative_to(p)
-            parts = list(rel.parts)
-            folder_parts_lower = [pt.lower() for pt in parts[:-1]]  # dossiers seulement
-            file_name_lower    = rel.stem.lower()
+    # ── Source 2 : vault Obsidian (optionnelle) ───────────────────────────────
+    p = Path(vault_path) if vault_path else None
+    if p and p.exists():
+        priority: list[dict] = []
+        fallback: list[dict] = []
+        for f in sorted(p.rglob("*.md")):
+            try:
+                rel = f.relative_to(p)
+                parts_list = list(rel.parts)
+                folder_parts_lower = [pt.lower() for pt in parts_list[:-1]]
+                file_name_lower    = rel.stem.lower()
+                content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                if not content:
+                    continue
+                entry = {"file": str(rel), "path": str(f), "content": content, "source": "obsidian"}
+                if any(kw in fp for kw in _CALENDAR_FOLDER_KEYWORDS for fp in folder_parts_lower):
+                    priority.append(entry)
+                elif any(kw in file_name_lower for kw in _CALENDAR_FILE_KEYWORDS):
+                    fallback.append(entry)
+            except Exception as exc:
+                logger.warning("Lecture calendrier Obsidian ignorée %s : %s", f, exc)
+        priority.sort(key=lambda x: x["file"], reverse=True)
+        fallback.sort(key=lambda x: x["file"], reverse=True)
+        for entry in priority + fallback:
+            fname = Path(entry["file"]).name
+            if fname not in results:  # git a la priorité
+                results[fname] = entry
 
-            content = f.read_text(encoding="utf-8", errors="ignore").strip()
-            if not content:
-                continue
-
-            entry = {"file": str(rel), "path": str(f), "content": content}
-
-            if any(kw in fp for kw in _CALENDAR_FOLDER_KEYWORDS for fp in folder_parts_lower):
-                priority.append(entry)
-            elif any(kw in file_name_lower for kw in _CALENDAR_FILE_KEYWORDS):
-                fallback.append(entry)
-        except Exception as exc:
-            logger.warning("Lecture calendrier ignorée %s : %s", f, exc)
-
-    # Dans chaque groupe, les plus récents (année/mois dans le nom) en premier
-    priority.sort(key=lambda x: x["file"], reverse=True)
-    fallback.sort(key=lambda x: x["file"], reverse=True)
-    return priority + fallback
+    combined = sorted(results.values(), key=lambda x: x["file"], reverse=True)
+    if not combined:
+        logger.warning("Aucun fichier calendrier trouvé (ni git ni Obsidian).")
+    return combined
 
 
 def write_calendar_file(vault_path: str, filename: str, content: str) -> dict:
-    """Crée ou met à jour un fichier markdown dans le dossier Calendrier Publication."""
-    p = Path(vault_path)
-    if not vault_path or not p.exists():
-        return {"status": "error", "error": f"Vault introuvable : {vault_path}"}
+    """Crée ou met à jour un fichier markdown calendrier.
 
-    # Cherche le dossier calendrier existant
-    cal_folder = None
-    for folder in sorted(p.rglob("*")):
-        if folder.is_dir() and any(kw in folder.name.lower() for kw in _CALENDAR_FOLDER_KEYWORDS):
-            cal_folder = folder
-            break
+    Écrit dans data/calendrier/ du repo Git (sync via git, disponible partout).
+    Si la vault Obsidian est aussi disponible, écrit en miroir dedans.
+    """
+    # ── Toujours écrire dans le dossier Git ──────────────────────────────────
+    _LOCAL_CALENDAR_DIR.mkdir(parents=True, exist_ok=True)
+    git_target = _LOCAL_CALENDAR_DIR / filename
+    git_target.write_text(content, encoding="utf-8")
+    logger.info("Calendrier écrit (git) : %s", git_target)
 
-    if cal_folder is None:
-        cal_folder = p / "Calendrier Publication"
-        cal_folder.mkdir(parents=True, exist_ok=True)
+    # ── Miroir dans Obsidian si disponible ───────────────────────────────────
+    p = Path(vault_path) if vault_path else None
+    if p and p.exists():
+        cal_folder = None
+        for folder in sorted(p.rglob("*")):
+            if folder.is_dir() and any(kw in folder.name.lower() for kw in _CALENDAR_FOLDER_KEYWORDS):
+                cal_folder = folder
+                break
+        if cal_folder is None:
+            cal_folder = p / "Calendrier Publication"
+            cal_folder.mkdir(parents=True, exist_ok=True)
+        obs_target = cal_folder / filename
+        obs_target.write_text(content, encoding="utf-8")
+        logger.info("Calendrier écrit (Obsidian miroir) : %s", obs_target)
 
-    target = cal_folder / filename
-    target.write_text(content, encoding="utf-8")
-    logger.info("Calendrier écrit : %s", target)
-    return {"status": "success", "path": str(target), "file": filename}
+    return {"status": "success", "path": str(git_target), "file": filename}
 
 
 def list_video_assets(assets_path: str) -> list[dict]:

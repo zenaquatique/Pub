@@ -10,7 +10,7 @@ from config import (
     GROQ_API_KEY, GROQ_MODEL, STORE_NAME,
     STORE_NICHE, BRAND_VOICE, TARGET_AUDIENCE,
     SHOPIFY_SHOP_URL, OBSIDIAN_VAULT_PATH, VIDEO_ASSETS_PATH,
-    CONTENT_RULES,
+    CONTENT_RULES, ANTHROPIC_API_KEY, CLAUDE_SCRIPT_MODEL,
 )
 from tools import shopify, social, email_campaigns, customer
 from tools.knowledge import (
@@ -476,25 +476,30 @@ MÉMOIRE PERSISTANTE
 
     vault_section = ""
     if vault_content:
+        # Tronqué à 4000 chars pour rester sous la limite TPM de Groq (12 000 tokens/min)
+        _max = 4000
+        vault_trimmed = vault_content[:_max] + ("\n[... tronqué ...]" if len(vault_content) > _max else "")
         vault_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VAULT OBSIDIAN — CONNAISSANCES DE LA MARQUE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{vault_content}
+{vault_trimmed}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
     assets_section = ""
     if assets:
+        shown = assets[:15]  # limite pour rester sous le TPM Groq
         lines = "\n".join(
             f"  - [{a['type'].upper()}] {a['name']}  ({a['size_kb']} KB)  → {a['path']}"
-            for a in assets
+            for a in shown
         )
+        extra = f"\n  (+ {len(assets) - len(shown)} autres...)" if len(assets) > len(shown) else ""
         assets_section = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ASSETS VIDÉO / IMAGES DISPONIBLES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{lines}
+{lines}{extra}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -579,14 +584,20 @@ PUBLICATIONS
 # ─── Boucle agent principale ──────────────────────────────────────────────────
 
 def run_marketing_session(task: str = None) -> str:
-    """Lance une session marketing complète. Retourne le rapport final."""
+    """Lance une session marketing. Utilise Claude si dispo, sinon Groq."""
+    if ANTHROPIC_API_KEY:
+        return _run_session_claude(task)
+    return _run_session_groq(task)
+
+
+def _run_session_groq(task: str = None) -> str:
     from groq import Groq
 
     groq_client = Groq(api_key=GROQ_API_KEY)
     system_prompt = build_system_prompt()
     user_message = task or "Lance la routine marketing quotidienne complète."
 
-    logger.info("=== Démarrage session marketing | %s ===", datetime.now().isoformat())
+    logger.info("=== Session Groq | %s ===", datetime.now().isoformat())
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -612,7 +623,6 @@ def run_marketing_session(task: str = None) -> str:
         msg = response.choices[0].message
         tool_calls = msg.tool_calls or []
 
-        # Add assistant message to history
         assistant_entry: dict = {"role": "assistant", "content": msg.content or ""}
         if tool_calls:
             assistant_entry["tool_calls"] = [
@@ -626,7 +636,7 @@ def run_marketing_session(task: str = None) -> str:
         messages.append(assistant_entry)
 
         if not tool_calls:
-            logger.info("=== Session terminée après %d tours ===", iteration)
+            logger.info("=== Session Groq terminée après %d tours ===", iteration)
             return msg.content or "(aucune réponse)"
 
         for tc in tool_calls:
@@ -642,6 +652,73 @@ def run_marketing_session(task: str = None) -> str:
                 "tool_call_id": tc.id,
                 "content": json.dumps(tool_result, ensure_ascii=False, default=str),
             })
+
+    logger.warning("Limite d'itérations atteinte (%d)", max_iterations)
+    return "Session interrompue : limite d'itérations atteinte."
+
+
+def _run_session_claude(task: str = None) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    system_prompt = build_system_prompt()
+    user_message = task or "Lance la routine marketing quotidienne complète."
+
+    logger.info("=== Session Claude | %s ===", datetime.now().isoformat())
+
+    # Convertit TOOLS_GROQ (format OpenAI) en format Anthropic
+    tools_anthropic = [
+        {
+            "name": t["function"]["name"],
+            "description": t["function"].get("description", ""),
+            "input_schema": t["function"].get("parameters", {"type": "object", "properties": {}}),
+        }
+        for t in TOOLS_GROQ
+    ]
+
+    messages: list[dict] = [{"role": "user", "content": user_message}]
+    iteration = 0
+    max_iterations = 20
+
+    while iteration < max_iterations:
+        iteration += 1
+        logger.info("Tour Claude %d", iteration)
+
+        response = client.messages.create(
+            model=CLAUDE_SCRIPT_MODEL,
+            max_tokens=4096,
+            system=system_prompt,
+            messages=messages,
+            tools=tools_anthropic,
+        )
+
+        # Construire l'entrée assistant (texte + éventuels tool_use)
+        assistant_content = response.content  # liste de blocs
+        messages.append({"role": "assistant", "content": assistant_content})
+
+        tool_use_blocks = [b for b in assistant_content if b.type == "tool_use"]
+
+        if not tool_use_blocks:
+            text_blocks = [b for b in assistant_content if b.type == "text"]
+            text = " ".join(b.text for b in text_blocks)
+            logger.info("=== Session Claude terminée après %d tours ===", iteration)
+            return text or "(aucune réponse)"
+
+        # Exécuter les outils et renvoyer les résultats
+        tool_results = []
+        for b in tool_use_blocks:
+            try:
+                tool_result = execute_tool(b.name, b.input or {})
+            except Exception as exc:
+                logger.warning("Outil %s échoué : %s", b.name, exc)
+                tool_result = {"status": "error", "reason": str(exc)}
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": b.id,
+                "content": json.dumps(tool_result, ensure_ascii=False, default=str),
+            })
+
+        messages.append({"role": "user", "content": tool_results})
 
     logger.warning("Limite d'itérations atteinte (%d)", max_iterations)
     return "Session interrompue : limite d'itérations atteinte."

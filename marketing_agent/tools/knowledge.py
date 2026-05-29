@@ -18,6 +18,24 @@ _LOCAL_CONTEXT_DIR  = Path(__file__).parent.parent / "data" / "context"
 # Dossier calendrier local (commité dans le repo, sync via git — pas besoin d'Obsidian)
 _LOCAL_CALENDAR_DIR = Path(__file__).parent.parent / "data" / "calendrier"
 
+_MONTH_NUM = {
+    "jan": 1, "fév": 2, "feb": 2, "mar": 3, "avr": 4, "apr": 4,
+    "mai": 5, "may": 5, "jun": 6, "juin": 6, "jul": 7,
+    "aoû": 8, "aug": 8, "sep": 9, "oct": 10, "nov": 11,
+    "déc": 12, "dec": 12,
+}
+
+def _calendar_sort_key(entry: dict) -> tuple:
+    """Extrait (année, mois) depuis un nom de fichier comme 'juin-2026.md'."""
+    stem = Path(entry["file"]).stem.lower()
+    year = month = 0
+    for part in stem.replace("_", "-").split("-"):
+        if part.isdigit() and len(part) == 4:
+            year = int(part)
+        elif part[:3] in _MONTH_NUM:
+            month = _MONTH_NUM[part[:3]]
+    return (year, month)
+
 
 def read_local_context() -> str:
     """Lit tous les fichiers .md du dossier data/context/ du projet."""
@@ -139,7 +157,7 @@ def find_calendar_files(vault_path: str) -> list[dict]:
             if fname not in results:  # git a la priorité
                 results[fname] = entry
 
-    combined = sorted(results.values(), key=lambda x: x["file"], reverse=True)
+    combined = sorted(results.values(), key=_calendar_sort_key, reverse=True)
     if not combined:
         logger.warning("Aucun fichier calendrier trouvé (ni git ni Obsidian).")
     return combined

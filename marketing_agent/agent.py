@@ -293,6 +293,27 @@ TOOLS_GROQ = [
     },
 ]
 
+# Outils ultra-compacts pour Groq (TPM très limité — descriptions courtes)
+TOOLS_COMPACT = [
+    {"type": "function", "function": {"name": "get_store_analytics", "description": "Stats boutique Shopify.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "get_products", "description": "Liste produits actifs.", "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}}, "required": []}}},
+    {"type": "function", "function": {"name": "update_product_description", "description": "Met à jour description produit.", "parameters": {"type": "object", "properties": {"product_id": {"type": "integer"}, "new_description": {"type": "string"}}, "required": ["product_id", "new_description"]}}},
+    {"type": "function", "function": {"name": "post_to_instagram", "description": "Post Instagram.", "parameters": {"type": "object", "properties": {"caption": {"type": "string"}, "image_url": {"type": "string"}}, "required": ["caption", "image_url"]}}},
+    {"type": "function", "function": {"name": "post_to_facebook", "description": "Post Facebook.", "parameters": {"type": "object", "properties": {"message": {"type": "string"}, "link": {"type": "string"}, "image_url": {"type": "string"}}, "required": ["message"]}}},
+    {"type": "function", "function": {"name": "send_newsletter", "description": "Envoie newsletter.", "parameters": {"type": "object", "properties": {"subject": {"type": "string"}, "html_body": {"type": "string"}, "plain_body": {"type": "string"}}, "required": ["subject", "html_body"]}}},
+    {"type": "function", "function": {"name": "get_pending_customer_messages", "description": "Messages clients en attente.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "reply_to_customer", "description": "Répond client.", "parameters": {"type": "object", "properties": {"message_id": {"type": "string"}, "platform": {"type": "string"}, "reply_text": {"type": "string"}}, "required": ["message_id", "platform", "reply_text"]}}},
+    {"type": "function", "function": {"name": "send_abandoned_cart_email", "description": "Email panier abandonné.", "parameters": {"type": "object", "properties": {"customer_email": {"type": "string"}, "customer_name": {"type": "string"}, "cart_items": {"type": "array", "items": {"type": "string"}}, "cart_url": {"type": "string"}}, "required": ["customer_email", "customer_name", "cart_items", "cart_url"]}}},
+    {"type": "function", "function": {"name": "get_brand_knowledge", "description": "Charge vault Obsidian et assets vidéo.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "render_video", "description": "Rend vidéo Remotion. ID format YYYYMMDD.", "parameters": {"type": "object", "properties": {"composition_id": {"type": "string"}, "output_filename": {"type": "string"}}, "required": ["composition_id"]}}},
+    {"type": "function", "function": {"name": "list_rendered_videos", "description": "Liste MP4 rendus.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "save_to_memory", "description": "Sauvegarde note persistante.", "parameters": {"type": "object", "properties": {"note": {"type": "string"}}, "required": ["note"]}}},
+    {"type": "function", "function": {"name": "get_post_props", "description": "Lit props d'un post Remotion.", "parameters": {"type": "object", "properties": {"composition_id": {"type": "string"}}, "required": ["composition_id"]}}},
+    {"type": "function", "function": {"name": "update_post_props", "description": "Modifie props d'un post Remotion. Appelle render_video après.", "parameters": {"type": "object", "properties": {"composition_id": {"type": "string"}, "updates": {"type": "object"}}, "required": ["composition_id", "updates"]}}},
+    {"type": "function", "function": {"name": "create_post_composition", "description": "Crée nouvelle composition Remotion dans Root.tsx.", "parameters": {"type": "object", "properties": {"composition_id": {"type": "string"}, "props": {"type": "object"}}, "required": ["composition_id", "props"]}}},
+    {"type": "function", "function": {"name": "write_calendar_file", "description": "Crée fichier calendrier markdown dans Obsidian.", "parameters": {"type": "object", "properties": {"filename": {"type": "string"}, "content": {"type": "string"}}, "required": ["filename", "content"]}}},
+]
+
 # ─── Gestion des actions en attente ──────────────────────────────────────────
 
 def _load_pending_actions() -> list:
@@ -494,12 +515,25 @@ ASSETS VIDÉO / IMAGES DISPONIBLES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-    compact_note = "\n(Mode compact : utilise get_brand_knowledge pour charger vault et assets.)\n" if compact else ""
+    if compact:
+        # Prompt minimal pour Groq (TPM 12k) — pas de dividers, pas de vault/assets
+        mem_line = f"MEMOIRE: {mem_trimmed}" if memory else ""
+        return f"""Agent marketing "{STORE_NAME}" ({STORE_NICHE}). Aujourd'hui: {today}.
+Voix: {BRAND_VOICE} | Cible: {TARGET_AUDIENCE} | Boutique: https://{SHOPIFY_SHOP_URL}
+{mem_line}
+CONTENU INTERDIT: animaleries, plantes qui meurent, pesticides, concurrents.
+CONTENU OK: beaute plantes, prix 0.99EUR+, cultivees France/Europe, livraison rapide, facilite entretien.
+REGLES: reponds en "tu", sois court (1-3 phrases), fais les actions directement sans demander confirmation.
+TACHE PRECISE: si instruction specifique, fais-la directement. ROUTINE: si message vide, lance routine complete.
+REMOTION: projet={VIDEO_ASSETS_PATH}, ID=YYYYMMDD. Post existant: get_post_props->update_post_props->render_video. Post absent: create_post_composition->render_video.
+CALENDRIER: get_brand_knowledge puis write_calendar_file. Format: | Jour | Date | Template | Plateformes | Sujet | ID |
+MEMOIRE: save_to_memory avant toute action si correction/preference.
+PUBLICATIONS: Instagram/Facebook/newsletter -> file d'attente. Vidéo/Root.tsx/calendrier -> direct."""
 
     return f"""Tu es l'agent marketing IA de "{STORE_NAME}" ({STORE_NICHE}).
 Voix de marque : {BRAND_VOICE} | Cible : {TARGET_AUDIENCE}
 Boutique : https://{SHOPIFY_SHOP_URL} | Aujourd'hui : {today}
-{compact_note}{memory_section}{vault_section}{assets_section}
+{memory_section}{vault_section}{assets_section}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {CONTENT_RULES}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -609,7 +643,7 @@ def _run_session_groq(task: str = None) -> str:
         response = groq_client.chat.completions.create(
             model=GROQ_MODEL,
             messages=messages,
-            tools=TOOLS_GROQ,
+            tools=TOOLS_COMPACT,
             tool_choice="auto",
             temperature=0.6,
             max_tokens=4096,

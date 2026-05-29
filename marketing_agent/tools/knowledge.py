@@ -193,6 +193,41 @@ def write_calendar_file(vault_path: str, filename: str, content: str) -> dict:
     return {"status": "success", "path": str(git_target), "file": filename}
 
 
+def sync_calendars_to_obsidian(vault_path: str) -> dict:
+    """Copie tous les fichiers de data/calendrier/ vers la vault Obsidian.
+
+    Utile quand un calendrier est créé directement dans le repo Git
+    (sans passer par write_calendar_file) et doit apparaître dans Obsidian.
+    """
+    if not _LOCAL_CALENDAR_DIR.exists():
+        return {"status": "error", "error": "data/calendrier/ introuvable"}
+
+    p = Path(vault_path) if vault_path else None
+    if not p or not p.exists():
+        return {"status": "error", "error": f"Vault Obsidian introuvable : {vault_path}"}
+
+    cal_folder = None
+    for folder in sorted(p.rglob("*")):
+        if folder.is_dir() and any(kw in folder.name.lower() for kw in _CALENDAR_FOLDER_KEYWORDS):
+            cal_folder = folder
+            break
+    if cal_folder is None:
+        cal_folder = p / "Calendrier Publication"
+        cal_folder.mkdir(parents=True, exist_ok=True)
+
+    synced = []
+    for f in sorted(_LOCAL_CALENDAR_DIR.glob("*.md")):
+        try:
+            dest = cal_folder / f.name
+            dest.write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+            synced.append(f.name)
+            logger.info("Sync Obsidian : %s → %s", f.name, dest)
+        except Exception as exc:
+            logger.warning("Sync Obsidian échoué pour %s : %s", f.name, exc)
+
+    return {"status": "success", "synced": synced, "obsidian_folder": str(cal_folder)}
+
+
 def list_video_assets(assets_path: str) -> list[dict]:
     """Liste les vidéos, images et docs du dossier d'assets."""
     p = Path(assets_path)

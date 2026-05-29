@@ -31,7 +31,7 @@ from tools.customer import (
     send_facebook_reply,
     send_instagram_reply,
 )
-from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory, read_local_context
+from tools.knowledge import find_calendar_files, read_obsidian_vault, list_video_assets, read_agent_memory, append_agent_memory, read_local_context, sync_calendars_to_obsidian
 from tools.remotion import (
     render_video, list_rendered_videos,
     extract_post_props, generate_voiceover, date_to_composition_id,
@@ -333,6 +333,15 @@ async def api_clear_memory():
 
 
 # ─── API — Calendrier éditorial ──────────────────────────────────────────────
+
+@app.get("/api/sync-calendar-to-obsidian")
+async def api_sync_calendar_to_obsidian():
+    """Copie tous les calendriers de data/calendrier/ vers la vault Obsidian."""
+    result = sync_calendars_to_obsidian(OBSIDIAN_VAULT_PATH)
+    if result.get("status") == "error":
+        raise HTTPException(500, result["error"])
+    return result
+
 
 @app.get("/api/calendar")
 async def api_calendar(file_index: int = 0):

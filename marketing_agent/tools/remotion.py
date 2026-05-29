@@ -664,6 +664,29 @@ def list_remotion_compositions(project_path: str) -> dict:
         return {"status": "error", "error": str(exc)}
 
 
+def _find_rendered_file(project: Path, composition_id: str, remotion_log: str) -> str:
+    """Cherche un fichier .mp4 récemment créé dans le projet et dans le log Remotion."""
+    import time as _time
+    now = _time.time()
+    # Cherche dans le log Remotion : "output: <path>" ou "Rendered to <path>"
+    for pattern in [
+        r"(?:output|rendered to|Output file)[:\s]+([^\s\n]+\.mp4)",
+        r"([A-Za-z]:\\[^\s\n]+\.mp4)",
+        r"(/[^\s\n]+\.mp4)",
+    ]:
+        m = re.search(pattern, remotion_log, re.IGNORECASE)
+        if m:
+            return m.group(1)
+    # Cherche les .mp4 modifiés dans les 5 dernières minutes
+    for mp4 in project.rglob("*.mp4"):
+        try:
+            if now - mp4.stat().st_mtime < 300:
+                return str(mp4)
+        except Exception:
+            pass
+    return ""
+
+
 def render_video(composition_id: str, project_path: str, output_filename: str = "") -> dict:
     """Lance npx remotion render <composition_id> dans le dossier du projet."""
     project = Path(project_path)
@@ -706,16 +729,36 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
             encoding="utf-8", errors="replace",
         )
 
+    def _check_output(res: subprocess.CompletedProcess, suffix: str = "") -> dict | None:
+        """Retourne un dict succès si le fichier existe, None sinon."""
+        combined = (res.stdout or "") + (res.stderr or "")
+        if res.returncode == 0:
+            if output_path.exists():
+                return {
+                    "status": "success",
+                    "composition_id": composition_id,
+                    "output_path": str(output_path),
+                    "message": f"Vidéo rendue → {output_path}{suffix}",
+                    "remotion_log": combined[-2000:],
+                }
+            # returncode 0 mais fichier absent — cherche où Remotion l'a mis
+            alt = _find_rendered_file(project, composition_id, combined)
+            debug = f"returncode=0 mais {output_path} introuvable. Log Remotion :\n{combined[-3000:]}"
+            if alt:
+                debug = f"Fichier trouvé ailleurs : {alt}\n\n" + debug
+            logger.error("render_video: %s", debug)
+            return {"status": "error", "error": debug}
+        return None
+
     try:
-        cmd = f'"{npx}" remotion render "{composition_id}" "{output_path}"'
+        cmd = f'"{npx}" remotion render "{composition_id}" --output "{output_path}"'
         result = _run(cmd)
 
-        if result.returncode == 0:
-            return {"status": "success", "composition_id": composition_id,
-                    "output_path": str(output_path),
-                    "message": f"Vidéo rendue → {output_path}"}
+        r = _check_output(result)
+        if r:
+            return r
 
-        error_output = (result.stderr or result.stdout or "")
+        error_output = ((result.stderr or "") + (result.stdout or ""))
         # "Multiple composition" → vide TOUS les caches connus et relance sans cache bundle
         if "Multiple composition" in error_output:
             # 1. Cache webpack local
@@ -735,14 +778,13 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
             # Relance sans cache bundle
             cmd_no_cache = (
                 f'"{npx}" remotion render --bundle-cache=false '
-                f'"{composition_id}" "{output_path}"'
+                f'"{composition_id}" --output "{output_path}"'
             )
             result = _run(cmd_no_cache)
-            if result.returncode == 0:
-                return {"status": "success", "composition_id": composition_id,
-                        "output_path": str(output_path),
-                        "message": f"Vidéo rendue → {output_path} (cache vidé)"}
-            error_output = (result.stderr or result.stdout or "")
+            r = _check_output(result, " (cache vidé)")
+            if r:
+                return r
+            error_output = ((result.stderr or "") + (result.stdout or ""))
 
         logger.error("Remotion render failed (code %d): %s", result.returncode, error_output[-3000:])
         return {"status": "error", "error": f"Exit code {result.returncode}\n\n{error_output[-3000:]}"}
@@ -1018,8 +1060,9 @@ def force_render(composition_id: str, project_path: str,
     out_dir.mkdir(exist_ok=True)
     output_path = out_dir / f"{composition_id}.mp4"
 
-    cmd = f'"{npx}" remotion render --bundle-cache=false "{composition_id}" "{output_path}"'
+    cmd = f'"{npx}" remotion render --bundle-cache=false "{composition_id}" --output "{output_path}"'
     logger.info("force_render: lancement → %s", cmd)
+    result = None
     try:
         result = subprocess.run(
             cmd, cwd=str(project), shell=True, env=env,
@@ -1027,8 +1070,6 @@ def force_render(composition_id: str, project_path: str,
             encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired:
-        if index_original is not None:
-            index_ts.write_text(index_original, encoding="utf-8")
         return {"status": "error", "error": "Timeout rendu >10 min"}
     finally:
         # Toujours restaurer index.ts après le rendu
@@ -1036,16 +1077,28 @@ def force_render(composition_id: str, project_path: str,
             index_ts.write_text(index_original, encoding="utf-8")
             logger.info("force_render: index.ts restauré (cache-bust retiré)")
 
-    if result.returncode == 0:
-        return {
-            "status": "success",
-            "composition_id": composition_id,
-            "output_path": str(output_path),
-            "message": f"Vidéo rendue → {output_path}",
-        }
+    if result is None:
+        return {"status": "error", "error": "Subprocess non démarré"}
 
-    # Capture stdout + stderr pour voir si le bundle est caché ou recompilé
-    error_output = ((result.stderr or "") + (result.stdout or ""))[-4000:]
+    combined = ((result.stderr or "") + (result.stdout or ""))
+    if result.returncode == 0:
+        if output_path.exists():
+            return {
+                "status": "success",
+                "composition_id": composition_id,
+                "output_path": str(output_path),
+                "message": f"Vidéo rendue → {output_path}",
+                "remotion_log": combined[-2000:],
+            }
+        # returncode 0 mais fichier absent
+        alt = _find_rendered_file(project, composition_id, combined)
+        debug = f"returncode=0 mais {output_path} introuvable.\nLog Remotion :\n{combined[-3000:]}"
+        if alt:
+            debug = f"Fichier trouvé ailleurs : {alt}\n\n" + debug
+        logger.error("force_render: %s", debug)
+        return {"status": "error", "error": debug}
+
+    error_output = combined[-4000:]
     logger.error("force_render failed (code %d): %s", result.returncode, error_output)
     return {"status": "error", "error": f"Exit {result.returncode}\n\n{error_output}"}
 

@@ -568,30 +568,49 @@ MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts d
 - Donner envie d'acheter ou de suivre la boutique
 - Respecter TOUTES les contraintes mémoire et les interdits listés en début de prompt"""
 
-        user_msg = (
-            f"Sujet : {cal_entry or f'Post ZenAquatique du {composition_id}'}\n"
-            f"Template : {template_type}\n"
-            f"{f'FEEDBACK : {feedback}' if feedback else ''}\n\n"
-            f"Génère les overlays visuels selon ce schéma exact :\n{schema}\n\n"
-            f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde (respecter absolument) :\n"
-            f"  • hookText : 10-14 MOTS — 2 phrases courtes\n"
-            f"  • chaque tip title : 2-4 mots concrets (affiché à l'écran, pas lu)\n"
-            f"  • chaque tip desc : 14-18 MOTS — 2 phrases vendeuses\n"
-            f"  • ctaText : 10-14 MOTS — 2 phrases (action + zen-aquatique.fr)\n\n"
-            f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
-            f"  1. hookText = 2 vraies phrases avec verbe fort\n"
-            f"     ✅ 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'\n"
-            f"     ❌ 'Paysage aquatique' / 'Découvrez nos plantes !'\n"
-            f"  2. tip title = SPÉCIFIQUE AU SUJET — nom de plante, conseil précis, caractéristique unique\n"
-            f"     ✅ (sujet plantes) : 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
-            f"     ✅ (sujet conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
-            f"     ❌ JAMAIS : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches' en titre\n"
-            f"        (ces arguments vont dans les descriptions ou le CTA)\n"
-            f"  3. tip desc = 2 phrases avec fait concret + 1 argument ZenAquatique\n"
-            f"     ✅ 'Tapis vert dense, idéal pour l'avant-plan en aquascape. Cultivée en France, dès 2,99€.'\n"
-            f"     ❌ 'Des boutures de qualité à partir de 0,99€, fraîches garanties vivantes.'\n"
-            f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases"
-        )
+        _subject = cal_entry or f"Post ZenAquatique du {composition_id}"
+        _fb = f"FEEDBACK : {feedback}" if feedback else ""
+
+        if "VersusVideoProps" in template_type:
+            user_msg = (
+                f"Sujet : {_subject}\nTemplate : {template_type}\n{_fb}\n\n"
+                f"Génère les overlays d'une vidéo VERSUS selon ce schéma exact :\n{schema}\n\n"
+                f"⚠️ VERSUS = comparaison entre DEUX APPROCHES AQUARISTIQUES — jamais entre des boutiques.\n"
+                f"Exemples de comparaisons AUTORISÉES :\n"
+                f"  leftLabel='Bac planté'       vs rightLabel='Bac nu'\n"
+                f"  leftLabel='Plantes vivantes' vs rightLabel='Déco artificielle'\n"
+                f"  leftLabel='Boutures'          vs rightLabel='Plantes en pot'\n"
+                f"  leftLabel='Avec CO2'          vs rightLabel='Sans CO2'\n\n"
+                f"leftItems = 3 AVANTAGES de l'option gauche (4-6 mots chacun)\n"
+                f"rightItems = 3 CARACTÉRISTIQUES de l'option droite (4-6 mots chacun)\n"
+                f"verdict = conclusion 6-10 mots valorisant ZenAquatique\n"
+                f"ctaText = 2 phrases : action forte + zen-aquatique.fr\n"
+            )
+        else:
+            user_msg = (
+                f"Sujet : {_subject}\n"
+                f"Template : {template_type}\n"
+                f"{_fb}\n\n"
+                f"Génère les overlays visuels selon ce schéma exact :\n{schema}\n\n"
+                f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde (respecter absolument) :\n"
+                f"  • hookText : 10-14 MOTS — 2 phrases courtes\n"
+                f"  • chaque tip title : 2-4 mots concrets (affiché à l'écran, pas lu)\n"
+                f"  • chaque tip desc : 14-18 MOTS — 2 phrases vendeuses\n"
+                f"  • ctaText : 10-14 MOTS — 2 phrases (action + zen-aquatique.fr)\n\n"
+                f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
+                f"  1. hookText = 2 vraies phrases avec verbe fort\n"
+                f"     ✅ 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'\n"
+                f"     ❌ 'Paysage aquatique' / 'Découvrez nos plantes !'\n"
+                f"  2. tip title = SPÉCIFIQUE AU SUJET — nom de plante, conseil précis, caractéristique unique\n"
+                f"     ✅ (sujet plantes) : 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
+                f"     ✅ (sujet conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
+                f"     ❌ JAMAIS : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches' en titre\n"
+                f"        (ces arguments vont dans les descriptions ou le CTA)\n"
+                f"  3. tip desc = 2 phrases avec fait concret + 1 argument ZenAquatique\n"
+                f"     ✅ 'Tapis vert dense, idéal pour l'avant-plan en aquascape. Cultivée en France, dès 2,99€.'\n"
+                f"     ❌ 'Des boutures de qualité à partir de 0,99€, fraîches garanties vivantes.'\n"
+                f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases"
+            )
 
         ai_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -699,29 +718,46 @@ def _generate_with_groq(
         )
 
         # ── Appel unique : génère les props visuels (contenu de la vidéo) ──────────
-        props_prompt = (
-            f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
-            f"Génère les overlays visuels selon ce schéma exact.\n\n"
-            f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde :\n"
-            f"  • hookText : 10-14 mots — 2 phrases courtes\n"
-            f"  • tip title : 2-4 mots SPÉCIFIQUES AU SUJET (affiché à l'écran)\n"
-            f"  • tip desc  : 14-18 mots — 2 phrases précises\n"
-            f"  • ctaText   : 10-14 mots — action + zen-aquatique.fr\n\n"
-            f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
-            f"  1. hookText = 2 phrases avec verbe fort, liées au sujet\n"
-            f"     ✅ 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout dans un aquascape.'\n"
-            f"     ❌ 'Transforme ton aquarium avec des plantes fraîches. Cultivées en France pour toi.'\n\n"
-            f"  2. tip title = SPÉCIFIQUE AU SUJET — nom de plante, conseil précis, caractéristique unique\n"
-            f"     ✅ (sujet plantes) : 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
-            f"     ✅ (sujet conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
-            f"     ❌ JAMAIS ces titres génériques : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches'\n"
-            f"        (ces arguments vont dans la desc ou le CTA, PAS dans les titres)\n\n"
-            f"  3. tip desc = 2 phrases avec fait concret lié au sujet + 1 argument ZenAquatique\n"
-            f"     ✅ 'Tapis vert dense, idéal pour couvrir le sol en aquascape. Cultivée en France, dès 2,99€.'\n"
-            f"     ❌ 'Des boutures de qualité à partir de 0,99€, fraîches garanties vivantes.'\n\n"
-            f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases\n\n"
-            f"Schéma :\n{schema}"
-        )
+        if "VersusVideoProps" in template_type:
+            props_prompt = (
+                f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
+                f"Génère les overlays d'une vidéo VERSUS selon ce schéma exact.\n\n"
+                f"⚠️ VERSUS = comparaison entre DEUX APPROCHES AQUARISTIQUES — jamais entre des boutiques.\n"
+                f"Exemples de comparaisons AUTORISÉES :\n"
+                f"  • leftLabel='Bac planté'        vs rightLabel='Bac nu'\n"
+                f"  • leftLabel='Plantes vivantes'  vs rightLabel='Déco artificielle'\n"
+                f"  • leftLabel='Boutures'           vs rightLabel='Plantes en pot'\n"
+                f"  • leftLabel='Avec CO2'           vs rightLabel='Sans CO2'\n\n"
+                f"leftItems = 3 AVANTAGES de l'option gauche (4-6 mots chacun, concrets)\n"
+                f"rightItems = 3 CARACTÉRISTIQUES de l'option droite (4-6 mots chacun)\n"
+                f"verdict = conclusion en 6-10 mots qui valorise ZenAquatique\n"
+                f"ctaText = 2 phrases : action forte + zen-aquatique.fr\n\n"
+                f"Schéma :\n{schema}"
+            )
+        else:
+            props_prompt = (
+                f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
+                f"Génère les overlays visuels selon ce schéma exact.\n\n"
+                f"⏱ RYTHME VOIX OFF = 3,5 mots/seconde :\n"
+                f"  • hookText : 10-14 mots — 2 phrases courtes\n"
+                f"  • tip title : 2-4 mots SPÉCIFIQUES AU SUJET (affiché à l'écran)\n"
+                f"  • tip desc  : 14-18 mots — 2 phrases précises\n"
+                f"  • ctaText   : 10-14 mots — action + zen-aquatique.fr\n\n"
+                f"RÈGLES QUALITÉ — OBLIGATOIRES :\n"
+                f"  1. hookText = 2 phrases avec verbe fort, liées au sujet\n"
+                f"     ✅ 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout dans un aquascape.'\n"
+                f"     ❌ 'Transforme ton aquarium avec des plantes fraîches. Cultivées en France pour toi.'\n\n"
+                f"  2. tip title = SPÉCIFIQUE AU SUJET — nom de plante, conseil précis, caractéristique unique\n"
+                f"     ✅ (sujet plantes) : 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
+                f"     ✅ (sujet conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
+                f"     ❌ JAMAIS ces titres génériques : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches'\n"
+                f"        (ces arguments vont dans la desc ou le CTA, PAS dans les titres)\n\n"
+                f"  3. tip desc = 2 phrases avec fait concret lié au sujet + 1 argument ZenAquatique\n"
+                f"     ✅ 'Tapis vert dense, idéal pour couvrir le sol en aquascape. Cultivée en France, dès 2,99€.'\n"
+                f"     ❌ 'Des boutures de qualité à partir de 0,99€, fraîches garanties vivantes.'\n\n"
+                f"  4. ctaText = impératif + zen-aquatique.fr en 2 phrases\n\n"
+                f"Schéma :\n{schema}"
+            )
 
         try:
             props = json.loads(_llm_chat_json(

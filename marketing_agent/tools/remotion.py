@@ -625,6 +625,37 @@ def _find_npx() -> str:
     return "npx"
 
 
+def _find_browser_executable() -> str:
+    """Retourne le chemin d'un navigateur Chromium installé (Chrome ou Edge).
+
+    Remotion télécharge son propre Chrome headless shell (113 Mo), mais
+    Windows Defender peut le bloquer à l'exécution (binaire inconnu téléchargé).
+    En passant un navigateur déjà installé et signé, on contourne ce problème.
+    Edge est pré-installé sur tous les Windows 10/11 et toujours accepté.
+    """
+    import sys
+    if sys.platform != "win32":
+        return ""
+    candidates = [
+        # Microsoft Edge (pré-installé Windows 10/11)
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        # Google Chrome
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+    ]
+    for c in candidates:
+        try:
+            if Path(c).exists():
+                logger.info("Navigateur système trouvé : %s", c)
+                return c
+        except Exception:
+            pass
+    return ""
+
+
 def list_remotion_compositions(project_path: str) -> dict:
     """Exécute `npx remotion compositions` et retourne ce que Remotion voit réellement.
 
@@ -713,6 +744,8 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
     output_path = out_dir / filename
 
     npx = _find_npx()
+    browser_exe = _find_browser_executable()
+    browser_flag = f'--browser-executable="{browser_exe}"' if browser_exe else ""
 
     env = os.environ.copy()
     extra_paths = [
@@ -761,7 +794,7 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
         return None
 
     try:
-        cmd = f'"{npx}" remotion render --log=verbose "{composition_id}" "{output_path}"'
+        cmd = f'"{npx}" remotion render --log=verbose {browser_flag} "{composition_id}" "{output_path}"'
         result = _run(cmd)
 
         r = _check_output(result)
@@ -774,7 +807,7 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
             _clear_all_remotion_caches(project_path)
             logger.warning("Caches webpack vidés — retry avec --bundle-cache=false")
             cmd_no_cache = (
-                f'"{npx}" remotion render --bundle-cache=false --log=verbose '
+                f'"{npx}" remotion render --bundle-cache=false --log=verbose {browser_flag} '
                 f'"{composition_id}" "{output_path}"'
             )
             result = _run(cmd_no_cache)
@@ -1057,6 +1090,8 @@ def force_render(composition_id: str, project_path: str,
 
     # ── 7. Rendre sans cache bundle ───────────────────────────────────────────
     npx = _find_npx()
+    browser_exe = _find_browser_executable()
+    browser_flag = f'--browser-executable="{browser_exe}"' if browser_exe else ""
     env = os.environ.copy()
     env["PATH"] = os.pathsep.join([
         r"C:\Program Files\nodejs",
@@ -1067,7 +1102,7 @@ def force_render(composition_id: str, project_path: str,
     out_dir.mkdir(exist_ok=True)
     output_path = out_dir / f"{composition_id}.mp4"
 
-    cmd = f'"{npx}" remotion render --bundle-cache=false --log=verbose "{composition_id}" "{output_path}"'
+    cmd = f'"{npx}" remotion render --bundle-cache=false --log=verbose {browser_flag} "{composition_id}" "{output_path}"'
     logger.info("force_render: lancement → %s", cmd)
     result = None
     try:

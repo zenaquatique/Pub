@@ -1206,6 +1206,23 @@ async def api_restore_root_tsx_backup():
     return result
 
 
+@app.get("/api/git-restore-root-tsx")
+async def api_git_restore_root_tsx():
+    """Restaure Root.tsx depuis le dernier commit git du projet Remotion."""
+    import subprocess as _sp
+    project = Path(VIDEO_ASSETS_PATH)
+    if not project.exists():
+        raise HTTPException(404, f"Projet Remotion introuvable : {VIDEO_ASSETS_PATH}")
+    result = _sp.run(
+        "git checkout -- src/Root.tsx",
+        cwd=str(project), shell=True,
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode == 0:
+        return {"status": "success", "message": "Root.tsx restauré depuis le dernier commit git"}
+    raise HTTPException(500, f"git checkout échoué :\n{result.stderr or result.stdout}")
+
+
 @app.get("/api/force-render-v2/{composition_id}")
 async def api_force_render_v2(composition_id: str):
     """Force render avec rebuild complet de la section JSX.

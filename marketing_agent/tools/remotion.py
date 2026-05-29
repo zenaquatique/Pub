@@ -731,12 +731,6 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
             ),
         }
 
-    # Normalise Root.tsx avant le rendu : aplatit les tags multi-lignes qui
-    # provoquent "Multiple composition registered" dans Remotion
-    norm = normalize_root_tsx(project_path)
-    if norm.get("converted"):
-        logger.warning("render_video: tags normalisés avant rendu → %s", norm["converted"])
-
     out_dir = project / "out"
     out_dir.mkdir(exist_ok=True)
 

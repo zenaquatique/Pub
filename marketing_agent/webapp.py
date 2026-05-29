@@ -462,10 +462,13 @@ def _llm_chat_json(messages: list, temperature: float = 0.7, max_tokens: int = 2
             )
             return resp.choices[0].message.content
         except Exception as exc:
-            is_429 = "429" in str(exc) or getattr(exc, "status_code", None) == 429
-            if not is_429:
+            is_rate_limit = (
+                "429" in str(exc) or "413" in str(exc)
+                or getattr(exc, "status_code", None) in (413, 429)
+            )
+            if not is_rate_limit:
                 raise
-            logger.warning("Groq rate-limitée (429) → bascule sur OpenAI")
+            logger.warning("Groq bloquée (%s) → bascule sur OpenAI", str(exc)[:80])
 
     if not OPENAI_API_KEY:
         raise RuntimeError(
@@ -697,8 +700,8 @@ def _generate_with_groq(
         memory       = read_agent_memory(OBSIDIAN_VAULT_PATH)
         local_ctx    = read_local_context()
         combined     = (local_ctx + "\n" + vault).strip()
-        vault_block  = f"\nCONNAISSANCES MARQUE :\n{combined[:8000]}\n" if combined else ""
-        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory}\n" if memory else ""
+        vault_block  = f"\nCONNAISSANCES MARQUE :\n{combined[:1500]}\n" if combined else ""
+        memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory[:800]}\n" if memory else ""
         fb_block     = f"\nRETOUR UTILISATEUR : {feedback}\n" if feedback else ""
 
         if is_new:

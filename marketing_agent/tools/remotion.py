@@ -197,11 +197,19 @@ def _escape_ts(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _valid_ts_key(key: str) -> bool:
+    """Retourne True si la clé est un identifiant TypeScript valide (pas d'espaces, etc.)."""
+    return bool(re.match(r'^[a-zA-Z_$][a-zA-Z0-9_$]*$', key))
+
+
 def _props_to_ts_block(composition_id: str, template_type: str, props: dict) -> str:
     """Reconstruit le bloc TypeScript complet pour un post."""
     lines: list[str] = []
     for key, value in props.items():
         if key in ("template_type", "composition_id"):
+            continue
+        if not _valid_ts_key(key):
+            logger.warning("Clé TypeScript invalide ignorée (espace ou caractère illégal) : %r", key)
             continue
         if isinstance(value, str):
             lines.append(f'  {key}: "{_escape_ts(value)}",')
@@ -214,7 +222,11 @@ def _props_to_ts_block(composition_id: str, template_type: str, props: dict) -> 
             elif isinstance(value[0], dict):
                 inner = []
                 for obj in value:
-                    fields = ", ".join(f'{k}: "{_escape_ts(str(v))}"' for k, v in obj.items())
+                    fields = ", ".join(
+                        f'{k}: "{_escape_ts(str(v))}"'
+                        for k, v in obj.items()
+                        if _valid_ts_key(k)
+                    )
                     inner.append(f"    {{ {fields} }}")
                 lines.append(f'  {key}: [\n' + ",\n".join(inner) + "\n  ],")
     return f"const post{composition_id}: {template_type} = {{\n" + "\n".join(lines) + "\n};"

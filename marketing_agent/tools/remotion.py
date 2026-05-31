@@ -194,7 +194,13 @@ def generate_voiceover(props: dict) -> str:
 
 
 def _escape_ts(s: str) -> str:
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+    return (s
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
 
 
 def _valid_ts_key(key: str) -> bool:
@@ -823,8 +829,29 @@ def render_video(composition_id: str, project_path: str, output_filename: str = 
                 return r
             error_output = ((result.stderr or "") + (result.stdout or ""))
 
-        logger.error("Remotion render failed (code %d): %s", result.returncode, error_output[-3000:])
-        return {"status": "error", "error": f"Exit code {result.returncode}\n\n{error_output[-3000:]}"}
+        # ── Diagnostic TypeScript : lance tsc --noEmit pour avoir les vraies erreurs ──
+        tsc_diag = ""
+        try:
+            tsc_res = subprocess.run(
+                f'"{npx}" tsc --noEmit',
+                cwd=str(project), shell=True, env=env,
+                capture_output=True, text=True, timeout=60,
+                encoding="utf-8", errors="replace",
+            )
+            tsc_out = (tsc_res.stdout or "") + (tsc_res.stderr or "")
+            if tsc_out.strip():
+                tsc_diag = f"\n\n=== Erreurs TypeScript (tsc --noEmit) ===\n{tsc_out[:3000]}"
+        except Exception as _tsc_err:
+            tsc_diag = f"\n\n[tsc --noEmit non disponible : {_tsc_err}]"
+
+        # Affiche début + fin de l'output Remotion pour capter les erreurs esbuild
+        _head = error_output[:2000]
+        _tail = error_output[-2000:] if len(error_output) > 2000 else ""
+        _gap  = f"\n...[{len(error_output)-4000} chars tronqués]...\n" if len(error_output) > 4000 else ""
+        display_output = _head + _gap + _tail
+
+        logger.error("Remotion render failed (code %d):%s\nLog: %s", result.returncode, tsc_diag, display_output)
+        return {"status": "error", "error": f"Exit code {result.returncode}{tsc_diag}\n\n{display_output}"}
 
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "Timeout — rendu >10 min"}

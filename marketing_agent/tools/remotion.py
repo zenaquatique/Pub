@@ -925,6 +925,15 @@ def rebuild_jsx_section(project_path: str) -> dict:
 
         content = tsx.read_text(encoding="utf-8", errors="ignore")
 
+        # ── Nettoyer les blocs calendar.posts.map() vides (laissés par des rebuilds précédents) ──
+        _map_block_re = re.compile(
+            r'\n?[ \t]*\{calendar\.posts[^}]*?\.map\([^)]*\)\s*\(\s*\n\s*\)\)\}',
+            re.DOTALL
+        )
+        content, _n_removed = _map_block_re.subn("", content)
+        if _n_removed:
+            logger.info("rebuild_jsx_section: %d bloc(s) calendar.posts.map orphelin(s) supprimé(s)", _n_removed)
+
         # ── Backup ────────────────────────────────────────────────────────────
         bak = tsx.with_suffix(".tsx.bak")
         bak.write_text(content, encoding="utf-8")

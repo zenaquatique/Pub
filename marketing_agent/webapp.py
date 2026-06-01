@@ -1499,6 +1499,45 @@ async def api_repair_root_tsx_syntax():
             "message": f"{len(removed)} ligne(s) invalide(s) supprimée(s)"}
 
 
+@app.get("/api/repair-calendar-map")
+async def api_repair_calendar_map():
+    """Supprime le bloc {calendar.posts.filter().map(() => ())} vide laissé par rebuild_jsx_section."""
+    tsx = Path(VIDEO_ASSETS_PATH) / "src" / "Root.tsx"
+    if not tsx.exists():
+        raise HTTPException(404, "Root.tsx introuvable")
+    content = tsx.read_text(encoding="utf-8", errors="ignore")
+    lines = content.splitlines(keepends=True)
+    new_lines: list[str] = []
+    removed: list[int] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        # Détecte le début du bloc orphelin calendar.posts
+        if stripped.startswith("{calendar.posts"):
+            # Collecte jusqu'à la ligne qui ferme le bloc : ))}" ou similaire
+            block: list[tuple[int, str]] = [(i, lines[i])]
+            j = i + 1
+            while j < len(lines) and j < i + 12:
+                block.append((j, lines[j]))
+                if lines[j].strip().rstrip(";").endswith("))}"):
+                    break
+                j += 1
+            block_text = "".join(l for _, l in block)
+            # C'est le bloc orphelin si .filter + .map + corps vide (pas de JSX dedans)
+            if ".filter(" in block_text and ".map(" in block_text and "<Composition" not in block_text:
+                for lineno, _ in block:
+                    removed.append(lineno + 1)
+                i = j + 1
+                continue
+        new_lines.append(lines[i])
+        i += 1
+    if not removed:
+        return {"status": "ok", "message": "Aucun bloc calendar.posts.map orphelin trouvé"}
+    tsx.write_text("".join(new_lines), encoding="utf-8")
+    return {"status": "fixed", "lines_removed": removed,
+            "message": f"{len(removed)} ligne(s) supprimée(s) (bloc calendar.posts.map vide)"}
+
+
 @app.get("/api/git-restore-root-tsx")
 async def api_git_restore_root_tsx():
     """Restaure Root.tsx depuis le dernier commit git du projet Remotion."""

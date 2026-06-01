@@ -1263,7 +1263,10 @@ def _render_sync(composition_id: str) -> dict:
 
 
 def _get_post_schedule(composition_id: str):
-    """Retourne la datetime UTC planifiée (si > 10 min dans le futur), sinon None."""
+    """Retourne la datetime UTC planifiée (si > 10 min dans le futur), sinon None.
+
+    Créneau : samedi = 10h00, autres jours = POSTING_HOUR/POSTING_MINUTE (18h30 par défaut).
+    """
     try:
         from zoneinfo import ZoneInfo
     except ImportError:
@@ -1273,7 +1276,13 @@ def _get_post_schedule(composition_id: str):
         month = int(composition_id[4:6])
         day   = int(composition_id[6:8])
         tz    = ZoneInfo(POSTING_TIMEZONE)
-        local_dt = datetime(year, month, day, POSTING_HOUR, POSTING_MINUTE, tzinfo=tz)
+        post_date = datetime(year, month, day, tzinfo=tz)
+        # Samedi (weekday==5) → créneau weekend 10h00
+        if post_date.weekday() == 5:
+            hour, minute = 10, 0
+        else:
+            hour, minute = POSTING_HOUR, POSTING_MINUTE
+        local_dt = datetime(year, month, day, hour, minute, tzinfo=tz)
         utc_dt   = local_dt.astimezone(timezone.utc)
         now      = datetime.now(timezone.utc)
         return utc_dt if (utc_dt - now).total_seconds() > 600 else None

@@ -87,9 +87,9 @@ TARGET_AUDIENCE = os.environ.get("TARGET_AUDIENCE", "adultes 25-45 ans")
 # Meta webhooks
 META_WEBHOOK_VERIFY_TOKEN = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "mon_token_secret_webhook")
 
-# Planificateur
-POSTING_HOUR     = int(os.environ.get("POSTING_HOUR", "9"))
-POSTING_MINUTE   = int(os.environ.get("POSTING_MINUTE", "0"))
+# Planificateur — créneau semaine 18h30, weekend 10h00
+POSTING_HOUR     = int(os.environ.get("POSTING_HOUR", "18"))
+POSTING_MINUTE   = int(os.environ.get("POSTING_MINUTE", "30"))
 POSTING_TIMEZONE = os.environ.get("POSTING_TIMEZONE", "Europe/Paris")
 
 # Claude API (optionnel — priorité sur Groq si clé fournie)

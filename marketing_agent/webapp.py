@@ -1423,6 +1423,50 @@ async def api_caption(composition_id: str):
     }
 
 
+@app.get("/api/debug-schedule/{composition_id}")
+async def api_debug_schedule(composition_id: str):
+    """Diagnostic : montre le calcul complet du créneau de publication."""
+    from datetime import datetime, timezone
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+    try:
+        year  = int(composition_id[0:4])
+        month = int(composition_id[4:6])
+        day   = int(composition_id[6:8])
+        tz    = ZoneInfo(POSTING_TIMEZONE)
+        post_date = datetime(year, month, day, tzinfo=tz)
+        weekday = post_date.weekday()
+        if weekday == 5:
+            hour, minute = 10, 0
+        else:
+            hour, minute = POSTING_HOUR, POSTING_MINUTE
+        local_dt = datetime(year, month, day, hour, minute, tzinfo=tz)
+        utc_dt   = local_dt.astimezone(timezone.utc)
+        now      = datetime.now(timezone.utc)
+        diff     = (utc_dt - now).total_seconds()
+        scheduled = _get_post_schedule(composition_id)
+        return {
+            "composition_id": composition_id,
+            "POSTING_HOUR": POSTING_HOUR,
+            "POSTING_MINUTE": POSTING_MINUTE,
+            "POSTING_TIMEZONE": POSTING_TIMEZONE,
+            "weekday": weekday,
+            "weekday_name": ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"][weekday],
+            "hour_used": hour,
+            "minute_used": minute,
+            "local_dt": str(local_dt),
+            "utc_dt": str(utc_dt),
+            "now_utc": str(now),
+            "diff_seconds": round(diff),
+            "scheduled_at": scheduled.isoformat() if scheduled else None,
+            "verdict": "PROGRAMMÉ" if scheduled else "IMMÉDIAT (date passée)",
+        }
+    except Exception as e:
+        return {"error": str(e), "POSTING_HOUR": POSTING_HOUR, "POSTING_MINUTE": POSTING_MINUTE}
+
+
 @app.get("/api/debug-env")
 async def api_debug_env():
     """Vérifie quelles variables .env sont chargées (valeurs masquées)."""

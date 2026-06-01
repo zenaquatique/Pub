@@ -359,17 +359,17 @@ _VOICEOVER_SCHEMAS = {
     "VersusVideoProps": """{
   "hookText": "accroche 6-8 mots — pose la comparaison. Ex: 'Bac planté vs bac nu : qui gagne ?'",
   "hookEmoji": "1 emoji aquatique",
-  "leftLabel": "nom court option GAUCHE (2-3 mots). Ex: 'Bac planté', 'Plantes vivantes', 'Boutures'",
+  "leftLabel": "⚠️ GAUCHE = ROUGE = option ALTERNATIVE/INFÉRIEURE (2-3 mots). Ex: 'Bac minéral', 'Déco artificielle', 'Plantes en pot', 'Bac nu'",
   "leftItems": [
-    "avantage 1 en 4-6 mots — spécifique et concret. Ex: 'Eau naturellement purifiée'",
+    "limite ou inconvénient neutre en 4-6 mots. Ex: 'Aspect statique, peu évolutif'",
+    "limite 2 en 4-6 mots. Ex: 'Pas de bactéries bénéfiques'",
+    "limite 3 en 4-6 mots. Ex: 'Eau sans filtration naturelle'"
+  ],
+  "rightLabel": "⚠️ DROITE = VERT = option ZENAQUATIQUE/SUPÉRIEURE (2-3 mots). Ex: 'Bac planté', 'Plantes vivantes', 'Boutures ZenAquatique'",
+  "rightItems": [
+    "avantage fort en 4-6 mots. Ex: 'Eau naturellement purifiée'",
     "avantage 2 en 4-6 mots. Ex: 'Bactéries bénéfiques fixées'",
     "avantage 3 en 4-6 mots. Ex: 'Décor vivant et évolutif'"
-  ],
-  "rightLabel": "nom court option DROITE (2-3 mots). Ex: 'Bac nu', 'Déco artificielle', 'Pot'",
-  "rightItems": [
-    "caractéristique option droite en 4-6 mots. Ex: 'Entretien réduit au minimum'",
-    "caractéristique 2 en 4-6 mots. Ex: 'Pas de taille ni de fertilisation'",
-    "caractéristique 3 en 4-6 mots. Ex: 'Aspect statique, jamais vivant'"
   ],
   "verdict": "conclusion forte en 6-10 mots qui valorise ZenAquatique. Ex: 'Le bac planté gagne haut la main — dès 0,99€'",
   "ctaText": "appel à l'action 10-14 mots en 2 phrases. Ex: 'Transforme ton aquarium dès aujourd'hui. Découvre nos boutures sur zen-aquatique.fr'"
@@ -732,7 +732,7 @@ def _generate_with_groq(
         combined     = (local_ctx + "\n" + vault).strip()
         vault_block  = f"\nCONNAISSANCES MARQUE :\n{combined[:1500]}\n" if combined else ""
         memory_block = f"\nCONTRAINTES MÉMOIRE (obligatoires) :\n{memory[:800]}\n" if memory else ""
-        fb_block     = f"\nRETOUR UTILISATEUR : {feedback}\n" if feedback else ""
+        fb_block     = f"\n⚡ INSTRUCTION UTILISATEUR (PRIORITÉ ABSOLUE) : {feedback}\n" if feedback else ""
 
         if is_new:
             cal_entry, template_type = _build_cal_entry(composition_id, context)
@@ -751,20 +751,23 @@ def _generate_with_groq(
         )
 
         # ── Appel unique : génère les props visuels (contenu de la vidéo) ──────────
+        feedback_block = f"\n⚡ INSTRUCTION UTILISATEUR (PRIORITÉ ABSOLUE — tu DOIS l'appliquer) :\n{feedback}\n" if feedback else ""
         if "VersusVideoProps" in template_type:
             props_prompt = (
-                f"Sujet : {subject}\nTemplate : {template_type}\n{fb_block}\n"
+                f"Sujet : {subject}\nTemplate : {template_type}\n{feedback_block}\n"
                 f"Génère les overlays d'une vidéo VERSUS selon ce schéma exact.\n\n"
-                f"⚠️ VERSUS = comparaison entre DEUX APPROCHES AQUARISTIQUES — jamais entre des boutiques.\n"
-                f"Exemples de comparaisons AUTORISÉES :\n"
-                f"  • leftLabel='Bac planté'        vs rightLabel='Bac nu'\n"
-                f"  • leftLabel='Plantes vivantes'  vs rightLabel='Déco artificielle'\n"
-                f"  • leftLabel='Boutures'           vs rightLabel='Plantes en pot'\n"
-                f"  • leftLabel='Avec CO2'           vs rightLabel='Sans CO2'\n\n"
-                f"leftItems = 3 AVANTAGES de l'option gauche (4-6 mots chacun, concrets)\n"
-                f"rightItems = 3 CARACTÉRISTIQUES de l'option droite (4-6 mots chacun)\n"
-                f"verdict = conclusion en 6-10 mots qui valorise ZenAquatique\n"
-                f"ctaText = 2 phrases : action forte + zen-aquatique.fr\n\n"
+                f"🎨 RÈGLE COULEURS — OBLIGATOIRE SANS EXCEPTION :\n"
+                f"  leftLabel  = ROUGE = l'option ALTERNATIVE (bac nu, déco artificielle, plantes en pot...)\n"
+                f"  rightLabel = VERT  = l'option ZENAQUATIQUE (bac planté, plantes vivantes, boutures...)\n\n"
+                f"Exemples CORRECTS (ZenAquatique toujours à DROITE) :\n"
+                f"  • left='Bac minéral'       right='Bac planté'\n"
+                f"  • left='Déco artificielle' right='Plantes vivantes'\n"
+                f"  • left='Plantes en pot'    right='Boutures ZenAquatique'\n"
+                f"  • left='Sans CO2'          right='Avec CO2 + plantes ZenAquatique'\n\n"
+                f"leftItems  = 3 points NEUTRES/LIMITES de l'option gauche (4-6 mots chacun)\n"
+                f"rightItems = 3 AVANTAGES forts de l'option ZenAquatique (4-6 mots chacun)\n"
+                f"verdict    = conclusion 6-10 mots valorisant ZenAquatique\n"
+                f"ctaText    = 2 phrases : action forte + zen-aquatique.fr\n\n"
                 f"Schéma :\n{schema}"
             )
         else:

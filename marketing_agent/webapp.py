@@ -1219,6 +1219,43 @@ async def api_approve_voiceover(request: Request):
     return {**render_result, "root_tsx_updated": True}
 
 
+@app.post("/api/save-to-root-tsx")
+async def api_save_to_root_tsx(request: Request):
+    """Dérive les props depuis le voiceover édité et écrit Root.tsx — SANS rendre la vidéo."""
+    body = await request.json()
+    composition_id = body.get("composition_id", "").strip()
+    voiceover_text = body.get("voiceover", "").strip()
+    if not composition_id:
+        raise HTTPException(400, "composition_id manquant")
+
+    cached = _load_script(composition_id)
+
+    if voiceover_text:
+        template_type = (cached.get("props") or {}).get("template_type", "EducatifVideoProps")
+        loop = asyncio.get_event_loop()
+        pres = await loop.run_in_executor(
+            _executor, _voiceover_to_props_sync, composition_id, voiceover_text, template_type
+        )
+        if pres.get("status") == "error":
+            raise HTTPException(500, f"Erreur génération props : {pres['error']}")
+        props = pres["props"]
+        _save_script(composition_id, {**cached, "props": props, "voiceover": voiceover_text, "status": "success"})
+    else:
+        props = cached.get("props")
+        if not props:
+            props = extract_post_props(composition_id, VIDEO_ASSETS_PATH)
+        if not props:
+            raise HTTPException(400, f"Aucun script pour '{composition_id}'. Clique d'abord sur 'Script IA'.")
+
+    result = update_post_props(composition_id, VIDEO_ASSETS_PATH, props)
+    if result.get("status") == "error" and "introuvable" in result.get("error", ""):
+        result = create_post_composition(composition_id, VIDEO_ASSETS_PATH, props)
+    if result.get("status") not in ("success", "created"):
+        raise HTTPException(500, result.get("error", "Erreur écriture Root.tsx"))
+
+    return {"status": "saved", "composition_id": composition_id, "root_tsx_updated": True}
+
+
 # ─── API — Rendu Remotion ────────────────────────────────────────────────────
 
 def _render_sync(composition_id: str) -> dict:

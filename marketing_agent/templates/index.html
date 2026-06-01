@@ -720,6 +720,9 @@ Chargement…</pre>
               <button class="btn btn-primary" onclick="approveAndRender(this)">
                 <i class="fa-solid fa-clapperboard me-1"></i>Rendre la vidéo
               </button>
+              <button class="btn btn-outline-success btn-sm" id="btn-save-root" onclick="saveToRootTsx(this)">
+                <i class="fa-solid fa-floppy-disk me-1"></i>Enregistrer dans Root.tsx
+              </button>
               <button class="btn btn-outline-secondary btn-sm" onclick="copyVoiceover()">
                 <i class="fa-solid fa-copy me-1"></i>Copier
               </button>
@@ -1737,6 +1740,41 @@ async function approveAndRender(btn) {
       errBox.style.display = 'block';
     }
     try { showToast('Erreur rendu', 'danger'); } catch(_) {}
+  }
+}
+
+async function saveToRootTsx(btn) {
+  if (!_voCid) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enregistrement…';
+  const errBox = document.getElementById('render-error-box');
+  if (errBox) errBox.style.display = 'none';
+  try {
+    const voiceover = document.getElementById('voiceover-text')?.value || '';
+    const res = await fetch('/api/save-to-root-tsx', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({composition_id: _voCid, voiceover}),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || JSON.stringify(d));
+    btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Enregistré !';
+    btn.className = btn.className.replace('btn-outline-success','btn-success');
+    setTimeout(() => {
+      btn.innerHTML = orig;
+      btn.className = btn.className.replace('btn-success','btn-outline-success');
+      btn.disabled = false;
+    }, 3000);
+    showToast(`✅ Root.tsx mis à jour pour ${_voCid}`, 'success');
+  } catch(e) {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+    if (errBox) {
+      errBox.textContent = '❌ Erreur enregistrement :\n' + e.message;
+      errBox.style.display = 'block';
+    }
+    try { showToast('Erreur enregistrement', 'danger'); } catch(_) {}
   }
 }
 

@@ -375,26 +375,26 @@ _VOICEOVER_SCHEMAS = {
   "ctaText": "appel à l'action 10-14 mots en 2 phrases. Ex: 'Transforme ton aquarium dès aujourd'hui. Découvre nos boutures sur zen-aquatique.fr'"
 }""",
     "EducatifVideoProps": """{
-  "hookText": "10-14 mots — 2 phrases : contexte accrocheur + bénéfice clé ZenAquatique. Ex: 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'",
+  "hookText": "10-14 mots — 2 phrases : pose le problème ou la question + annonce le bénéfice. Ex 'raisons': 'Les plantes vivantes changent tout dans un aquarium. Voici 3 raisons de faire le pas.' Ex 'conseils': 'Ces erreurs bloquent ta végétation depuis des mois. Voici comment les éviter.'",
   "hookEmoji": "1 emoji aquatique pertinent",
   "tips": [
     {
       "num": "01",
-      "title": "2-4 mots CONCRETS (ex: 'Dès 0,99€', 'Made in France', 'Boutures garanties')",
-      "desc": "14-18 mots — 2 phrases : argument principal avec chiffre ou fait + détail engageant. Ex: 'Des boutures françaises à partir de 0,99€, fraîches et garanties vivantes à réception. L'aquarium de tes rêves à petit prix.'"
+      "title": "2-4 mots — LE TITRE EST LE SUJET DE CE CONSEIL/RAISON/ERREUR. Ex 'raisons': 'Eau purifiée naturellement' / 'Bac vivant, beau bac' / 'Zéro produit chimique'. Ex 'conseils': 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'. JAMAIS un nom de plante ici pour un sujet éducatif.",
+      "desc": "14-18 mots — 2 phrases : explique la raison/conseil avec un fait concret + lien avec ZenAquatique. Ex: 'Les plantes filtrent nitrates et nitrites naturellement. Ton eau reste claire, tes poissons en pleine forme.'"
     },
     {
       "num": "02",
-      "title": "2-4 mots CONCRETS",
-      "desc": "14-18 mots — 2 phrases avec argument ZenAquatique précis (origine, livraison, qualité…)"
+      "title": "2-4 mots — raison/conseil/erreur n°2 (même règle que ci-dessus)",
+      "desc": "14-18 mots — 2 phrases : fait concret + argument ZenAquatique"
     },
     {
       "num": "03",
-      "title": "2-4 mots CONCRETS",
-      "desc": "14-18 mots — 2 phrases avec argument ZenAquatique précis"
+      "title": "2-4 mots — raison/conseil/erreur n°3 (même règle que ci-dessus)",
+      "desc": "14-18 mots — 2 phrases : fait concret + argument ZenAquatique"
     }
   ],
-  "ctaText": "10-14 mots — 2 phrases : appel à l'action fort + zen-aquatique.fr. Ex: 'Crée l'aquarium de tes rêves dès aujourd'hui. Le lien est en bio, sur zen-aquatique.fr.'"
+  "ctaText": "10-14 mots — 2 phrases : appel à l'action fort + zen-aquatique.fr. Ex: 'Commence avec une bouture, change ton bac pour toujours. Retrouve toutes nos espèces sur zen-aquatique.fr.'"
 }""",
     "PromoVideoProps": """{
   "hookText": "10-14 mots — 2 phrases : accroche + angle de la sélection. Adapte au sujet (plantes ou crevettes).",
@@ -634,9 +634,12 @@ MISSION : Tu génères des scripts vidéo qui vendent et engagent. Tes scripts d
                 f"  1. hookText = 2 vraies phrases avec verbe fort\n"
                 f"     ✅ 'Ces plantes vont transformer ton aquarium. Cultivées en France, livrées vivantes chez toi.'\n"
                 f"     ❌ 'Paysage aquatique' / 'Découvrez nos plantes !'\n"
-                f"  2. tip title = SPÉCIFIQUE AU SUJET — nom de plante, conseil précis, caractéristique unique\n"
-                f"     ✅ (sujet plantes) : 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
-                f"     ✅ (sujet conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
+                f"  2. tip title = dépend du TYPE DE SUJET :\n"
+                f"     • Sujet 'raisons / conseils / erreurs / étapes' → CONCEPT/BÉNÉFICE abstrait\n"
+                f"       ✅ 'Eau purifiée' / 'Zéro algues' / 'Sans CO2' / '8h lumière max' / 'Facile à entretenir'\n"
+                f"       ❌ JAMAIS un nom de plante pour un sujet éducatif type 'raisons'\n"
+                f"     • Sujet 'top 3 / sélection plantes' → nom de plante du catalogue\n"
+                f"       ✅ 'Micranthemum Monte Carlo' / 'Rotala H'ra' / 'Bucephalandra'\n"
                 f"     ❌ JAMAIS : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches' en titre\n"
                 f"        (ces arguments vont dans les descriptions ou le CTA)\n"
                 f"  3. tip desc = 2 phrases avec fait concret + 1 argument ZenAquatique\n"
@@ -784,10 +787,13 @@ def _generate_with_groq(
                 f"  1. hookText = 2 phrases avec verbe fort, liées au sujet\n"
                 f"     ✅ (plantes) : 'Ces 3 plantes font le sol de ton aquarium. L'avant-plan qui change tout.'\n"
                 f"     ✅ (crevettes) : 'Ces crevettes vont colorer ton bac instantanément. Neocaridina, la star des aquariums.'\n\n"
-                f"  2. titre = SPÉCIFIQUE AU SUJET — nom de produit précis du catalogue, conseil ou caractéristique\n"
-                f"     ✅ (plantes) : noms réels comme 'Rotala Laos' / 'Egeria Densa' / 'Sagittaria Subulata'\n"
-                f"     ✅ (crevettes) : 'Yellow Néon' / 'Blue Velvette' / 'Orange Cherry'\n"
-                f"     ✅ (conseil) : 'Sans CO2' / '8h de lumière max' / 'Substrat nutritif'\n"
+                f"  2. titre = dépend du TYPE DE SUJET :\n"
+                f"     • Sujet 'raisons / conseils / erreurs / étapes' → titre = CONCEPT/BÉNÉFICE abstrait\n"
+                f"       ✅ 'Eau purifiée' / 'Zéro algues' / 'Sans CO2' / '8h lumière max'\n"
+                f"       ❌ JAMAIS un nom de plante pour un sujet éducatif type 'raisons'\n"
+                f"     • Sujet 'top 3 plantes / sélection' → titre = NOM DE PLANTE du catalogue\n"
+                f"       ✅ 'Rotala Laos' / 'Egeria Densa' / 'Micranthemum Monte Carlo'\n"
+                f"     • Sujet crevettes → 'Yellow Néon' / 'Blue Velvette' / 'Orange Cherry'\n"
                 f"     ❌ JAMAIS : 'Dès 0,99€' / 'Made in France' / 'Livrées fraîches' en titre\n\n"
                 f"  3. desc = 2 phrases avec fait concret lié au sujet + 1 argument ZenAquatique\n"
                 f"     ✅ 'Tapis vert dense, idéal pour couvrir le sol en aquascape. Cultivée en France, dès 2,99€.'\n\n"

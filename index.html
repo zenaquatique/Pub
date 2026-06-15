@@ -235,7 +235,10 @@ input[type=file]:hover{border-color:var(--accent)}
 <div id="tab-tableau" class="tab-content">
   <div class="hrow">
     <h2>Toutes les commandes</h2>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="monthFilter" onchange="renderTableau()" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:.85rem;cursor:pointer">
+        <option value="">Tous les mois</option>
+      </select>
       <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
       <button class="btn btn-danger btn-sm" onclick="clearHistory();renderTableau()">🗑 Tout effacer</button>
     </div>
@@ -897,10 +900,23 @@ function clearHistory(){if(confirm('Effacer tout l\'historique ?')){localStorage
 
 // ── Tableau de bord ───────────────────────────────────────────────────────────
 function renderTableau(){
-  const orders=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
+  const allOrders=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
   const body=document.getElementById('tableauBody');
   const foot=document.getElementById('tableauFoot');
-  if(!orders.length){
+
+  // Peupler le sélecteur de mois
+  const monthKey=d=>{const dt=new Date(d);return`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;};
+  const monthLabel=k=>{const[y,mo]=k.split('-');return new Date(y,mo-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});};
+  const months=[...new Set(allOrders.map(o=>monthKey(o.date)))].sort().reverse();
+  const sel=document.getElementById('monthFilter');
+  const prevVal=sel.value;
+  sel.innerHTML='<option value="">Tous les mois</option>'+months.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
+  if(months.includes(prevVal))sel.value=prevVal;
+
+  const filterKey=sel.value;
+  const orders=filterKey?allOrders.filter(o=>monthKey(o.date)===filterKey):allOrders;
+
+  if(!allOrders.length){
     body.innerHTML='<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Aucune commande enregistrée.</td></tr>';
     foot.innerHTML='';
     document.getElementById('recapRows').innerHTML='';
@@ -1001,14 +1017,14 @@ function renderTableau(){
     {l:'Nb commandes',v:nb,c:''},
   ].map(k=>`<div class="scard"><div class="sl">${k.l}</div><div class="sv ${k.c}">${k.v}</div></div>`).join('');
 
-  // Comparatif mensuel
+  // Comparatif mensuel — utilise le mois sélectionné ou le mois courant
   const now=new Date();
-  const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  const curKey=monthKey(now);
-  const lastDate=new Date(now.getFullYear(),now.getMonth()-1,1);
+  const curKey=filterKey||monthKey(now);
+  const [cy,cm]=curKey.split('-').map(Number);
+  const lastDate=new Date(cy,cm-2,1);
   const lastKey=monthKey(lastDate);
   const byMonth={};
-  orders.forEach(o=>{const k=monthKey(new Date(o.date));if(!byMonth[k])byMonth[k]=[];byMonth[k].push(o);});
+  allOrders.forEach(o=>{const k=monthKey(new Date(o.date));if(!byMonth[k])byMonth[k]=[];byMonth[k].push(o);});
   const mstats=ords=>({
     n:ords.length,
     ca:ords.reduce((s,o)=>s+o.pv,0),
@@ -1039,7 +1055,7 @@ function renderTableau(){
         <table class="dtable" style="font-size:.88rem">
           <thead><tr>
             <th style="text-align:left">Indicateur</th>
-            <th>${monthName(now)}</th>
+            <th>${monthName(new Date(cy,cm-1,1))}</th>
             <th>${monthName(lastDate)}</th>
             <th>Évolution</th>
           </tr></thead>
@@ -1113,7 +1129,8 @@ function renderTableau(){
   // Cadence commandes
   if(hasCur){
     const obj=S.s_nbCmd;
-    const resteMois=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate();
+    const refDate=filterKey?new Date(cy,cm-1,now.getDate()):now;
+    const resteMois=new Date(cy,cm,0).getDate()-refDate.getDate();
     if(cur.n<obj*0.5&&resteMois<10)recos.push({ico:'🟡',txt:`Tu es à <strong>${cur.n} commandes</strong> ce mois pour un objectif de <strong>${obj}</strong>. Il reste ${resteMois} jours — actionne ta visibilité.`});
     else if(cur.n>=obj)recos.push({ico:'🟢',txt:`Objectif atteint ! <strong>${cur.n} commandes</strong> ce mois pour un objectif de <strong>${obj}</strong>.`});
   }

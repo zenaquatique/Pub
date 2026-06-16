@@ -239,6 +239,13 @@ input[type=file]:hover{border-color:var(--accent)}
       <select id="monthFilter" onchange="renderTableau()" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:.85rem;cursor:pointer">
         <option value="">Tous les mois</option>
       </select>
+      <div class="sfx" style="width:130px;align-items:center">
+        <span style="font-size:.8rem;color:var(--muted);white-space:nowrap;margin-right:4px">Pub :</span>
+        <input type="number" id="pubInput" min="0" step="0.01" placeholder="0"
+          style="padding:6px 26px 6px 6px;font-size:.85rem"
+          oninput="savePub()">
+        <span>€</span>
+      </div>
       <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
       <button class="btn btn-danger btn-sm" onclick="clearHistory();renderTableau()">🗑 Tout effacer</button>
     </div>
@@ -897,6 +904,14 @@ function renderHistory(){
 
 function deleteOrder(i){const o=JSON.parse(localStorage.getItem('zaq_orders')||'[]');o.splice(i,1);localStorage.setItem('zaq_orders',JSON.stringify(o));renderHistory()}
 function clearHistory(){if(confirm('Effacer tout l\'historique ?')){localStorage.removeItem('zaq_orders');renderHistory()}}
+function savePub(){
+  const key=document.getElementById('monthFilter').value||'all';
+  const val=parseFloat(document.getElementById('pubInput').value)||0;
+  const map=JSON.parse(localStorage.getItem('zaq_pub')||'{}');
+  map[key]=val;
+  localStorage.setItem('zaq_pub',JSON.stringify(map));
+  renderTableau();
+}
 
 // ── Tableau de bord ───────────────────────────────────────────────────────────
 function renderTableau(){
@@ -915,6 +930,13 @@ function renderTableau(){
 
   const filterKey=sel.value;
   const orders=filterKey?allOrders.filter(o=>monthKey(o.date)===filterKey):allOrders;
+
+  // Charger la pub du mois sélectionné
+  const pubMap=JSON.parse(localStorage.getItem('zaq_pub')||'{}');
+  const pubKey=filterKey||'all';
+  const pubMois=pubMap[pubKey]||0;
+  const pubInp=document.getElementById('pubInput');
+  if(pubInp)pubInp.value=pubMois||'';
 
   if(!allOrders.length){
     body.innerHTML='<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Aucune commande enregistrée.</td></tr>';
@@ -984,8 +1006,11 @@ function renderTableau(){
     {label:`URSSAF (${getSettings().s_urssaf}%)`, v:totUrs},
     {label:'Frais carte',      v:totCarte},
     {label:'Frais fixes répartis', v:totFix},
+    ...(pubMois>0?[{label:'Publicité (variable)', v:pubMois}]:[]),
   ]:[];
   const totCouts=postes.reduce((s,p)=>s+p.v,0);
+  const benNet=totBen-pubMois;
+  const mgNet=totCA>0?benNet/totCA*100:0;
 
   document.getElementById('recapRows').innerHTML=postes.map(p=>`<tr>
     <td class="rt-label">${p.label}</td>
@@ -1001,18 +1026,18 @@ function renderTableau(){
     <td class="rt-label" style="color:var(--text)">CA total encaissé</td>
     <td class="rt-val pos">+${totCA.toFixed(2)} €</td><td></td>
   </tr><tr>
-    <td class="rt-label" style="color:var(--text);font-size:1rem;font-weight:700">BÉNÉFICE NET</td>
-    <td class="rt-val ${totBen>=0?'pos':'neg'}" style="font-size:1rem">${totBen>=0?'+':''}${totBen.toFixed(2)} €</td>
-    <td class="rt-pct ${totBen>=0?'pos':'neg'}" style="font-size:.88rem">${pct(Math.abs(totBen))}</td>
+    <td class="rt-label" style="color:var(--text);font-size:1rem;font-weight:700">BÉNÉFICE NET${pubMois>0?' (pub déduite)':''}</td>
+    <td class="rt-val ${benNet>=0?'pos':'neg'}" style="font-size:1rem">${benNet>=0?'+':''}${benNet.toFixed(2)} €</td>
+    <td class="rt-pct ${benNet>=0?'pos':'neg'}" style="font-size:.88rem">${pct(Math.abs(benNet))}</td>
   </tr>`;
 
   // KPI cards
-  const avgCmd=nb>0?totBen/nb:0;
+  const avgCmd=nb>0?benNet/nb:0;
   const avgMg=orders.reduce((s,o)=>s+o.marge,0)/nb;
   document.getElementById('recapKpis').innerHTML=[
     {l:'CA total',v:'+'+totCA.toFixed(2)+' €',c:'pos'},
-    {l:'Bénéfice total',v:(totBen>=0?'+':'')+totBen.toFixed(2)+' €',c:totBen>=0?'pos':'neg'},
-    {l:'Marge moyenne',v:avgMg.toFixed(1)+' %',c:avgMg>=30?'pos':avgMg>=15?'neu':'neg'},
+    {l:'Bénéfice net',v:(benNet>=0?'+':'')+benNet.toFixed(2)+' €',c:benNet>=0?'pos':'neg'},
+    {l:'Marge nette',v:mgNet.toFixed(1)+' %',c:mgNet>=30?'pos':mgNet>=15?'neu':'neg'},
     {l:'Bénéfice / commande',v:(avgCmd>=0?'+':'')+avgCmd.toFixed(2)+' €',c:avgCmd>=0?'pos':'neg'},
     {l:'Nb commandes',v:nb,c:''},
   ].map(k=>`<div class="scard"><div class="sl">${k.l}</div><div class="sv ${k.c}">${k.v}</div></div>`).join('');

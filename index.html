@@ -796,6 +796,7 @@ function renderShopifyOrders(orders){
           <span>€</span>
         </div>
         <button class="btn btn-outline btn-sm" onclick="applyDefaultPort()">→ Appliquer à toutes</button>`}
+        <button class="btn btn-outline btn-sm" onclick="showUnmatched()">⚠ Produits non matchés</button>
         <button class="btn btn-primary" onclick="bulkSaveShopifyOrders()">
           ✓ Tout enregistrer (${orders.length} commandes)
         </button>
@@ -844,13 +845,30 @@ function renderShopifyOrders(orders){
     </div>`;
 }
 
+function normStr(s){
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+}
+function matchCatalog(itemName,catalog){
+  const n=normStr(itemName);
+  const nw=n.split(' ').filter(w=>w.length>2);
+  return catalog.find(p=>{
+    const pn=normStr(p.nom);
+    const pw=pn.split(' ').filter(w=>w.length>2);
+    if(n===pn)return true;
+    if(pn.length>=6&&n.includes(pn))return true;
+    if(n.length>=6&&pn.includes(n))return true;
+    if(pn.length>=10&&n.startsWith(pn.slice(0,10)))return true;
+    if(n.length>=10&&pn.startsWith(n.slice(0,10)))return true;
+    return pw.length>=2&&nw.filter(w=>pw.includes(w)).length>=2;
+  });
+}
+
 function calcOrderBenefit(o,port){
   const s=getSettings();
   const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
   const pv=o.total||0;
   const coutProduits=o.items.reduce((sum,it)=>{
-    const n=it.name.toLowerCase();
-    const match=catalog.find(p=>{const pn=p.nom.toLowerCase();return pn.includes(n.slice(0,7))||n.includes(pn.slice(0,7))});
+    const match=matchCatalog(it.name,catalog);
     return sum+(match?.prixAchat||0)*it.qty;
   },0);
   const emballage=s.s_carton+s.s_polystyrene+s.s_poche+s.s_etiqFragile+s.s_etiqExped;
@@ -881,6 +899,15 @@ function applyDefaultPort(){
   });
 }
 
+function showUnmatched(){
+  const orders=window._shopifyOrders;if(!orders)return;
+  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
+  const unmatched=new Set();
+  orders.forEach(o=>o.items.forEach(it=>{if(!matchCatalog(it.name,catalog))unmatched.add(it.name);}));
+  if(!unmatched.size){alert('Tous les produits sont matchés dans le catalogue ✓');return;}
+  alert('Produits non trouvés dans le catalogue :\n\n'+[...unmatched].join('\n')+'\n\nVérifie que leurs noms sont proches dans le catalogue.');
+}
+
 function bulkSaveShopifyOrders(){
   const orders=window._shopifyOrders;
   if(!orders||!orders.length)return;
@@ -895,6 +922,7 @@ function bulkSaveShopifyOrders(){
       ref:o.ref,
       date:o.date||new Date().toISOString(),
       produits:o.items.map(it=>it.name).join(', '),
+      items:o.items,
       pv:r.pv,coutProduits:r.coutProduits,port:r.port,
       emballage:r.emballage,urssaf:r.urssaf,carte:r.carte,
       fixParCmd:r.fixParCmd,totalCouts:r.totalCouts,
@@ -1050,7 +1078,17 @@ function renderTableau(){
   // Totaux
   const sum=k=>orders.reduce((s,o)=>s+(o[k]??0),0);
   const totCA=sum('pv');
-  const totProd=sum('coutProduits');
+  // Recalcule le coût produits depuis les items + catalogue actuel si disponible
+  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
+  const totProd=orders.reduce((s,o)=>{
+    if(o.items&&o.items.length&&catalog.length){
+      return s+o.items.reduce((ss,it)=>{
+        const match=matchCatalog(it.name,catalog);
+        return ss+(match?.prixAchat||0)*it.qty;
+      },0);
+    }
+    return s+(o.coutProduits??0);
+  },0);
   const totPort=sum('port');
   const totEmb=sum('emballage');
   const totCarte=sum('carte');

@@ -361,9 +361,51 @@ input[type=file]:hover{border-color:var(--accent)}
     </div>
   </div>
   <p style="font-size:.78rem;color:var(--muted)">Tout est sauvegardé localement dans ce navigateur.</p>
+
+  <div class="card" style="border:1px solid var(--warning)">
+    <h2>Sauvegarde des données</h2>
+    <p style="font-size:.85rem;color:var(--muted);margin:0 0 14px">Si tu télécharges une nouvelle version de l'app, exporte tes données d'abord puis restaure-les après. Le fichier JSON contient catalogue, commandes, paramètres et pub.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="exportData()">⬇ Exporter mes données (.json)</button>
+      <label class="btn btn-outline" style="cursor:pointer">
+        ⬆ Restaurer mes données
+        <input type="file" accept=".json" style="display:none" onchange="importData(this)">
+      </label>
+    </div>
+    <div id="backupStatus" style="margin-top:10px;font-size:.85rem"></div>
+  </div>
 </div>
 
 <script>
+// ── Sauvegarde / Restauration ─────────────────────────────────────────────────
+function exportData(){
+  const keys=['zaq_s','zaq_catalog','zaq_orders','zaq_pub','zaq_ports'];
+  const data={};
+  keys.forEach(k=>{const v=localStorage.getItem(k);if(v)data[k]=JSON.parse(v);});
+  data._exported=new Date().toISOString();
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`zen_aquatique_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+function importData(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      const keys=['zaq_s','zaq_catalog','zaq_orders','zaq_pub','zaq_ports'];
+      let n=0;
+      keys.forEach(k=>{if(data[k]!==undefined){localStorage.setItem(k,JSON.stringify(data[k]));n++;}});
+      document.getElementById('backupStatus').innerHTML=`<span style="color:var(--success)">✓ ${n} blocs de données restaurés — recharge la page pour voir les changements.</span>`;
+    }catch(err){
+      document.getElementById('backupStatus').innerHTML=`<span style="color:var(--danger)">Erreur : fichier invalide.</span>`;
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ── Paramètres ────────────────────────────────────────────────────────────────
 const DEFS={s_hosting:80,s_claude:20,s_banque:16.90,s_autres:0,s_nbCmd:45,s_urssaf:12.6,s_carteFix:1.50,s_cartePct:0,s_carton:1.50,s_polystyrene:1.00,s_poche:0.10,s_etiqFragile:0.05,s_etiqExped:0.10};
 function getSettings(){return{...DEFS,...JSON.parse(localStorage.getItem('zaq_s')||'{}')}}

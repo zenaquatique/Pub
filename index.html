@@ -246,6 +246,13 @@ input[type=file]:hover{border-color:var(--accent)}
           oninput="savePub()">
         <span>€</span>
       </div>
+      <div class="sfx" style="width:120px;align-items:center">
+        <span style="font-size:.8rem;color:var(--muted);white-space:nowrap;margin-right:4px">URSSAF :</span>
+        <input type="number" id="urssafInput" min="0" step="0.1" placeholder="12.6"
+          style="padding:6px 26px 6px 6px;font-size:.85rem"
+          oninput="saveUrssafMonth()">
+        <span>%</span>
+      </div>
       <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
       <button id="btnSuppr" class="btn btn-danger btn-sm" onclick="clearMonthOrAll()">🗑 Tout effacer</button>
     </div>
@@ -379,7 +386,7 @@ input[type=file]:hover{border-color:var(--accent)}
 <script>
 // ── Sauvegarde / Restauration ─────────────────────────────────────────────────
 function exportData(){
-  const keys=['zaq_s','zaq_catalog','zaq_orders','zaq_pub','zaq_ports'];
+  const keys=['zaq_s','zaq_catalog','zaq_orders','zaq_pub','zaq_ports','zaq_urssaf_months'];
   const data={};
   keys.forEach(k=>{const v=localStorage.getItem(k);if(v)data[k]=JSON.parse(v);});
   data._exported=new Date().toISOString();
@@ -395,7 +402,7 @@ function importData(input){
   reader.onload=e=>{
     try{
       const data=JSON.parse(e.target.result);
-      const keys=['zaq_s','zaq_catalog','zaq_orders','zaq_pub','zaq_ports'];
+      const keys=['zaq_s','zaq_catalog','zaq_orders','zaq_pub','zaq_ports','zaq_urssaf_months'];
       let n=0;
       keys.forEach(k=>{if(data[k]!==undefined){localStorage.setItem(k,JSON.stringify(data[k]));n++;}});
       document.getElementById('backupStatus').innerHTML=`<span style="color:var(--success)">✓ ${n} blocs de données restaurés — recharge la page pour voir les changements.</span>`;
@@ -966,6 +973,14 @@ function savePub(){
   localStorage.setItem('zaq_pub',JSON.stringify(map));
   renderTableau();
 }
+function saveUrssafMonth(){
+  const key=document.getElementById('monthFilter').value||'all';
+  const val=parseFloat(document.getElementById('urssafInput').value)||0;
+  const map=JSON.parse(localStorage.getItem('zaq_urssaf_months')||'{}');
+  if(val)map[key]=val; else delete map[key];
+  localStorage.setItem('zaq_urssaf_months',JSON.stringify(map));
+  renderTableau();
+}
 
 // ── Tableau de bord ───────────────────────────────────────────────────────────
 function renderTableau(){
@@ -989,12 +1004,16 @@ function renderTableau(){
   const btnS=document.getElementById('btnSuppr');
   if(btnS)btnS.textContent=filterKey?'🗑 Supprimer ce mois':'🗑 Tout effacer';
 
-  // Charger la pub du mois sélectionné
+  // Charger la pub et le taux URSSAF du mois sélectionné
   const pubMap=JSON.parse(localStorage.getItem('zaq_pub')||'{}');
+  const urssafMonths=JSON.parse(localStorage.getItem('zaq_urssaf_months')||'{}');
   const pubKey=filterKey||'all';
   const pubMois=pubMap[pubKey]||0;
+  const urssafTaux=urssafMonths[pubKey]??getSettings().s_urssaf;
   const pubInp=document.getElementById('pubInput');
   if(pubInp)pubInp.value=pubMois||'';
+  const urssafInp=document.getElementById('urssafInput');
+  if(urssafInp)urssafInp.value=urssafTaux;
 
   if(!allOrders.length){
     body.innerHTML='<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Aucune commande enregistrée.</td></tr>';
@@ -1034,15 +1053,15 @@ function renderTableau(){
   const totProd=sum('coutProduits');
   const totPort=sum('port');
   const totEmb=sum('emballage');
-  const totUrs=sum('urssaf');
   const totCarte=sum('carte');
   const hasBreakdown=orders.some(o=>o.coutProduits!=null);
   const nb=orders.length;
-  // Frais fixes réels du mois (montant mensuel fixe, pas divisé par un nb estimé)
   const S=getSettings();
+  // URSSAF recalculé avec le taux du mois (corrige les imports faits avec le mauvais taux)
+  const totUrs=totCA*urssafTaux/100;
+  // Frais fixes réels du mois (montant mensuel fixe, pas divisé par un nb estimé)
   const fixMensuel=S.s_hosting+S.s_claude+S.s_banque+S.s_autres;
-  const totFix=fixMensuel; // montant réel du mois, pas sum(fixParCmd)
-  // Bénéfice recalculé avec frais fixes réels
+  const totFix=fixMensuel;
   const totBen=totCA-totProd-totPort-totEmb-totUrs-totCarte-totFix;
   const totMg=totCA>0?totBen/totCA*100:0;
 
@@ -1065,7 +1084,7 @@ function renderTableau(){
     {label:'Coût produits',    v:totProd},
     {label:'Frais de port',    v:totPort},
     {label:'Emballage',        v:totEmb},
-    {label:`URSSAF (${S.s_urssaf}%)`, v:totUrs},
+    {label:`URSSAF (${urssafTaux}%)`, v:totUrs},
     {label:'Frais carte',      v:totCarte},
     {label:`Frais fixes (${nb} cmd réelles)`, v:totFix},
     ...(pubMois>0?[{label:'Publicité (variable)', v:pubMois}]:[]),

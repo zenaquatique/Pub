@@ -865,8 +865,12 @@ function matchCatalog(itemName,catalog){
 
 function calcOrderBenefit(o,port){
   const s=getSettings();
-  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
   const pv=o.total||0;
+  // Commande à 0€ : uniquement le port est un coût (réexpé, annulation, etc.)
+  if(pv===0){
+    return{pv:0,coutProduits:0,port,emballage:0,urssaf:0,carte:0,fixParCmd:0,totalCouts:port,benefice:-port,marge:0};
+  }
+  const catalog=JSON.parse(localStorage.getItem('zaq_catalog')||'[]');
   const coutProduits=o.items.reduce((sum,it)=>{
     const match=matchCatalog(it.name,catalog);
     return sum+(match?.prixAchat||0)*it.qty;

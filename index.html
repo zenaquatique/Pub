@@ -247,7 +247,7 @@ input[type=file]:hover{border-color:var(--accent)}
         <span>€</span>
       </div>
       <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
-      <button class="btn btn-danger btn-sm" onclick="clearHistory();renderTableau()">🗑 Tout effacer</button>
+      <button id="btnSuppr" class="btn btn-danger btn-sm" onclick="clearMonthOrAll()">🗑 Tout effacer</button>
     </div>
   </div>
   <div style="overflow-x:auto;border:1px solid var(--border);border-radius:12px">
@@ -946,6 +946,18 @@ function renderHistory(){
 
 function deleteOrder(i){const o=JSON.parse(localStorage.getItem('zaq_orders')||'[]');o.splice(i,1);localStorage.setItem('zaq_orders',JSON.stringify(o));renderHistory()}
 function clearHistory(){if(confirm('Effacer tout l\'historique ?')){localStorage.removeItem('zaq_orders');renderHistory()}}
+function clearMonthOrAll(){
+  const key=document.getElementById('monthFilter').value;
+  if(!key){if(confirm('Effacer TOUTES les commandes ?')){localStorage.removeItem('zaq_orders');renderHistory();renderTableau();}}
+  else{
+    const label=document.getElementById('monthFilter').selectedOptions[0].text;
+    if(!confirm(`Supprimer toutes les commandes de ${label} ?`))return;
+    const all=JSON.parse(localStorage.getItem('zaq_orders')||'[]');
+    const monthKey=d=>{const dt=new Date(d);return`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;};
+    localStorage.setItem('zaq_orders',JSON.stringify(all.filter(o=>monthKey(o.date)!==key)));
+    renderHistory();renderTableau();
+  }
+}
 function savePub(){
   const key=document.getElementById('monthFilter').value||'all';
   const val=parseFloat(document.getElementById('pubInput').value)||0;
@@ -972,6 +984,10 @@ function renderTableau(){
 
   const filterKey=sel.value;
   const orders=filterKey?allOrders.filter(o=>monthKey(o.date)===filterKey):allOrders;
+
+  // Mettre à jour le bouton supprimer selon la sélection
+  const btnS=document.getElementById('btnSuppr');
+  if(btnS)btnS.textContent=filterKey?'🗑 Supprimer ce mois':'🗑 Tout effacer';
 
   // Charger la pub du mois sélectionné
   const pubMap=JSON.parse(localStorage.getItem('zaq_pub')||'{}');
@@ -1020,11 +1036,15 @@ function renderTableau(){
   const totEmb=sum('emballage');
   const totUrs=sum('urssaf');
   const totCarte=sum('carte');
-  const totFix=sum('fixParCmd');
-  const totBen=sum('benefice');
-  const totMg=totCA>0?totBen/totCA*100:0;
   const hasBreakdown=orders.some(o=>o.coutProduits!=null);
   const nb=orders.length;
+  // Frais fixes réels du mois (montant mensuel fixe, pas divisé par un nb estimé)
+  const S=getSettings();
+  const fixMensuel=S.s_hosting+S.s_claude+S.s_banque+S.s_autres;
+  const totFix=fixMensuel; // montant réel du mois, pas sum(fixParCmd)
+  // Bénéfice recalculé avec frais fixes réels
+  const totBen=totCA-totProd-totPort-totEmb-totUrs-totCarte-totFix;
+  const totMg=totCA>0?totBen/totCA*100:0;
 
   foot.innerHTML=`<tr>
     <td colspan="2">TOTAL (${nb} cmd)</td>
@@ -1045,9 +1065,9 @@ function renderTableau(){
     {label:'Coût produits',    v:totProd},
     {label:'Frais de port',    v:totPort},
     {label:'Emballage',        v:totEmb},
-    {label:`URSSAF (${getSettings().s_urssaf}%)`, v:totUrs},
+    {label:`URSSAF (${S.s_urssaf}%)`, v:totUrs},
     {label:'Frais carte',      v:totCarte},
-    {label:'Frais fixes répartis', v:totFix},
+    {label:`Frais fixes (${nb} cmd réelles)`, v:totFix},
     ...(pubMois>0?[{label:'Publicité (variable)', v:pubMois}]:[]),
   ]:[];
   const totCouts=postes.reduce((s,p)=>s+p.v,0);
@@ -1148,7 +1168,6 @@ function renderTableau(){
 
   // Recommandations
   const recos=[];
-  const S=getSettings();
   const hasCur=cur.n>0,hasLast=last.n>0;
 
   // Tendance CA

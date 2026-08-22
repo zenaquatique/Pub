@@ -1,0 +1,203 @@
+<!--
+  Calculateur de sol nutritif — ZenAquatique
+  À coller tel quel dans Shopify : Boutique en ligne > Personnaliser > page Produit
+  > Ajouter un bloc > "Liquid personnalisé" (Custom Liquid), sur les fiches produit
+  substrats / sol nutritif / sable.
+  Aucune dépendance externe, aucun appel réseau : fonctionne dans n'importe quel thème.
+-->
+<div class="zaq-calcsol" id="zaq-calcsol">
+  <h3 class="zaq-calcsol__titre">Combien de litres de sol nutritif me faut-il ?</h3>
+
+  <div class="zaq-calcsol__champs">
+    <div class="zaq-calcsol__champ">
+      <label for="zaq-longueur">Longueur du bac (cm)</label>
+      <input type="number" id="zaq-longueur" inputmode="decimal" min="1" step="0.5" placeholder="ex : 60">
+    </div>
+    <div class="zaq-calcsol__champ">
+      <label for="zaq-largeur">Largeur du bac (cm)</label>
+      <input type="number" id="zaq-largeur" inputmode="decimal" min="1" step="0.5" placeholder="ex : 30">
+    </div>
+  </div>
+
+  <div class="zaq-calcsol__champ">
+    <label for="zaq-hauteur">Hauteur de sol souhaitée (cm)</label>
+    <input type="number" id="zaq-hauteur" inputmode="decimal" min="1" step="0.5" value="5">
+    <div class="zaq-calcsol__presets" role="group" aria-label="Hauteurs conseillées">
+      <button type="button" class="zaq-calcsol__preset" data-hauteur="3">Fine couche (3 cm)</button>
+      <button type="button" class="zaq-calcsol__preset" data-hauteur="5">Standard (5 cm)</button>
+      <button type="button" class="zaq-calcsol__preset" data-hauteur="8">Aquascaping / pente (8 cm)</button>
+    </div>
+  </div>
+
+  <label class="zaq-calcsol__checkbox">
+    <input type="checkbox" id="zaq-marge" checked>
+    Ajouter 10% de marge (pentes, tassement dans le temps)
+  </label>
+
+  <div class="zaq-calcsol__champ">
+    <label for="zaq-sac">Contenance d'un sac (L)</label>
+    <input type="number" id="zaq-sac" inputmode="decimal" min="0.5" step="0.5" value="2.5">
+    <span class="zaq-calcsol__aide">Modifiable selon le produit (ex : 2,5 L pour le Dennerle Substrate)</span>
+  </div>
+
+  <div class="zaq-calcsol__resultat" id="zaq-resultat" aria-live="polite">
+    <p class="zaq-calcsol__placeholder">Renseignez les dimensions de votre bac pour voir le résultat.</p>
+  </div>
+</div>
+
+<style>
+  .zaq-calcsol {
+    max-width: 420px;
+    margin: 1.5rem 0;
+    padding: 1.25rem;
+    border: 1px solid #d8e2dc;
+    border-radius: 10px;
+    background: #f7faf8;
+    font-family: inherit;
+    color: #1f2d24;
+    box-sizing: border-box;
+  }
+  .zaq-calcsol *,
+  .zaq-calcsol *::before,
+  .zaq-calcsol *::after { box-sizing: border-box; }
+  .zaq-calcsol__titre {
+    margin: 0 0 1rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .zaq-calcsol__champs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .zaq-calcsol__champ {
+    margin-bottom: 0.9rem;
+  }
+  .zaq-calcsol__champ label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+  }
+  .zaq-calcsol input[type="number"] {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #c3d1c9;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background: #fff;
+    color: #1f2d24;
+  }
+  .zaq-calcsol input[type="number"]:focus {
+    outline: 2px solid #4a9d6f;
+    outline-offset: 1px;
+  }
+  .zaq-calcsol__presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+  .zaq-calcsol__preset {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    border: 1px solid #4a9d6f;
+    border-radius: 999px;
+    background: #fff;
+    color: #2f6b48;
+    cursor: pointer;
+  }
+  .zaq-calcsol__preset:hover,
+  .zaq-calcsol__preset:focus {
+    background: #4a9d6f;
+    color: #fff;
+  }
+  .zaq-calcsol__checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.9rem;
+    cursor: pointer;
+  }
+  .zaq-calcsol__aide {
+    display: block;
+    font-size: 0.75rem;
+    color: #5b6b60;
+    margin-top: 0.25rem;
+  }
+  .zaq-calcsol__resultat {
+    margin-top: 1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    background: #eaf4ee;
+    font-size: 0.9rem;
+  }
+  .zaq-calcsol__resultat p { margin: 0.25rem 0; }
+  .zaq-calcsol__resultat strong { color: #2f6b48; }
+  .zaq-calcsol__placeholder { color: #5b6b60; }
+</style>
+
+<script>
+(function () {
+  var racine = document.getElementById('zaq-calcsol');
+  if (!racine) return;
+
+  var champLongueur = racine.querySelector('#zaq-longueur');
+  var champLargeur = racine.querySelector('#zaq-largeur');
+  var champHauteur = racine.querySelector('#zaq-hauteur');
+  var champMarge = racine.querySelector('#zaq-marge');
+  var champSac = racine.querySelector('#zaq-sac');
+  var zoneResultat = racine.querySelector('#zaq-resultat');
+  var boutonsPreset = racine.querySelectorAll('.zaq-calcsol__preset');
+
+  function nombreValide(valeur) {
+    var n = parseFloat(valeur);
+    return isFinite(n) && n > 0 ? n : null;
+  }
+
+  function formaterLitres(n) {
+    return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  }
+
+  function calculer() {
+    var longueur = nombreValide(champLongueur.value);
+    var largeur = nombreValide(champLargeur.value);
+    var hauteur = nombreValide(champHauteur.value);
+
+    if (!longueur || !largeur || !hauteur) {
+      zoneResultat.innerHTML = '<p class="zaq-calcsol__placeholder">Renseignez les dimensions de votre bac pour voir le résultat.</p>';
+      return;
+    }
+
+    var volumeLitres = (longueur * largeur * hauteur) / 1000;
+    if (champMarge.checked) {
+      volumeLitres *= 1.1;
+    }
+
+    var html = '<p>Volume de sol nécessaire : <strong>' + formaterLitres(volumeLitres) + ' L</strong></p>';
+
+    var contenanceSac = nombreValide(champSac.value);
+    if (contenanceSac) {
+      var nombreSacs = Math.ceil(volumeLitres / contenanceSac);
+      html += '<p>Nombre de sacs conseillé : <strong>' + nombreSacs + '</strong></p>';
+    }
+
+    zoneResultat.innerHTML = html;
+  }
+
+  [champLongueur, champLargeur, champHauteur, champMarge, champSac].forEach(function (champ) {
+    champ.addEventListener('input', calculer);
+    champ.addEventListener('change', calculer);
+  });
+
+  boutonsPreset.forEach(function (bouton) {
+    bouton.addEventListener('click', function () {
+      champHauteur.value = bouton.getAttribute('data-hauteur');
+      calculer();
+    });
+  });
+
+  calculer();
+})();
+</script>

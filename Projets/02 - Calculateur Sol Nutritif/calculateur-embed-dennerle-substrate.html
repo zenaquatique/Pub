@@ -1,0 +1,208 @@
+<!--
+  Calculateur de sol nutritif — ZenAquatique
+  Pré-rempli pour : Dennerle Substrate 2.5L (3 kg)
+  À coller tel quel dans Shopify : Boutique en ligne > Personnaliser > page Produit
+  "Dennerle Substrate" > Ajouter un bloc > "Liquid personnalisé" (Custom Liquid).
+  Rien à modifier dans le code. Aucune dépendance externe, aucun appel réseau.
+-->
+<div class="zaq-calcsol" id="zaq-calcsol-dennerle">
+  <h3 class="zaq-calcsol__titre">Combien de litres de sol nutritif me faut-il ?</h3>
+
+  <div class="zaq-calcsol__champs">
+    <div class="zaq-calcsol__champ">
+      <label for="zaq-dennerle-longueur">Longueur du bac (cm)</label>
+      <input type="number" id="zaq-dennerle-longueur" inputmode="decimal" min="1" step="0.5" placeholder="ex : 60">
+    </div>
+    <div class="zaq-calcsol__champ">
+      <label for="zaq-dennerle-largeur">Largeur du bac (cm)</label>
+      <input type="number" id="zaq-dennerle-largeur" inputmode="decimal" min="1" step="0.5" placeholder="ex : 30">
+    </div>
+  </div>
+
+  <div class="zaq-calcsol__champ">
+    <label for="zaq-dennerle-hauteur">Hauteur de sol souhaitée (cm)</label>
+    <input type="number" id="zaq-dennerle-hauteur" inputmode="decimal" min="1" step="0.5" value="5">
+    <div class="zaq-calcsol__presets" role="group" aria-label="Hauteurs conseillées">
+      <button type="button" class="zaq-calcsol__preset" data-hauteur="3">Fine couche (3 cm)</button>
+      <button type="button" class="zaq-calcsol__preset" data-hauteur="5">Standard (5 cm)</button>
+      <button type="button" class="zaq-calcsol__preset" data-hauteur="8">Aquascaping / pente (8 cm)</button>
+    </div>
+  </div>
+
+  <label class="zaq-calcsol__checkbox">
+    <input type="checkbox" id="zaq-dennerle-marge" checked>
+    Ajouter 10% de marge (pentes, tassement dans le temps)
+  </label>
+
+  <div class="zaq-calcsol__resultat" id="zaq-dennerle-resultat" aria-live="polite">
+    <p class="zaq-calcsol__placeholder">Renseignez les dimensions de votre bac pour voir le résultat.</p>
+  </div>
+</div>
+
+<style>
+  .zaq-calcsol {
+    width: 100%;
+    margin: clamp(16px, 4vw, 24px) 0;
+    padding: clamp(18px, 5vw, 28px);
+    border: 2px solid #9dbaa9;
+    border-radius: 12px;
+    background: #f7faf8;
+    font-family: inherit;
+    font-size: clamp(16px, 4vw, 18px);
+    color: #14201a;
+    box-sizing: border-box;
+  }
+  .zaq-calcsol *,
+  .zaq-calcsol *::before,
+  .zaq-calcsol *::after { box-sizing: border-box; }
+  .zaq-calcsol__titre {
+    margin: 0 0 clamp(16px, 4vw, 22px);
+    font-size: clamp(21px, 5.5vw, 26px);
+    line-height: 1.25;
+    font-weight: 700;
+    color: #14201a;
+  }
+  .zaq-calcsol__champs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+  }
+  .zaq-calcsol__champ {
+    margin-bottom: 20px;
+  }
+  .zaq-calcsol__champ label {
+    display: block;
+    font-size: clamp(15px, 3.8vw, 17px);
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #14201a;
+  }
+  .zaq-calcsol input[type="number"] {
+    width: 100%;
+    padding: clamp(11px, 3vw, 14px) clamp(12px, 3.5vw, 16px);
+    border: 2px solid #6f8a7a;
+    border-radius: 8px;
+    font-size: clamp(16px, 4.5vw, 19px);
+    font-weight: 600;
+    background: #fff;
+    color: #14201a;
+    box-shadow: inset 0 1px 2px rgba(20, 32, 26, 0.08);
+  }
+  .zaq-calcsol input[type="number"]:focus {
+    outline: 3px solid #2f6b48;
+    outline-offset: 1px;
+    border-color: #2f6b48;
+  }
+  .zaq-calcsol__presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .zaq-calcsol__preset {
+    padding: clamp(8px, 2.2vw, 10px) clamp(14px, 4vw, 18px);
+    font-size: clamp(14px, 3.6vw, 16px);
+    font-weight: 700;
+    border: 2px solid #2f6b48;
+    border-radius: 999px;
+    background: #fff;
+    color: #235939;
+    cursor: pointer;
+  }
+  .zaq-calcsol__preset:hover,
+  .zaq-calcsol__preset:focus {
+    background: #2f6b48;
+    color: #fff;
+  }
+  .zaq-calcsol__checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: clamp(15px, 3.8vw, 17px);
+    font-weight: 600;
+    margin-bottom: 20px;
+    cursor: pointer;
+    color: #14201a;
+  }
+  .zaq-calcsol__checkbox input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    accent-color: #2f6b48;
+  }
+  .zaq-calcsol__resultat {
+    margin-top: 22px;
+    padding: clamp(16px, 4.5vw, 20px) clamp(16px, 4.5vw, 22px);
+    border: 2px solid #b7d4c1;
+    border-radius: 10px;
+    background: #eaf4ee;
+    font-size: clamp(16px, 4.5vw, 19px);
+    font-weight: 600;
+    color: #14201a;
+  }
+  .zaq-calcsol__resultat p { margin: 8px 0; color: #14201a; }
+  .zaq-calcsol__resultat strong { color: #1c4a30; font-size: 1.15em; font-weight: 800; }
+  .zaq-calcsol__placeholder { color: #3d4a43; font-weight: 500; }
+</style>
+
+<script>
+(function () {
+  // Sac de référence de CETTE fiche : Dennerle Substrate 2.5L
+  var CONTENANCE_SAC_LITRES = 2.5;
+
+  var racine = document.getElementById('zaq-calcsol-dennerle');
+  if (!racine) return;
+
+  var champLongueur = racine.querySelector('#zaq-dennerle-longueur');
+  var champLargeur = racine.querySelector('#zaq-dennerle-largeur');
+  var champHauteur = racine.querySelector('#zaq-dennerle-hauteur');
+  var champMarge = racine.querySelector('#zaq-dennerle-marge');
+  var zoneResultat = racine.querySelector('#zaq-dennerle-resultat');
+  var boutonsPreset = racine.querySelectorAll('.zaq-calcsol__preset');
+
+  function nombreValide(valeur) {
+    var n = parseFloat(valeur);
+    return isFinite(n) && n > 0 ? n : null;
+  }
+
+  function formaterNombre(n) {
+    return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  }
+
+  function calculer() {
+    var longueur = nombreValide(champLongueur.value);
+    var largeur = nombreValide(champLargeur.value);
+    var hauteur = nombreValide(champHauteur.value);
+
+    if (!longueur || !largeur || !hauteur) {
+      zoneResultat.innerHTML = '<p class="zaq-calcsol__placeholder">Renseignez les dimensions de votre bac pour voir le résultat.</p>';
+      return;
+    }
+
+    var volumeLitres = (longueur * largeur * hauteur) / 1000;
+    if (champMarge.checked) {
+      volumeLitres *= 1.1;
+    }
+
+    var nombreSacs = Math.ceil(volumeLitres / CONTENANCE_SAC_LITRES);
+
+    zoneResultat.innerHTML =
+      '<p>Volume de sol nécessaire : <strong>' + formaterNombre(volumeLitres) + ' L</strong></p>' +
+      '<p>Nombre de sacs conseillé (2,5 L) : <strong>' + nombreSacs + '</strong></p>';
+  }
+
+  [champLongueur, champLargeur, champHauteur, champMarge].forEach(function (champ) {
+    champ.addEventListener('input', calculer);
+    champ.addEventListener('change', calculer);
+  });
+
+  boutonsPreset.forEach(function (bouton) {
+    bouton.addEventListener('click', function () {
+      champHauteur.value = bouton.getAttribute('data-hauteur');
+      calculer();
+    });
+  });
+
+  calculer();
+})();
+</script>

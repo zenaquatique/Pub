@@ -33,10 +33,16 @@ Changer de bac redimensionne la scène (largeur max + ratio longueur/hauteur) et
 
 ## Étape 2 — Le sol
 Reprend la formule du **Projet 02** (volume = longueur × largeur × hauteur / 1000, +10% de marge) en utilisant les dimensions du bac choisi à l'étape 1 :
-- Produit : Dennerle Substrate 2.5L, Sable Fin Rivière ou Sable Fin Blanc Neige
-- Hauteur : 3 cm ou 5 cm
+- Produit : Dennerle Substrate 2.5L (sol nutritif), Sable Fin Rivière ou Sable Fin Blanc Neige (sable pur)
+- Hauteur totale : 3 cm ou 5 cm
 - Résultat : nombre de sacs calculé automatiquement, ajouté au panier, fond du bac recoloré et redimensionné visuellement en conséquence
 - Changer de produit ou de hauteur **remplace** le sol précédent (pas d'empilement)
+
+**Sable de recouvrement obligatoire avec un sol nutritif** (demande d'Owen — en aquascaping le sol nutritif se recouvre toujours d'une fine couche de sable, sinon il se disperse/se ternit) : dès que le Dennerle Substrate est choisi, un second sélecteur "sable de recouvrement" apparaît et devient obligatoire (pré-rempli par défaut, modifiable). La hauteur totale choisie (3 ou 5 cm) se répartit en :
+- une fine couche de recouvrement fixe de **1 cm** (constante `CAP_HAUTEUR_CM`, à ajuster si besoin — c'est une hypothèse de départ, pas une donnée confirmée par Owen)
+- le reste en sol nutritif (donc 2 cm ou 4 cm)
+
+Les deux produits (sol nutritif + sable de recouvrement) sont calculés séparément avec leurs propres contenances, affichés en deux lignes dans le panier, et le fond du bac affiche visuellement les deux couches superposées. Pour un sable pur (pas de sol nutritif), pas de recouvrement : une seule couche, comme avant.
 
 ## Palette (étape 3) — colonnes rétractables
 8 catégories, chacune un bloc `<details>` que le client ouvre/ferme. Contenu = tout le catalogue envoyé, **hors packs et cartes-cadeaux** (à sa demande) et hors "Formation Standard" (service, pas un produit à poser dans le bac — à confirmer si à inclure ailleurs) :
@@ -59,14 +65,17 @@ Les prix venant du catalogue connu (`Contexte/catalogue-produits.md`) sont exact
 `configurateur-embed.html` — prototype fonctionnel autonome (HTML + CSS + JS inline, aucune dépendance). Glisser-déposer en Pointer Events (souris + tactile).
 
 Testé automatiquement (Playwright) :
-- changement de bac → scène redimensionnée, capacité indicative mise à jour
+- changement de bac → le bac est **réellement** plus grand pour une plus grande cuve (largeur ET hauteur, vérifié 25L vs 375L), capacité indicative mise à jour
 - sélection sol + hauteur → fond du bac recoloré/redimensionné, sacs calculés, ligne ajoutée au panier
+- sol nutritif → sable de recouvrement obligatoire affiché, deux lignes calculées séparément dans le panier, deux couches visibles dans le bac
+- changement du produit de recouvrement → recalcul immédiat de sa ligne
+- retour à un sable pur → la ligne de recouvrement se cache réellement (bug de spécificité CSS corrigé : une classe partagée forçait `display:flex` et empêchait `hidden` de fonctionner)
 - changement de hauteur (3↔5cm) → recalcul immédiat
 - changement de bac avec sol déjà choisi → recalcul avec les nouvelles dimensions
 - ouverture/fermeture d'une catégorie (colonne rétractable)
 - glisser-déposer d'un produit (dépôt, déplacement, retrait) — toujours fonctionnel comme en v1
-- "Ajouter tout au panier" (simulation) → regroupe sol + items avec quantités
-- sauvegarde `localStorage` (bac, sol, items placés) et restauration après rechargement
+- "Ajouter tout au panier" (simulation) → regroupe sol + recouvrement + items avec quantités
+- sauvegarde `localStorage` (bac, sol, recouvrement, items placés) et restauration après rechargement
 
 ## ⚠️ Ce qui reste simulé (à remplacer avant mise en ligne)
 1. **Visuels produits** : formes SVG par catégorie, pas de vraies photos détourées. Le code n'a pas encore de champ `image` par produit dans cette v2 (à ajouter en même temps que les vrais visuels).

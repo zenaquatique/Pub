@@ -236,6 +236,7 @@
     width: 30px;
     height: 30px;
     flex-shrink: 0;
+    overflow: hidden;
   }
   .zaq-builder__img {
     width: 100%;
@@ -314,6 +315,15 @@
     user-select: none;
   }
   .zaq-builder__item:active { cursor: grabbing; }
+  /* Wrapper séparé (plutôt que overflow:hidden sur .zaq-builder__item directement) :
+     le bouton × est positionné hors de la boîte (-8px) et doit rester visible même
+     si le visuel (photo cassée, alt trop long...) doit lui être découpé proprement. */
+  .zaq-builder__item-visuel {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 8px;
+  }
   .zaq-builder__item-supprimer {
     position: absolute;
     top: -8px;
@@ -355,6 +365,7 @@
     position: fixed;
     width: 50px;
     height: 50px;
+    overflow: hidden;
     pointer-events: none;
     z-index: 1000;
     opacity: 0.9;
@@ -879,7 +890,7 @@
       el.style.left = item.xPct + '%';
       el.style.top = item.yPct + '%';
       el.style.zIndex = item.zIndex;
-      el.innerHTML = rendreVisuel(produit) + '<span class="zaq-builder__item-supprimer" title="Retirer">×</span>';
+      el.innerHTML = '<div class="zaq-builder__item-visuel">' + rendreVisuel(produit) + '</div><span class="zaq-builder__item-supprimer" title="Retirer">×</span>';
       el.querySelector('.zaq-builder__item-supprimer').addEventListener('pointerdown', function (e) {
         e.stopPropagation();
       });

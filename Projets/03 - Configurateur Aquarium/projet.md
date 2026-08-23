@@ -90,6 +90,10 @@ Testé automatiquement (Playwright), **dans la page d'aperçu telle qu'elle est 
 ## Ajouter les vraies photos produit
 Le code accepte déjà un champ `image` par produit (URL) — dès qu'il est renseigné, il remplace automatiquement le pictogramme partout (palette, bac, glisser-déposer), sans autre modification. Deux façons de le remplir :
 
+**⚠️ Les photos ne s'afficheront pas dans l'aperçu Artifact (claude.ai)** — la première photo réelle ajoutée (Hygrophila Polysperma) a été testée, mais l'aperçu publié sur claude.ai bloque le chargement de toute image externe par sécurité (seules les polices Google Fonts passent). Ce n'est pas un bug ni une mauvaise URL : ça ne se produira pas sur la vraie fiche Shopify, où les images se chargent normalement. Pour voir les photos en vrai avant publication : dupliquer le thème Shopify (Boutique en ligne → Thèmes → Dupliquer), coller le bloc sur la copie, et utiliser le bouton "Aperçu" de l'éditeur de thème — lien privé, invisible pour les clients, jusqu'à publication volontaire de cette copie.
+
+Bug corrigé au passage : quand une photo ne charge pas, le texte alternatif débordait de la petite case au lieu de rester propre (repéré grâce au retour d'Owen sur l'aperçu). Le visuel (photo ou pictogramme) est maintenant dans un conteneur avec `overflow:hidden` séparé du bouton "×" (qui doit lui rester visible en dehors de la case) — testé avec une image volontairement cassée : la case reste à sa taille normale, rien ne déborde, le bouton de suppression reste cliquable.
+
 **A. À la main (rapide à démarrer, long pour 76 produits)** — pour chaque produit à illustrer : dans l'admin Shopify → Produits → [le produit] → clic droit sur la photo → copier l'adresse de l'image (ou ouvrir l'image en grand et copier son URL `cdn.shopify.com/...`) → coller dans le 5e argument de son `pr(...)` dans `configurateur-embed.html`, ex. :
 ```js
 pr('crypto-lucens', 'Cryptocoryne Lucens', 1.99, false, 'https://cdn.shopify.com/s/files/.../crypto-lucens.jpg'),

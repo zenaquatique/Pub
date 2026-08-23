@@ -27,7 +27,7 @@
       <select class="zaq-builder__select" id="zaq-sol-produit">
         <option value="">— Aucun —</option>
       </select>
-      <div class="zaq-builder__hauteurs" role="group" aria-label="Hauteur de sol">
+      <div class="zaq-builder__hauteurs" role="group" aria-label="Hauteur de sol" id="zaq-hauteurs-sol">
         <button type="button" class="zaq-builder__hauteur" data-hauteur="3">3 cm</button>
         <button type="button" class="zaq-builder__hauteur" data-hauteur="5">5 cm</button>
       </div>
@@ -35,6 +35,10 @@
     <div class="zaq-builder__sol-ligne" id="zaq-recouvrement-ligne" hidden>
       <label class="zaq-builder__recouvrement-label" for="zaq-sol-recouvrement">Sable de recouvrement (obligatoire par-dessus un sol nutritif)</label>
       <select class="zaq-builder__select" id="zaq-sol-recouvrement"></select>
+      <div class="zaq-builder__hauteurs" role="group" aria-label="Hauteur de recouvrement" id="zaq-hauteurs-cap">
+        <button type="button" class="zaq-builder__hauteur" data-hauteur="3">3 cm</button>
+        <button type="button" class="zaq-builder__hauteur" data-hauteur="5">5 cm</button>
+      </div>
     </div>
     <p class="zaq-builder__sol-info" id="zaq-sol-info"></p>
   </div>
@@ -597,9 +601,6 @@
     { id: 'sable-fin-blanc-neige', nom: 'Sable Fin Blanc Neige SUPERFISH', prix: 10.99, prixApprox: false, variantId: null, contenanceKg: 4, densiteKgParL: 1.55, couleur: '#e8ddc8', type: 'sable' }
   ];
   var SABLES_RECOUVREMENT = PRODUITS_SOL.filter(function (s) { return s.type === 'sable'; });
-  // Épaisseur de recouvrement fixe : fine couche de sable par-dessus le sol
-  // nutritif, indépendante de la hauteur totale choisie (3/5cm = sol + cap).
-  var CAP_HAUTEUR_CM = 1;
 
   // ─── Bacs : dimensions standard indicatives (à confirmer auprès d'Aquael) ──
   var BACS = [
@@ -629,7 +630,8 @@
   var elSolRecouvrement = racine.querySelector('#zaq-sol-recouvrement');
   var elRecouvrementLigne = racine.querySelector('#zaq-recouvrement-ligne');
   var elSolInfo = racine.querySelector('#zaq-sol-info');
-  var boutonsHauteur = racine.querySelectorAll('.zaq-builder__hauteur');
+  var boutonsHauteurSol = racine.querySelectorAll('#zaq-hauteurs-sol .zaq-builder__hauteur');
+  var boutonsHauteurCap = racine.querySelectorAll('#zaq-hauteurs-cap .zaq-builder__hauteur');
   var elPalette = racine.querySelector('#zaq-palette');
   var elTank = racine.querySelector('#zaq-tank');
   var elFond = racine.querySelector('#zaq-fond');
@@ -646,7 +648,7 @@
   var prochainUid = 1;
   var zIndexCourant = 10;
   var bacActuel = BACS[2]; // 54L par défaut
-  var solActuel = null;     // { produitId, hauteurCm, capProduitId, sacs, sacsCap, volumeL, volumeLCap }
+  var solActuel = null;     // { produitId, hauteurCm, capProduitId, capHauteurCm, sacs, sacsCap, volumeL, volumeLCap }
 
   function formaterPrix(n) {
     return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -700,10 +702,13 @@
 
     if (produitSol.type === 'nutritif') {
       if (!solActuel.capProduitId) solActuel.capProduitId = SABLES_RECOUVREMENT[0].id;
+      if (!solActuel.capHauteurCm) solActuel.capHauteurCm = 3;
       var produitCap = PRODUITS_PAR_ID_SOL(solActuel.capProduitId);
-      var hauteurSolCm = Math.max(solActuel.hauteurCm - CAP_HAUTEUR_CM, 1);
-      var hauteurSolPct = Math.max(5, Math.min(38, (hauteurSolCm / bacActuel.hauteur) * 100));
-      var hauteurCapPct = Math.max(2, Math.min(10, (CAP_HAUTEUR_CM / bacActuel.hauteur) * 100));
+      var hauteurSolCm = solActuel.hauteurCm;
+      var hauteurCapCm = solActuel.capHauteurCm;
+      var hauteurTotaleCm = hauteurSolCm + hauteurCapCm;
+      var hauteurSolPct = Math.max(4, Math.min(35, (hauteurSolCm / bacActuel.hauteur) * 100));
+      var hauteurCapPct = Math.max(4, Math.min(35, (hauteurCapCm / bacActuel.hauteur) * 100));
 
       elFond.style.height = hauteurSolPct + '%';
       elFond.style.background = produitSol.couleur;
@@ -712,7 +717,7 @@
       elFondCap.style.background = produitCap.couleur;
 
       var calcSol = calculerSacs(produitSol, hauteurSolCm);
-      var calcCap = calculerSacs(produitCap, CAP_HAUTEUR_CM);
+      var calcCap = calculerSacs(produitCap, hauteurCapCm);
       solActuel.sacs = calcSol.sacs;
       solActuel.volumeL = calcSol.volumeL;
       solActuel.sacsCap = calcCap.sacs;
@@ -720,11 +725,14 @@
 
       elSolInfo.textContent =
         'Sol nutritif (' + hauteurSolCm + ' cm) : ' + calcSol.volumeL.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' L → ' + calcSol.sacs + ' sac' + (calcSol.sacs > 1 ? 's' : '') +
-        ' · Recouvrement (' + CAP_HAUTEUR_CM + ' cm) : ' + calcCap.volumeL.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' L → ' + calcCap.sacs + ' sac' + (calcCap.sacs > 1 ? 's' : '') +
-        '. Les deux sont ajoutés au panier.';
+        ' · Recouvrement (' + hauteurCapCm + ' cm) : ' + calcCap.volumeL.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' L → ' + calcCap.sacs + ' sac' + (calcCap.sacs > 1 ? 's' : '') +
+        ' · Hauteur totale : ' + hauteurTotaleCm + ' cm. Les deux sont ajoutés au panier.';
 
       elRecouvrementLigne.hidden = false;
       elSolRecouvrement.value = solActuel.capProduitId;
+      boutonsHauteurCap.forEach(function (b) {
+        b.setAttribute('aria-pressed', parseInt(b.getAttribute('data-hauteur'), 10) === hauteurCapCm ? 'true' : 'false');
+      });
     } else {
       solActuel.capProduitId = null;
       solActuel.sacsCap = 0;
@@ -754,11 +762,14 @@
       elFondCap.style.height = '0';
       elSolInfo.textContent = '';
       elRecouvrementLigne.hidden = true;
-      boutonsHauteur.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+      boutonsHauteurSol.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+      boutonsHauteurCap.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
     } else {
       var hauteurActuelle = (solActuel && solActuel.hauteurCm) || 5;
-      solActuel = { produitId: elSolProduit.value, hauteurCm: hauteurActuelle, capProduitId: null };
-      boutonsHauteur.forEach(function (b) {
+      var capHauteurActuelle = solActuel ? solActuel.capHauteurCm : null;
+      var capProduitActuel = solActuel ? solActuel.capProduitId : null;
+      solActuel = { produitId: elSolProduit.value, hauteurCm: hauteurActuelle, capProduitId: capProduitActuel, capHauteurCm: capHauteurActuelle };
+      boutonsHauteurSol.forEach(function (b) {
         b.setAttribute('aria-pressed', parseInt(b.getAttribute('data-hauteur'), 10) === hauteurActuelle ? 'true' : 'false');
       });
       calculerEtAppliquerSol();
@@ -773,15 +784,29 @@
     rendrePanier();
     sauvegarder();
   });
-  boutonsHauteur.forEach(function (bouton) {
+  boutonsHauteurSol.forEach(function (bouton) {
     bouton.addEventListener('click', function () {
-      boutonsHauteur.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+      boutonsHauteurSol.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
       bouton.setAttribute('aria-pressed', 'true');
       var hauteurCm = parseInt(bouton.getAttribute('data-hauteur'), 10);
       if (!elSolProduit.value) {
         elSolProduit.value = PRODUITS_SOL[0].id;
       }
-      solActuel = { produitId: elSolProduit.value, hauteurCm: hauteurCm, capProduitId: solActuel ? solActuel.capProduitId : null };
+      solActuel = {
+        produitId: elSolProduit.value,
+        hauteurCm: hauteurCm,
+        capProduitId: solActuel ? solActuel.capProduitId : null,
+        capHauteurCm: solActuel ? solActuel.capHauteurCm : null
+      };
+      calculerEtAppliquerSol();
+      rendrePanier();
+      sauvegarder();
+    });
+  });
+  boutonsHauteurCap.forEach(function (bouton) {
+    bouton.addEventListener('click', function () {
+      if (!solActuel) return;
+      solActuel.capHauteurCm = parseInt(bouton.getAttribute('data-hauteur'), 10);
       calculerEtAppliquerSol();
       rendrePanier();
       sauvegarder();
@@ -864,16 +889,15 @@
 
     if (solActuel && solActuel.sacs) {
       var produitSol = PRODUITS_PAR_ID_SOL(solActuel.produitId);
-      var hauteurAffichee = produitSol.type === 'nutritif' ? Math.max(solActuel.hauteurCm - CAP_HAUTEUR_CM, 1) : solActuel.hauteurCm;
       var ligneTotalSol = produitSol.prix * solActuel.sacs;
       total += ligneTotalSol;
-      html += '<li><span>' + solActuel.sacs + '× ' + produitSol.nom + ' (' + hauteurAffichee + ' cm)</span><span>' + formaterPrix(ligneTotalSol) + '</span></li>';
+      html += '<li><span>' + solActuel.sacs + '× ' + produitSol.nom + ' (' + solActuel.hauteurCm + ' cm)</span><span>' + formaterPrix(ligneTotalSol) + '</span></li>';
 
       if (solActuel.capProduitId && solActuel.sacsCap) {
         var produitCap = PRODUITS_PAR_ID_SOL(solActuel.capProduitId);
         var ligneTotalCap = produitCap.prix * solActuel.sacsCap;
         total += ligneTotalCap;
-        html += '<li><span>' + solActuel.sacsCap + '× ' + produitCap.nom + ' (recouvrement, ' + CAP_HAUTEUR_CM + ' cm)</span><span>' + formaterPrix(ligneTotalCap) + '</span></li>';
+        html += '<li><span>' + solActuel.sacsCap + '× ' + produitCap.nom + ' (recouvrement, ' + solActuel.capHauteurCm + ' cm)</span><span>' + formaterPrix(ligneTotalCap) + '</span></li>';
       }
     }
 
@@ -1065,7 +1089,7 @@
   elBac.value = bacActuel.id;
   if (solActuel) {
     elSolProduit.value = solActuel.produitId;
-    boutonsHauteur.forEach(function (b) {
+    boutonsHauteurSol.forEach(function (b) {
       b.setAttribute('aria-pressed', parseInt(b.getAttribute('data-hauteur'), 10) === solActuel.hauteurCm ? 'true' : 'false');
     });
   }

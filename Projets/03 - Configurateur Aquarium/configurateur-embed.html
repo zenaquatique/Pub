@@ -742,11 +742,11 @@
       var hauteurSolPct = Math.max(4, Math.min(35, (hauteurSolCm / bacActuel.hauteur) * 100));
       var hauteurCapPct = Math.max(4, Math.min(35, (hauteurCapCm / bacActuel.hauteur) * 100));
 
-      elFond.style.height = hauteurSolPct + '%';
-      elFond.style.background = produitSol.couleur;
-      elFondCap.style.bottom = hauteurSolPct + '%';
-      elFondCap.style.height = hauteurCapPct + '%';
-      elFondCap.style.background = produitCap.couleur;
+      elFond.style.setProperty('height', hauteurSolPct + '%', 'important');
+      elFond.style.setProperty('background', produitSol.couleur, 'important');
+      elFondCap.style.setProperty('bottom', hauteurSolPct + '%', 'important');
+      elFondCap.style.setProperty('height', hauteurCapPct + '%', 'important');
+      elFondCap.style.setProperty('background', produitCap.couleur, 'important');
 
       var calcSol = calculerSacs(produitSol, hauteurSolCm);
       var calcCap = calculerSacs(produitCap, hauteurCapCm);
@@ -771,9 +771,9 @@
       solActuel.volumeLCap = 0;
 
       var hauteurPct = Math.max(6, Math.min(40, (solActuel.hauteurCm / bacActuel.hauteur) * 100));
-      elFond.style.height = hauteurPct + '%';
-      elFond.style.background = produitSol.couleur;
-      elFondCap.style.height = '0';
+      elFond.style.setProperty('height', hauteurPct + '%', 'important');
+      elFond.style.setProperty('background', produitSol.couleur, 'important');
+      elFondCap.style.setProperty('height', '0', 'important');
 
       var calc = calculerSacs(produitSol, solActuel.hauteurCm);
       solActuel.sacs = calc.sacs;

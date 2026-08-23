@@ -30,7 +30,16 @@ Après le collage d'une nouvelle version du code, plus rien ne s'affichait sur l
 5. **Correctif** : suppression du commentaire d'en-tête (emoji compris, il ne servait qu'à la doc interne) et des tirets décoratifs dans les commentaires JS, remplacés par du texte simple. Le fichier ne contient plus aucun caractère en dehors des accents français, `€`, `×`, `≈`, `—` et `→` — tous utilisés couramment et sans risque connu.
 6. Fichier envoyé à Owen **en pièce jointe** (plutôt que collé dans le chat) pour qu'il copie depuis un fichier texte brut plutôt que depuis une bulle de conversation formatée, évitant tout risque de reformatage (guillemets, tirets) au moment du copier-coller.
 
-**À confirmer par Owen** : si ça ne suffit pas, prochaine étape = isoler HTML+CSS (sans le `<script>`) pour savoir si le blocage vient du script ou du balisage lui-même.
+**Confirmé par Owen** : ça marche, le widget s'affiche et fonctionne sur la vraie boutique (bac 375L testé, glisser-déposer, calcul du sol, panier — tout est opérationnel).
+
+## v5 — retours du premier test grandeur nature réussi
+Trois retours après le premier essai fonctionnel sur la vraie boutique :
+
+1. **Le sol (sable/nutritif) ne se voyait plus dans le bac.** Cause probable : sur le vrai thème Shopify (contrairement à mes tests isolés), une couleur de fond ou un habillage de section peut réduire le contraste entre l'eau et le sol. Correctif défensif : `z-index` explicite sur les 3 couches (eau=1, sol=2, recouvrement=3, les objets posés restent au-dessus avec un z-index ≥ 10) pour garantir l'ordre d'empilement quoi qu'il arrive, + une bordure sombre de 2px en haut du sol et du recouvrement pour qu'ils restent visibles même si leur couleur se fond dans l'arrière-plan du thème.
+2. **Les photos produit étaient rognées ("pas en entière").** Cause : `object-fit: cover` remplit la case en recadrant l'image si ses proportions ne sont pas carrées — pour des photos détourées (souvent hautes et étroites), ça coupait le haut/bas ou les côtés. Remplacé par `object-fit: contain` : la photo entière est toujours visible, réduite pour tenir dans la case (comme le fait déjà l'icône SVG de secours).
+3. **"Impossible de scaler la photo"** — même cause que le point 2 : avec `cover`, l'image semblait "collée" à une taille fixe indépendamment de la case. Avec `contain`, elle suit maintenant correctement `--zaq-item-size` (donc la taille du bac choisi), comme prévu à l'origine.
+
+**À confirmer par Owen** : que le sol est maintenant bien visible avec la bordure de contraste, et que les photos s'affichent en entier et à la bonne taille.
 
 ## ⚠️ Catégories : je n'ai pas pu consulter zen-aquatique.fr en direct
 L'accès au site est bloqué depuis cet environnement (proxy réseau). Les catégories utilisées reprennent celles déjà présentes dans le coffre (`Contexte/catalogue-produits.md` : Plantes, Crevettes, Décoration, Substrats, Outillage, Aquariums) + celles qu'il a fallu ajouter pour couvrir la liste envoyée (Éclairage, Chauffage, Filtration, Air & CO2). **À corriger si les vraies collections Shopify sont nommées ou regroupées différemment.**

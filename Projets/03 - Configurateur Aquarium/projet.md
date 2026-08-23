@@ -72,18 +72,36 @@ Testé automatiquement (Playwright), **dans la page d'aperçu telle qu'elle est 
 - ouverture/fermeture d'une catégorie (colonne rétractable)
 - **la palette défile réellement sur tout son contenu** (les 28 plantes, pas seulement les 7 premières) : la palette était en `display:flex; flex-direction:column` avec `overflow-y:auto`, un conteneur flex-column ne réduit pas toujours ses enfants correctement quand le contenu dépasse sa hauteur, ce qui empêchait le défilement de s'activer et laissait le contenu déborder hors du cadre au lieu de défiler dedans (silencieusement — le HTML et le texte étaient corrects, seul l'affichage était cassé). Passé en conteneur bloc simple.
 - glisser-déposer d'un produit (dépôt, déplacement, retrait) — toujours fonctionnel comme en v1
+- **dépôt précis au pixel près** : `left/top: X%` sur un élément posé se calcule par rapport à la boîte de padding du bac (sans sa bordure de 8px), alors que le point de dépôt était mesuré sur la boîte englobante complète (avec la bordure) — l'élément posé dérivait donc de quelques px vers la droite/le bas selon l'endroit du bac où on lâchait. Corrigé (mesuré : 0px d'écart après correction, contre un écart allant jusqu'à ~8px avant).
 - "Ajouter tout au panier" (simulation) → regroupe sol + recouvrement + items avec quantités
 - sauvegarde `localStorage` (bac, sol, recouvrement + ses hauteurs, items placés) et restauration après rechargement
+- **photo produit** : quand un produit a une `image` renseignée, elle remplace le pictogramme SVG (palette, bac, fantôme de glisser) ; sans image, le pictogramme de secours de la catégorie continue de s'afficher — testé dans les deux cas
 
 **Point de méthode retenu** : le premier correctif de la taille du bac avait été validé uniquement sur le fichier `configurateur-embed.html` isolé, qui a fonctionné — mais la page d'aperçu qui l'entoure (bannière + cadre) a sa propre largeur maximale, qui bridait silencieusement l'effet. Les tests portent maintenant sur la page d'aperçu complète, comme le lien qu'Owen ouvre réellement.
 
 ## ⚠️ Ce qui reste simulé (à remplacer avant mise en ligne)
-1. **Visuels produits** : formes SVG par catégorie, pas de vraies photos détourées. Le code n'a pas encore de champ `image` par produit dans cette v2 (à ajouter en même temps que les vrais visuels).
+1. **Visuels produits** : le code sait afficher une vraie photo (champ `image`, 5e argument de `pr(...)`) mais **je n'ai pas accès à tes vraies photos produit depuis cet environnement** (pas d'accès à Shopify ni à internet) — tous les produits sont donc encore sur le pictogramme SVG de secours. Deux façons de les ajouter, voir section dédiée ci-dessous.
 2. **`variantId`** : `null` partout — à récupérer dans l'admin Shopify pour chaque produit qu'on veut inclure.
 3. **`MODE_SHOPIFY = false`** : le vrai appel à `/cart/add.js` est déjà écrit dans le code, juste désactivé par défaut.
 4. **Prix approximatifs** : voir tableau ci-dessus.
 5. **Dimensions des bacs** : valeurs indicatives, à confirmer auprès d'Aquael.
 6. **Catégories** : à confirmer/corriger, le site n'a pas pu être consulté en direct.
+
+## Ajouter les vraies photos produit
+Le code accepte déjà un champ `image` par produit (URL) — dès qu'il est renseigné, il remplace automatiquement le pictogramme partout (palette, bac, glisser-déposer), sans autre modification. Deux façons de le remplir :
+
+**A. À la main (rapide à démarrer, long pour 76 produits)** — pour chaque produit à illustrer : dans l'admin Shopify → Produits → [le produit] → clic droit sur la photo → copier l'adresse de l'image (ou ouvrir l'image en grand et copier son URL `cdn.shopify.com/...`) → coller dans le 5e argument de son `pr(...)` dans `configurateur-embed.html`, ex. :
+```js
+pr('crypto-lucens', 'Cryptocoryne Lucens', 1.99, false, 'https://cdn.shopify.com/s/files/.../crypto-lucens.jpg'),
+```
+
+**B. Automatique via Shopify Liquid (recommandé pour la mise en ligne)** — plutôt que de copier 76 URLs (+ 76 prix + 76 variantId) à la main, le bloc peut, une fois posé sur Shopify, boucler sur une vraie collection en Liquid et générer le tableau JS automatiquement à partir des vraies données produit :
+```liquid
+{% for product in collections['nom-de-la-collection'].products %}
+  pr('{{ product.handle }}', '{{ product.title | escape }}', {{ product.price | money_without_currency }}, false, '{{ product.featured_image | image_url: width: 200 }}'){% unless forloop.last %},{% endunless %}
+{% endfor %}
+```
+Ça résout en une fois photo, prix réel ET `variantId` (via `product.selected_or_first_available_variant.id`), sans plus jamais avoir à les tenir à jour à la main. Je peux la préparer quand tu es prêt à passer à cette étape — il faudra juste me confirmer le nom de la collection Shopify à utiliser pour chaque catégorie.
 
 ## Hors scope pour l'instant (pistes v2)
 - Vraie détection de collision/espace occupé dans le bac (l'indicateur de capacité est juste un repère, pas une contrainte)

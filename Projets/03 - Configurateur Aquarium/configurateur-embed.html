@@ -237,6 +237,13 @@
     height: 30px;
     flex-shrink: 0;
   }
+  .zaq-builder__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    display: block;
+  }
   .zaq-builder__carte-texte {
     display: flex;
     flex-direction: column;
@@ -468,10 +475,23 @@
   }
 
   // Petit raccourci pour déclarer un produit : prixApprox=true => prix "≈", à vérifier
-  // dans l'admin Shopify. "image" (optionnel, non utilisé ici) accepte une URL vers
-  // une vraie photo détourée : à ajouter produit par produit avant la mise en ligne.
-  function pr(id, nom, prix, prixApprox) {
-    return { id: id, nom: nom, prix: prix, prixApprox: !!prixApprox, variantId: null };
+  // dans l'admin Shopify. "image" (optionnel, 5e argument) accepte une URL vers une
+  // vraie photo produit — dès qu'elle est renseignée, elle remplace le pictogramme
+  // SVG de la catégorie. Laisser vide tant qu'on n'a pas l'URL : le pictogramme
+  // continue de s'afficher, rien d'autre ne casse.
+  function pr(id, nom, prix, prixApprox, image) {
+    return { id: id, nom: nom, prix: prix, prixApprox: !!prixApprox, variantId: null, image: image || null };
+  }
+  function echapperHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+  // Visuel effectif d'un produit : sa photo si renseignée, sinon le pictogramme
+  // de secours de sa catégorie.
+  function rendreVisuel(produit) {
+    if (produit.image) {
+      return '<img class="zaq-builder__img" src="' + echapperHtml(produit.image) + '" alt="' + echapperHtml(produit.nom) + '" loading="lazy">';
+    }
+    return ICONE_PAR_PRODUIT[produit.id] || '';
   }
 
   // ─── Catalogue (hors packs et carte-cadeau, cf. demande d'Owen) ───────────
@@ -828,7 +848,7 @@
       cat.produits.forEach(function (p) {
         html +=
           '<div class="zaq-builder__carte" data-produit-id="' + p.id + '">' +
-            '<div class="zaq-builder__carte-visuel">' + cat.icone + '</div>' +
+            '<div class="zaq-builder__carte-visuel">' + rendreVisuel(p) + '</div>' +
             '<div class="zaq-builder__carte-texte">' +
               '<span class="zaq-builder__carte-nom">' + p.nom + '</span>' +
               '<span class="zaq-builder__carte-prix">' + texteLignePrix(p) + '</span>' +
@@ -859,7 +879,7 @@
       el.style.left = item.xPct + '%';
       el.style.top = item.yPct + '%';
       el.style.zIndex = item.zIndex;
-      el.innerHTML = ICONE_PAR_PRODUIT[item.produitId] + '<span class="zaq-builder__item-supprimer" title="Retirer">×</span>';
+      el.innerHTML = rendreVisuel(produit) + '<span class="zaq-builder__item-supprimer" title="Retirer">×</span>';
       el.querySelector('.zaq-builder__item-supprimer').addEventListener('pointerdown', function (e) {
         e.stopPropagation();
       });
@@ -1000,7 +1020,7 @@
 
     var fantome = document.createElement('div');
     fantome.className = 'zaq-builder__fantome';
-    fantome.innerHTML = ICONE_PAR_PRODUIT[produit.id];
+    fantome.innerHTML = rendreVisuel(produit);
     document.body.appendChild(fantome);
     positionnerFantome(fantome, evenement.clientX, evenement.clientY);
 
@@ -1020,8 +1040,15 @@
         e.clientY >= rectTank.top && e.clientY <= rectTank.bottom;
 
       if (dansLeBac) {
-        var xPct = ((e.clientX - rectTank.left) / rectTank.width) * 100;
-        var yPct = ((e.clientY - rectTank.top) / rectTank.height) * 100;
+        // "left/top: X%" sur un élément posé se calcule par rapport à la boîte de
+        // padding du bac (donc SANS sa bordure de 8px), alors que getBoundingClientRect()
+        // inclut la bordure : sans cette correction, le point posé dérive de quelques
+        // px vers la droite/le bas selon l'endroit du bac où on lâche.
+        var cs = getComputedStyle(elTank);
+        var bordureG = parseFloat(cs.borderLeftWidth) || 0;
+        var bordureH = parseFloat(cs.borderTopWidth) || 0;
+        var xPct = ((e.clientX - rectTank.left - bordureG) / elTank.clientWidth) * 100;
+        var yPct = ((e.clientY - rectTank.top - bordureH) / elTank.clientHeight) * 100;
         xPct = Math.max(3, Math.min(97, xPct));
         yPct = Math.max(6, Math.min(94, yPct));
         if (uidExistant !== null) {

@@ -10,6 +10,7 @@
 - [Projets/01 - Automatisation Contenu Social/projet.md] — Carousels Instagram + vidéos TikTok/Reels + Meta Ads — statut : en cours
 - [Projets/01 - Automatisation Contenu Social/remotion.md] — Détails du projet Remotion (chemin, compositions, workflow render)
 - [Projets/02 - Calculateur Sol Nutritif/projet.md] — Calculateur de litres de sol nutritif pour fiche produit Shopify — statut : widget prêt, à coller sur le thème
+- [Projets/03 - Configurateur Aquarium/projet.md] — Configurateur de bac en glisser-déposer (plantes/déco/sable/matériel) avec ajout panier — statut : prototype fonctionnel à tester, visuels/variantId réels à venir
 
 ## 0 - INBOX
 - (vide)

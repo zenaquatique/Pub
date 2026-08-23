@@ -1,0 +1,592 @@
+<!--
+  Configurateur d'aquarium — ZenAquatique (PROTOTYPE)
+  Le client glisse des produits depuis la liste vers le bac virtuel, les repositionne
+  librement, les retire en les faisant glisser hors du bac, puis valide sa sélection
+  d'un coup avec "Ajouter tout au panier".
+
+  ⚠️ Ceci est une maquette fonctionnelle avec des données et visuels de démonstration
+  (formes SVG à la place des vraies photos détourées, MODE_SHOPIFY = false = simulation).
+  Voir projet.md pour la liste des étapes avant mise en ligne réelle sur Shopify.
+-->
+<div class="zaq-builder" id="zaq-builder">
+  <div class="zaq-builder__palette" id="zaq-palette"></div>
+
+  <div class="zaq-builder__scene">
+    <div class="zaq-builder__tank" id="zaq-tank">
+      <div class="zaq-builder__eau"></div>
+      <div class="zaq-builder__fond"></div>
+    </div>
+    <p class="zaq-builder__astuce">Glissez un produit de la liste vers le bac. Glissez un élément déjà posé pour le déplacer, ou faites-le glisser hors du bac pour le retirer.</p>
+  </div>
+
+  <div class="zaq-builder__panier">
+    <h4 class="zaq-builder__panier-titre">Votre sélection</h4>
+    <ul class="zaq-builder__liste" id="zaq-liste-panier">
+      <li class="zaq-builder__liste-vide" id="zaq-liste-vide">Votre bac est vide pour l'instant.</li>
+    </ul>
+    <p class="zaq-builder__total">Total : <strong id="zaq-total">0,00&nbsp;€</strong></p>
+    <button type="button" class="zaq-builder__bouton" id="zaq-ajouter-panier" disabled>Ajouter tout au panier</button>
+    <button type="button" class="zaq-builder__bouton-secondaire" id="zaq-vider">Vider le bac</button>
+    <p class="zaq-builder__confirmation" id="zaq-confirmation" hidden></p>
+  </div>
+</div>
+
+<style>
+  .zaq-builder {
+    display: grid;
+    grid-template-columns: 220px 1fr 260px;
+    gap: 20px;
+    align-items: start;
+    max-width: 1100px;
+    margin: 24px 0;
+    padding: 20px;
+    border: 2px solid #9dbaa9;
+    border-radius: 14px;
+    background: #f7faf8;
+    font-family: inherit;
+    color: #14201a;
+    box-sizing: border-box;
+  }
+  .zaq-builder *,
+  .zaq-builder *::before,
+  .zaq-builder *::after { box-sizing: border-box; }
+
+  @media (max-width: 860px) {
+    .zaq-builder { grid-template-columns: 1fr; }
+  }
+
+  /* ---- Palette ---- */
+  .zaq-builder__palette {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 560px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .zaq-builder__categorie-titre {
+    margin: 6px 0 6px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #3d4a43;
+  }
+  .zaq-builder__carte {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 2px solid #c9d6cd;
+    border-radius: 10px;
+    background: #fff;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    margin-bottom: 8px;
+  }
+  .zaq-builder__carte:active { cursor: grabbing; }
+  .zaq-builder__carte-visuel {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+  .zaq-builder__carte-texte {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .zaq-builder__carte-nom {
+    font-size: 13px;
+    font-weight: 700;
+    color: #14201a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .zaq-builder__carte-prix {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2f6b48;
+  }
+
+  /* ---- Scène / bac ---- */
+  .zaq-builder__scene {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .zaq-builder__tank {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 6px solid #3a4a42;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #dff0e6;
+  }
+  .zaq-builder__eau {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(154, 214, 195, 0.55) 0%, rgba(94, 168, 152, 0.55) 100%);
+  }
+  .zaq-builder__fond {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 14%;
+    background: linear-gradient(180deg, #cba573 0%, #a9834f 100%);
+  }
+  .zaq-builder__item {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .zaq-builder__item:active { cursor: grabbing; }
+  .zaq-builder__item-supprimer {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: #b23b3b;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .zaq-builder__astuce {
+    margin: 0;
+    font-size: 13px;
+    color: #3d4a43;
+    font-weight: 500;
+  }
+
+  /* ---- Fantôme de glisser ---- */
+  .zaq-builder__fantome {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.9;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25));
+  }
+
+  /* ---- Panier ---- */
+  .zaq-builder__panier {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 2px solid #b7d4c1;
+    border-radius: 10px;
+    background: #eaf4ee;
+  }
+  .zaq-builder__panier-titre {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .zaq-builder__liste {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .zaq-builder__liste li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .zaq-builder__liste-vide {
+    color: #5b6b60;
+    font-weight: 500 !important;
+  }
+  .zaq-builder__total {
+    margin: 4px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid #b7d4c1;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .zaq-builder__bouton {
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #2f6b48;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .zaq-builder__bouton:disabled {
+    background: #a9bcb0;
+    cursor: not-allowed;
+  }
+  .zaq-builder__bouton-secondaire {
+    padding: 8px;
+    border: 2px solid #6f8a7a;
+    border-radius: 8px;
+    background: transparent;
+    color: #3d4a43;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .zaq-builder__confirmation {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1c4a30;
+  }
+</style>
+
+<script>
+(function () {
+  // ────────────────────────────────────────────────────────────────
+  // false = simulation (fonctionne partout, y compris hors Shopify).
+  // true  = envoie réellement les articles au panier Shopify via
+  //         /cart/add.js — nécessite d'avoir renseigné variantId
+  //         (l'ID de variante Shopify) pour chaque produit ci-dessous.
+  var MODE_SHOPIFY = false;
+  // ────────────────────────────────────────────────────────────────
+
+  function svgFeuille(c) {
+    return '<svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 4 C30 8 34 20 20 36 C6 20 10 8 20 4 Z" fill="' + c + '"/><line x1="20" y1="8" x2="20" y2="32" stroke="rgba(0,0,0,0.25)" stroke-width="1.5"/></svg>';
+  }
+  function svgRoche(c) {
+    return '<svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M4 30 Q2 18 14 14 Q18 4 28 10 Q38 12 36 24 Q38 34 26 36 Q12 40 4 30 Z" fill="' + c + '"/></svg>';
+  }
+  function svgCrevette(c) {
+    return '<svg viewBox="0 0 40 24" width="100%" height="100%"><path d="M2 14 Q8 3 20 5 Q34 5 38 11 Q30 9 24 11 Q30 15 36 17 Q24 22 14 18 Q4 20 2 14 Z" fill="' + c + '"/></svg>';
+  }
+  function svgSable(c) {
+    return '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="2" y="14" width="36" height="20" rx="4" fill="' + c + '"/><circle cx="10" cy="24" r="1.6" fill="rgba(0,0,0,0.18)"/><circle cx="20" cy="20" r="1.6" fill="rgba(0,0,0,0.18)"/><circle cx="28" cy="26" r="1.6" fill="rgba(0,0,0,0.18)"/></svg>';
+  }
+  function svgMateriel(c) {
+    return '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="8" y="6" width="24" height="28" rx="4" fill="' + c + '"/><circle cx="20" cy="20" r="6" fill="rgba(255,255,255,0.55)"/></svg>';
+  }
+
+  // Catalogue de démonstration (extrait du catalogue ZenAquatique).
+  // "variantId" est à remplacer par le véritable ID de variante Shopify
+  // avant de passer MODE_SHOPIFY à true. "image" (optionnel) accepte une
+  // URL vers une vraie photo détourée : si absente, la forme SVG de
+  // secours ci-dessus est utilisée.
+  var CATEGORIES = [
+    {
+      id: 'plantes',
+      nom: 'Plantes',
+      produits: [
+        { id: 'crypto-lucens', nom: 'Cryptocoryne Lucens', prix: 1.99, variantId: null, visuel: svgFeuille('#3f8f5f') },
+        { id: 'rotala-laos', nom: 'Rotala Laos', prix: 1.50, variantId: null, visuel: svgFeuille('#4a9d6f') },
+        { id: 'bucephalandra-red-scorpio', nom: 'Bucephalandra Red Scorpio', prix: 3.99, variantId: null, visuel: svgFeuille('#2f6b48') },
+        { id: 'taxiphyllum-taiwan-moss', nom: 'Taxiphyllum Taïwan Moss', prix: 2.99, variantId: null, visuel: svgFeuille('#5bab7a') }
+      ]
+    },
+    {
+      id: 'vivant',
+      nom: 'Crevettes',
+      produits: [
+        { id: 'neocaridina-orange-cherry', nom: 'Neocaridina Orange Cherry', prix: 1.99, variantId: null, visuel: svgCrevette('#e0793c') }
+      ]
+    },
+    {
+      id: 'deco',
+      nom: 'Décoration',
+      produits: [
+        { id: 'dragon-stone', nom: 'Dragon Stone', prix: 5.99, variantId: null, visuel: svgRoche('#8a7a63') },
+        { id: 'black-rock', nom: 'Black Rock', prix: 5.99, variantId: null, visuel: svgRoche('#4a4a4a') },
+        { id: 'racine-spider-xs', nom: 'Racine Spider XS', prix: 6.99, variantId: null, visuel: svgRoche('#6b4a34') }
+      ]
+    },
+    {
+      id: 'substrats',
+      nom: 'Sol & sable',
+      produits: [
+        { id: 'dennerle-substrate', nom: 'Dennerle Substrate 2.5L', prix: 9.99, variantId: null, visuel: svgSable('#8a6a4a') },
+        { id: 'sable-fin-riviere', nom: 'Sable Fin Rivière', prix: 6.99, variantId: null, visuel: svgSable('#c9a876') }
+      ]
+    },
+    {
+      id: 'materiel',
+      nom: 'Matériel',
+      produits: [
+        { id: 'chauffage-eheim-25w', nom: 'Chauffage EHEIM 25W', prix: 18.99, variantId: null, visuel: svgMateriel('#4a6670') },
+        { id: 'diffuseur-air-superfish', nom: 'Diffuseur à air SUPERFISH', prix: 1.99, variantId: null, visuel: svgMateriel('#5c7a86') }
+      ]
+    }
+  ];
+
+  var PRODUITS_PAR_ID = {};
+  CATEGORIES.forEach(function (cat) {
+    cat.produits.forEach(function (p) { PRODUITS_PAR_ID[p.id] = p; });
+  });
+
+  var racine = document.getElementById('zaq-builder');
+  if (!racine) return;
+
+  var elPalette = racine.querySelector('#zaq-palette');
+  var elTank = racine.querySelector('#zaq-tank');
+  var elListe = racine.querySelector('#zaq-liste-panier');
+  var elListeVide = racine.querySelector('#zaq-liste-vide');
+  var elTotal = racine.querySelector('#zaq-total');
+  var elBoutonAjouter = racine.querySelector('#zaq-ajouter-panier');
+  var elBoutonVider = racine.querySelector('#zaq-vider');
+  var elConfirmation = racine.querySelector('#zaq-confirmation');
+
+  var CLE_STOCKAGE = 'zaq-configurateur-aquarium';
+  var placedItems = []; // { uid, produitId, xPct, yPct }
+  var prochainUid = 1;
+  var zIndexCourant = 10;
+
+  function formaterPrix(n) {
+    return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  }
+
+  // ---------- Rendu palette ----------
+  function rendrePalette() {
+    var html = '';
+    CATEGORIES.forEach(function (cat) {
+      html += '<div><p class="zaq-builder__categorie-titre">' + cat.nom + '</p>';
+      cat.produits.forEach(function (p) {
+        html +=
+          '<div class="zaq-builder__carte" data-produit-id="' + p.id + '">' +
+            '<div class="zaq-builder__carte-visuel">' + p.visuel + '</div>' +
+            '<div class="zaq-builder__carte-texte">' +
+              '<span class="zaq-builder__carte-nom">' + p.nom + '</span>' +
+              '<span class="zaq-builder__carte-prix">' + formaterPrix(p.prix) + '</span>' +
+            '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+    });
+    elPalette.innerHTML = html;
+
+    elPalette.querySelectorAll('.zaq-builder__carte').forEach(function (carte) {
+      carte.addEventListener('pointerdown', function (e) {
+        var produit = PRODUITS_PAR_ID[carte.getAttribute('data-produit-id')];
+        demarrerGlisser(produit, e, null);
+      });
+    });
+  }
+
+  // ---------- Rendu bac ----------
+  function rendreTank() {
+    racine.querySelectorAll('.zaq-builder__item').forEach(function (el) { el.remove(); });
+    placedItems.forEach(function (item) {
+      var produit = PRODUITS_PAR_ID[item.produitId];
+      if (!produit) return;
+      var el = document.createElement('div');
+      el.className = 'zaq-builder__item';
+      el.setAttribute('data-uid', item.uid);
+      el.style.left = item.xPct + '%';
+      el.style.top = item.yPct + '%';
+      el.style.zIndex = item.zIndex;
+      el.innerHTML = produit.visuel + '<span class="zaq-builder__item-supprimer" title="Retirer">×</span>';
+      el.querySelector('.zaq-builder__item-supprimer').addEventListener('pointerdown', function (e) {
+        e.stopPropagation();
+      });
+      el.querySelector('.zaq-builder__item-supprimer').addEventListener('click', function (e) {
+        e.stopPropagation();
+        retirerItem(item.uid);
+      });
+      el.addEventListener('pointerdown', function (e) {
+        demarrerGlisser(produit, e, item.uid);
+      });
+      elTank.appendChild(el);
+    });
+  }
+
+  // ---------- Rendu panier ----------
+  function rendrePanier() {
+    var groupes = {};
+    placedItems.forEach(function (item) {
+      groupes[item.produitId] = (groupes[item.produitId] || 0) + 1;
+    });
+    var ids = Object.keys(groupes);
+
+    if (ids.length === 0) {
+      elListe.innerHTML = '<li class="zaq-builder__liste-vide" id="zaq-liste-vide">Votre bac est vide pour l\'instant.</li>';
+      elBoutonAjouter.disabled = true;
+      elTotal.textContent = formaterPrix(0);
+      return;
+    }
+
+    var total = 0;
+    var html = '';
+    ids.forEach(function (id) {
+      var produit = PRODUITS_PAR_ID[id];
+      var qte = groupes[id];
+      var ligneTotal = produit.prix * qte;
+      total += ligneTotal;
+      html += '<li><span>' + qte + '× ' + produit.nom + '</span><span>' + formaterPrix(ligneTotal) + '</span></li>';
+    });
+    elListe.innerHTML = html;
+    elTotal.textContent = formaterPrix(total);
+    elBoutonAjouter.disabled = false;
+  }
+
+  function rafraichir() {
+    rendreTank();
+    rendrePanier();
+    sauvegarder();
+  }
+
+  // ---------- Persistance (localStorage, par visiteur) ----------
+  function sauvegarder() {
+    try {
+      var donnees = placedItems.map(function (i) {
+        return { produitId: i.produitId, xPct: i.xPct, yPct: i.yPct };
+      });
+      window.localStorage.setItem(CLE_STOCKAGE, JSON.stringify(donnees));
+    } catch (err) { /* stockage indisponible : on continue sans sauvegarde */ }
+  }
+  function charger() {
+    try {
+      var brut = window.localStorage.getItem(CLE_STOCKAGE);
+      if (!brut) return;
+      var donnees = JSON.parse(brut);
+      donnees.forEach(function (d) {
+        if (!PRODUITS_PAR_ID[d.produitId]) return;
+        placedItems.push({ uid: prochainUid++, produitId: d.produitId, xPct: d.xPct, yPct: d.yPct, zIndex: zIndexCourant++ });
+      });
+    } catch (err) { /* données corrompues ou stockage indisponible : on repart à vide */ }
+  }
+
+  // ---------- Actions sur les items du bac ----------
+  function ajouterItem(produit, xPct, yPct) {
+    placedItems.push({ uid: prochainUid++, produitId: produit.id, xPct: xPct, yPct: yPct, zIndex: zIndexCourant++ });
+    rafraichir();
+  }
+  function deplacerItem(uid, xPct, yPct) {
+    var item = placedItems.find(function (i) { return i.uid === uid; });
+    if (!item) return;
+    item.xPct = xPct;
+    item.yPct = yPct;
+    item.zIndex = zIndexCourant++;
+    rafraichir();
+  }
+  function retirerItem(uid) {
+    placedItems = placedItems.filter(function (i) { return i.uid !== uid; });
+    rafraichir();
+  }
+
+  // ---------- Glisser-déposer (pointer events, souris + tactile) ----------
+  function positionnerFantome(el, x, y) {
+    el.style.left = (x - 24) + 'px';
+    el.style.top = (y - 24) + 'px';
+  }
+
+  function demarrerGlisser(produit, evenement, uidExistant) {
+    evenement.preventDefault();
+
+    var elReel = null;
+    if (uidExistant !== null) {
+      elReel = elTank.querySelector('[data-uid="' + uidExistant + '"]');
+      if (elReel) elReel.style.visibility = 'hidden';
+    }
+
+    var fantome = document.createElement('div');
+    fantome.className = 'zaq-builder__fantome';
+    fantome.innerHTML = produit.visuel;
+    document.body.appendChild(fantome);
+    positionnerFantome(fantome, evenement.clientX, evenement.clientY);
+
+    function surDeplacement(e) {
+      positionnerFantome(fantome, e.clientX, e.clientY);
+    }
+
+    function surRelachement(e) {
+      document.removeEventListener('pointermove', surDeplacement);
+      document.removeEventListener('pointerup', surRelachement);
+      fantome.remove();
+      if (elReel) elReel.style.visibility = '';
+
+      var rectTank = elTank.getBoundingClientRect();
+      var dansLeBac =
+        e.clientX >= rectTank.left && e.clientX <= rectTank.right &&
+        e.clientY >= rectTank.top && e.clientY <= rectTank.bottom;
+
+      if (dansLeBac) {
+        var xPct = ((e.clientX - rectTank.left) / rectTank.width) * 100;
+        var yPct = ((e.clientY - rectTank.top) / rectTank.height) * 100;
+        xPct = Math.max(3, Math.min(97, xPct));
+        yPct = Math.max(6, Math.min(94, yPct));
+        if (uidExistant !== null) {
+          deplacerItem(uidExistant, xPct, yPct);
+        } else {
+          ajouterItem(produit, xPct, yPct);
+        }
+      } else if (uidExistant !== null) {
+        retirerItem(uidExistant);
+      }
+    }
+
+    document.addEventListener('pointermove', surDeplacement);
+    document.addEventListener('pointerup', surRelachement);
+  }
+
+  // ---------- Ajouter tout au panier ----------
+  function ajouterAuPanier() {
+    var groupes = {};
+    placedItems.forEach(function (item) {
+      groupes[item.produitId] = (groupes[item.produitId] || 0) + 1;
+    });
+    var ids = Object.keys(groupes);
+    if (ids.length === 0) return;
+
+    if (MODE_SHOPIFY) {
+      var items = ids.map(function (id) {
+        return { id: PRODUITS_PAR_ID[id].variantId, quantity: groupes[id] };
+      });
+      fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: items })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function () { window.location.href = '/cart'; })
+        .catch(function () {
+          elConfirmation.hidden = false;
+          elConfirmation.textContent = 'Erreur lors de l\'ajout au panier. Merci de réessayer.';
+        });
+      return;
+    }
+
+    var resume = ids.map(function (id) {
+      return groupes[id] + '× ' + PRODUITS_PAR_ID[id].nom;
+    }).join(', ');
+    elConfirmation.hidden = false;
+    elConfirmation.textContent = '(Simulation) Ajouté au panier : ' + resume;
+  }
+
+  elBoutonAjouter.addEventListener('click', ajouterAuPanier);
+  elBoutonVider.addEventListener('click', function () {
+    placedItems = [];
+    elConfirmation.hidden = true;
+    rafraichir();
+  });
+
+  rendrePalette();
+  charger();
+  rafraichir();
+})();
+</script>

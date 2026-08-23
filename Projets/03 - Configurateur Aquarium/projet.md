@@ -1,47 +1,95 @@
 # Projet 03 — Configurateur d'aquarium
 
 ## Objectif
-Sur une page dédiée (ou une fiche produit "aquarium"), le client compose visuellement son bac : il glisse des plantes, du sable, de la déco, du matériel et des poissons/crevettes dans un bac virtuel, peut les déplacer ou les retirer, puis ajoute toute sa sélection au panier en un clic.
+Sur une page dédiée (ou une fiche produit "aquarium"), le client compose visuellement son bac : il choisit sa cuve, son sol, puis glisse des plantes, du sable, de la déco, du matériel et des poissons/crevettes dans un bac virtuel. Il peut les déplacer ou les retirer, puis ajoute toute sa sélection au panier en un clic.
 
 ## Décisions de cadrage (validées avec Owen)
-- **Interaction** : glisser-déposer libre (pas un simple clic-pour-poser) — le client positionne où il veut, superpose, retire en sortant l'élément du bac.
-- **Visuels produits** : Owen a déjà la plupart des photos détourées (fond transparent) → le prototype peut viser un catalogue large, pas juste 10-15 produits.
-- **Panier** : pas de synchro en temps réel avec le panier Shopify. Le client compose librement, rien n'est ajouté tant qu'il n'a pas cliqué **"Ajouter tout au panier"** à la fin.
+- **Interaction** : glisser-déposer libre (pas un simple clic-pour-poser).
+- **Panier** : pas de synchro en temps réel — le client compose librement, rien n'est ajouté tant qu'il n'a pas cliqué **"Ajouter tout au panier"** à la fin.
+- **v2 (cette itération)** :
+  - le bac est **trop petit** dans la v1 → agrandi, et la taille de la scène s'adapte maintenant à la cuve choisie
+  - palette organisée en **colonnes rétractables par catégorie** (`<details>`, ouverture/fermeture au clic)
+  - catégories alignées sur celles du site (voir note ci-dessous)
+  - le **sol** n'est plus un item qu'on glisse : c'est un contrôle dédié (produit + hauteur 3/5 cm) qui remplace tout le fond du bac et calcule automatiquement le nombre de sacs
+  - la **cuve** vendue par ZenAquatique est sélectionnable en étape 1 ; ses dimensions réelles pilotent la taille de la scène et le calcul du sol
+
+## ⚠️ Catégories : je n'ai pas pu consulter zen-aquatique.fr en direct
+L'accès au site est bloqué depuis cet environnement (proxy réseau). Les catégories utilisées reprennent celles déjà présentes dans le coffre (`Contexte/catalogue-produits.md` : Plantes, Crevettes, Décoration, Substrats, Outillage, Aquariums) + celles qu'il a fallu ajouter pour couvrir la liste envoyée (Éclairage, Chauffage, Filtration, Air & CO2). **À corriger si les vraies collections Shopify sont nommées ou regroupées différemment.**
+
+## Étape 1 — Le bac
+Sélecteur avec les 7 tailles de cuve Aquael. Dimensions (L×l×h en cm) utilisées pour la scène et le calcul du sol — **valeurs standard indicatives, à confirmer auprès d'Aquael** (25L, 45L, 54L confirmées par les proportions habituelles du secteur ; 112L/200L/240L/375L estimées par extrapolation) :
+
+| Bac | Dimensions (cm) | Prix |
+|---|---|---|
+| 25L | 40×25×25 | 25,99€ |
+| 45L | 50×30×30 | 39,99€ |
+| 54L | 60×30×30 | 49,99€ |
+| 112L | 80×35×40 | ≈79,99€ |
+| 200L | 100×40×50 | ≈119,99€ |
+| 240L | 120×40×50 | ≈149,99€ |
+| 375L | 150×50×50 | ≈219,99€ |
+
+Changer de bac redimensionne la scène (largeur max + ratio longueur/hauteur) et recalcule automatiquement le sol si un sol est déjà choisi. Un indicateur "X / ~N éléments conseillés" sous le bac donne une idée de la place disponible selon la cuve (repère indicatif, pas une vraie détection de collision — voir "Hors scope").
+
+## Étape 2 — Le sol
+Reprend la formule du **Projet 02** (volume = longueur × largeur × hauteur / 1000, +10% de marge) en utilisant les dimensions du bac choisi à l'étape 1 :
+- Produit : Dennerle Substrate 2.5L, Sable Fin Rivière ou Sable Fin Blanc Neige
+- Hauteur : 3 cm ou 5 cm
+- Résultat : nombre de sacs calculé automatiquement, ajouté au panier, fond du bac recoloré et redimensionné visuellement en conséquence
+- Changer de produit ou de hauteur **remplace** le sol précédent (pas d'empilement)
+
+## Palette (étape 3) — colonnes rétractables
+8 catégories, chacune un bloc `<details>` que le client ouvre/ferme. Contenu = tout le catalogue envoyé, **hors packs et cartes-cadeaux** (à sa demande) et hors "Formation Standard" (service, pas un produit à poser dans le bac — à confirmer si à inclure ailleurs) :
+
+| Catégorie | Nb produits |
+|---|---|
+| Plantes | 28 |
+| Crevettes & accessoires | 8 |
+| Décoration | 5 |
+| Éclairage | 11 |
+| Chauffage | 9 |
+| Filtration | 7 |
+| Air & CO2 | 4 |
+| Outillage & entretien | 4 |
+
+## ⚠️ Prix approximatifs — à vérifier avant mise en ligne
+Les prix venant du catalogue connu (`Contexte/catalogue-produits.md`) sont exacts. Pour tout le reste (produits nouveaux dans la liste envoyée, tout l'Éclairage, tout le Chauffage sauf 25W, toute la Filtration, les 4 grandes cuves...), j'ai mis des **prix indicatifs** (préfixés `≈` dans l'interface) pour que le prototype reste utilisable — ce ne sont pas de vrais prix Shopify. Liste complète des produits marqués `prixApprox: true` dans le fichier, à corriger avec les vrais prix + `variantId` avant mise en ligne.
 
 ## Fichier livré
-`configurateur-embed.html` — prototype fonctionnel autonome (HTML + CSS + JS inline, aucune dépendance externe). Glisser-déposer implémenté avec les Pointer Events (souris + tactile, contrairement à l'API HTML5 Drag&Drop qui gère mal le mobile).
+`configurateur-embed.html` — prototype fonctionnel autonome (HTML + CSS + JS inline, aucune dépendance). Glisser-déposer en Pointer Events (souris + tactile).
 
-Testé automatiquement (simulation de glisser-déposer avec Playwright) :
-- dépôt d'un produit de la palette dans le bac → apparaît + entre dans le panier
-- déplacement d'un élément posé → reste dans le bac à sa nouvelle position
-- glisser un élément hors du bac → il est retiré du bac ET du panier
-- bouton "×" sur un élément posé → même effet, plus accessible au tactile
-- "Ajouter tout au panier" → regroupe par produit avec quantités et prix
-- la composition est sauvegardée dans le navigateur du client (`localStorage`) et restaurée s'il revient sur la page
+Testé automatiquement (Playwright) :
+- changement de bac → scène redimensionnée, capacité indicative mise à jour
+- sélection sol + hauteur → fond du bac recoloré/redimensionné, sacs calculés, ligne ajoutée au panier
+- changement de hauteur (3↔5cm) → recalcul immédiat
+- changement de bac avec sol déjà choisi → recalcul avec les nouvelles dimensions
+- ouverture/fermeture d'une catégorie (colonne rétractable)
+- glisser-déposer d'un produit (dépôt, déplacement, retrait) — toujours fonctionnel comme en v1
+- "Ajouter tout au panier" (simulation) → regroupe sol + items avec quantités
+- sauvegarde `localStorage` (bac, sol, items placés) et restauration après rechargement
 
-## ⚠️ Ce qui est simulé dans le prototype (à remplacer avant mise en ligne)
-1. **Visuels produits** : des formes SVG de couleur (feuille, roche, sable...) remplacent les vraies photos détourées. Le code accepte déjà un champ `image` (URL) par produit — dès qu'une vraie photo PNG/WebP détourée est disponible, il suffit de la renseigner, pas besoin de retoucher le code.
-2. **Catalogue** : seulement ~12 produits de démonstration (extraits de `Contexte/catalogue-produits.md`), pas tout le catalogue Shopify.
-3. **`variantId`** : `null` pour tous les produits. C'est l'ID de variante Shopify qui permet d'ajouter le bon produit au panier — à récupérer pour chaque produit qu'on veut rendre "posable".
-4. **`MODE_SHOPIFY = false`** en haut du script : le bouton "Ajouter au panier" affiche juste un résumé texte au lieu d'appeler le panier Shopify. Une fois les `variantId` renseignés, passer ce booléen à `true` active le vrai appel à `/cart/add.js` (le code est déjà écrit, pas mocké — juste désactivé par défaut pour que le prototype tourne n'importe où, y compris hors Shopify).
-
-## Étapes avant une V1 en ligne
-1. **Détourer/récupérer les visuels** des produits qu'on veut inclure (Owen dit en avoir déjà la plupart — à rassembler dans un format utilisable, ex. PNG transparent).
-2. **Récupérer les `variantId` Shopify** de ces produits (visibles dans l'admin Shopify, sur chaque variante).
-3. **Choisir l'emplacement** : une page dédiée type `/pages/composez-votre-aquarium` (recommandé — plus de place, pas contraint par le layout d'une fiche produit) ou un bloc sur une fiche "aquarium nu".
-4. Remplir le tableau `CATEGORIES` avec le vrai catalogue + `image` + `variantId`, passer `MODE_SHOPIFY = true`.
-5. Test réel sur le thème Shopify (le panier `/cart/add.js` ne peut être testé que depuis le domaine Shopify lui-même).
+## ⚠️ Ce qui reste simulé (à remplacer avant mise en ligne)
+1. **Visuels produits** : formes SVG par catégorie, pas de vraies photos détourées. Le code n'a pas encore de champ `image` par produit dans cette v2 (à ajouter en même temps que les vrais visuels).
+2. **`variantId`** : `null` partout — à récupérer dans l'admin Shopify pour chaque produit qu'on veut inclure.
+3. **`MODE_SHOPIFY = false`** : le vrai appel à `/cart/add.js` est déjà écrit dans le code, juste désactivé par défaut.
+4. **Prix approximatifs** : voir tableau ci-dessus.
+5. **Dimensions des bacs** : valeurs indicatives, à confirmer auprès d'Aquael.
+6. **Catégories** : à confirmer/corriger, le site n'a pas pu être consulté en direct.
 
 ## Hors scope pour l'instant (pistes v2)
+- Vraie détection de collision/espace occupé dans le bac (l'indicateur de capacité est juste un repère, pas une contrainte)
 - Redimensionner/pivoter les éléments posés
 - Suggestions automatiques ("plantes compatibles avec ce poisson")
-- Sauvegarde de la composition sur le compte client (au lieu du navigateur) pour la retrouver sur un autre appareil
-- Export d'une image de la composition (pour partager sur les réseaux, cf. le projet 01 Automatisation Contenu Social)
+- Sauvegarde de la composition sur le compte client (au lieu du navigateur)
+- Export d'une image de la composition (pour partager sur les réseaux, cf. Projet 01)
 
 ## Statut
-- [x] Cadrage des décisions produit (interaction, visuels, panier)
-- [x] Prototype fonctionnel avec catalogue de démo
-- [x] Tests automatisés du glisser-déposer (Playwright)
-- [ ] Owen : tester le prototype, valider l'expérience avant d'investir dans les vrais visuels/variantId
+- [x] Bac agrandi + scène qui s'adapte à la cuve choisie
+- [x] Palette en colonnes rétractables par catégorie
+- [x] Sol dédié (produit + hauteur) qui remplace tout le fond et calcule les sacs
+- [x] Catalogue complet envoyé par Owen intégré (hors packs/cartes-cadeaux)
+- [x] Tests automatisés (Playwright) de toutes les nouvelles interactions
+- [ ] Owen : confirmer/corriger les catégories par rapport au vrai site
+- [ ] Owen : fournir les vrais prix pour tout ce qui est marqué `≈`
 - [ ] Rassembler visuels détourés + variantId pour le catalogue final
-- [ ] Choisir l'emplacement sur le site et intégrer
+- [ ] Vérifier les dimensions réelles des cuves Aquael 112/200/240/375L

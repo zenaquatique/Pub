@@ -35,9 +35,15 @@
   </label>
 
   <div class="zaq-calcsol__champ">
-    <label for="zaq-sac">Contenance d'un sac (L)</label>
-    <input type="number" id="zaq-sac" inputmode="decimal" min="0.5" step="0.5" value="2.5">
-    <span class="zaq-calcsol__aide">Modifiable selon le produit (ex : 2,5 L pour le Dennerle Substrate)</span>
+    <label for="zaq-sac">Contenance d'un sac</label>
+    <div class="zaq-calcsol__sac-ligne">
+      <input type="number" id="zaq-sac" inputmode="decimal" min="0.1" step="0.1">
+      <div class="zaq-calcsol__unites" role="group" aria-label="Unité du sac">
+        <button type="button" class="zaq-calcsol__unite" data-unite="L">L</button>
+        <button type="button" class="zaq-calcsol__unite" data-unite="kg">kg</button>
+      </div>
+    </div>
+    <span class="zaq-calcsol__aide" id="zaq-aide-sac"></span>
   </div>
 
   <div class="zaq-calcsol__resultat" id="zaq-resultat" aria-live="polite">
@@ -136,6 +142,37 @@
     flex-shrink: 0;
     accent-color: #2f6b48;
   }
+  .zaq-calcsol__sac-ligne {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .zaq-calcsol__sac-ligne input[type="number"] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .zaq-calcsol__unites {
+    display: flex;
+    flex: 0 0 auto;
+    border: 2px solid #6f8a7a;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .zaq-calcsol__unite {
+    padding: 0 clamp(14px, 4vw, 18px);
+    font-size: clamp(15px, 4vw, 17px);
+    font-weight: 700;
+    border: none;
+    border-left: 2px solid #6f8a7a;
+    background: #fff;
+    color: #3d4a43;
+    cursor: pointer;
+  }
+  .zaq-calcsol__unite:first-child { border-left: none; }
+  .zaq-calcsol__unite[aria-pressed="true"] {
+    background: #2f6b48;
+    color: #fff;
+  }
   .zaq-calcsol__aide {
     display: block;
     font-size: clamp(13px, 3.2vw, 15px);
@@ -160,6 +197,15 @@
 
 <script>
 (function () {
+  // ─── À adapter pour CHAQUE fiche produit sur laquelle ce bloc est collé ───
+  var CONFIG = {
+    contenanceSacParDefaut: 2.5, // valeur pré-remplie du champ "Contenance d'un sac"
+    uniteParDefaut: 'L',         // 'L' ou 'kg' — selon ce qui est écrit sur l'emballage du produit
+    densiteKgParL: 1.2           // requis seulement pour permettre la saisie en kg : poids (kg) d'1 litre de ce produit
+                                  // ex. Dennerle Substrate 2.5L / 3kg → 1.2 kg/L. Sable en vrac : plutôt 1.5-1.6 kg/L (à vérifier sur la fiche du produit)
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
   var racine = document.getElementById('zaq-calcsol');
   if (!racine) return;
 
@@ -168,16 +214,27 @@
   var champHauteur = racine.querySelector('#zaq-hauteur');
   var champMarge = racine.querySelector('#zaq-marge');
   var champSac = racine.querySelector('#zaq-sac');
+  var aideSac = racine.querySelector('#zaq-aide-sac');
   var zoneResultat = racine.querySelector('#zaq-resultat');
   var boutonsPreset = racine.querySelectorAll('.zaq-calcsol__preset');
+  var boutonsUnite = racine.querySelectorAll('.zaq-calcsol__unite');
+  var uniteActuelle = CONFIG.uniteParDefaut;
 
   function nombreValide(valeur) {
     var n = parseFloat(valeur);
     return isFinite(n) && n > 0 ? n : null;
   }
 
-  function formaterLitres(n) {
+  function formaterNombre(n) {
     return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  }
+
+  function majAide() {
+    if (uniteActuelle === 'kg') {
+      aideSac.textContent = 'Conversion approximative sur la base de ' + formaterNombre(CONFIG.densiteKgParL) + ' kg par litre pour ce produit.';
+    } else {
+      aideSac.textContent = 'Modifiable selon le produit de cette fiche.';
+    }
   }
 
   function calculer() {
@@ -195,11 +252,14 @@
       volumeLitres *= 1.1;
     }
 
-    var html = '<p>Volume de sol nécessaire : <strong>' + formaterLitres(volumeLitres) + ' L</strong></p>';
+    var html = '<p>Volume de sol nécessaire : <strong>' + formaterNombre(volumeLitres) + ' L</strong></p>';
 
-    var contenanceSac = nombreValide(champSac.value);
-    if (contenanceSac) {
-      var nombreSacs = Math.ceil(volumeLitres / contenanceSac);
+    var contenanceSaisie = nombreValide(champSac.value);
+    if (contenanceSaisie) {
+      var contenanceEnLitres = uniteActuelle === 'kg'
+        ? contenanceSaisie / CONFIG.densiteKgParL
+        : contenanceSaisie;
+      var nombreSacs = Math.ceil(volumeLitres / contenanceEnLitres);
       html += '<p>Nombre de sacs conseillé : <strong>' + nombreSacs + '</strong></p>';
     }
 
@@ -218,6 +278,22 @@
     });
   });
 
+  boutonsUnite.forEach(function (bouton) {
+    bouton.addEventListener('click', function () {
+      uniteActuelle = bouton.getAttribute('data-unite');
+      boutonsUnite.forEach(function (b) {
+        b.setAttribute('aria-pressed', b === bouton ? 'true' : 'false');
+      });
+      majAide();
+      calculer();
+    });
+  });
+
+  champSac.value = CONFIG.contenanceSacParDefaut;
+  boutonsUnite.forEach(function (bouton) {
+    bouton.setAttribute('aria-pressed', bouton.getAttribute('data-unite') === uniteActuelle ? 'true' : 'false');
+  });
+  majAide();
   calculer();
 })();
 </script>

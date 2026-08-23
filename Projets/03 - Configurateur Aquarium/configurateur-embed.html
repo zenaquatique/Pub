@@ -168,10 +168,11 @@
   }
 
   /* ---- Palette : colonnes rétractables par catégorie ---- */
+  /* Conteneur bloc simple (pas flex) : un conteneur flex-column avec overflow-y:auto
+     ne réduit pas toujours ses enfants correctement (les <details> refusent de
+     rétrécir sous leur contenu), ce qui empêchait le défilement de s'activer et
+     laissait le contenu déborder hors du cadre au lieu de défiler dedans. */
   .zaq-builder__palette {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
     max-height: 640px;
     overflow-y: auto;
     padding-right: 4px;
@@ -181,6 +182,10 @@
     border-radius: 10px;
     background: #fff;
     overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .zaq-builder__categorie:last-child {
+    margin-bottom: 0;
   }
   .zaq-builder__categorie-titre {
     display: flex;

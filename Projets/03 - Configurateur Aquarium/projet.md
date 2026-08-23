@@ -70,6 +70,7 @@ Testé automatiquement (Playwright), **dans la page d'aperçu telle qu'elle est 
 - retour à un sable pur → la ligne de recouvrement se cache réellement (bug de spécificité CSS corrigé : une classe partagée forçait `display:flex` et empêchait `hidden` de fonctionner)
 - changement de bac avec sol déjà choisi → recalcul avec les nouvelles dimensions
 - ouverture/fermeture d'une catégorie (colonne rétractable)
+- **la palette défile réellement sur tout son contenu** (les 28 plantes, pas seulement les 7 premières) : la palette était en `display:flex; flex-direction:column` avec `overflow-y:auto`, un conteneur flex-column ne réduit pas toujours ses enfants correctement quand le contenu dépasse sa hauteur, ce qui empêchait le défilement de s'activer et laissait le contenu déborder hors du cadre au lieu de défiler dedans (silencieusement — le HTML et le texte étaient corrects, seul l'affichage était cassé). Passé en conteneur bloc simple.
 - glisser-déposer d'un produit (dépôt, déplacement, retrait) — toujours fonctionnel comme en v1
 - "Ajouter tout au panier" (simulation) → regroupe sol + recouvrement + items avec quantités
 - sauvegarde `localStorage` (bac, sol, recouvrement + ses hauteurs, items placés) et restauration après rechargement

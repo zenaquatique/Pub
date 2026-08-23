@@ -13,6 +13,14 @@ Sur une page dédiée (ou une fiche produit "aquarium"), le client compose visue
   - le **sol** n'est plus un item qu'on glisse : c'est un contrôle dédié (produit + hauteur 3/5 cm) qui remplace tout le fond du bac et calcule automatiquement le nombre de sacs
   - la **cuve** vendue par ZenAquatique est sélectionnable en étape 1 ; ses dimensions réelles pilotent la taille de la scène et le calcul du sol
 
+## v3 — validé en conditions réelles sur Shopify (thème dupliqué)
+Owen a testé le bloc collé sur une vraie copie de thème, en éditeur Shopify — première validation grandeur nature. Deux retours corrigés :
+
+1. **Le widget ne doit jamais forcer la largeur de la page.** La v2 forçait le widget entier à s'élargir selon la cuve choisie (`racine.style.maxWidth = ...`) pour que le bac ait de la place pour grandir. Problème : ça pouvait pousser/casser le conteneur du thème sur une page où il n'y a pas cette place. Supprimé — le widget reste maintenant **toujours à 100% de la largeur que la page lui donne**, jamais plus. Le bac grandit seulement dans la limite de la place réellement disponible (via sa propre `max-width`, toujours plafonnée par la colonne "scène" du widget) : sur une page large, la différence entre une petite et une grande cuve reste bien visible ; sur une page étroite, toutes les cuves se ramènent proportionnellement à l'espace dispo — comportement honnête, jamais de débordement.
+2. **Les éléments posés (plantes, déco...) étaient à taille fixe (46px)**, donc minuscules dans un grand bac. Ils s'échelonnent maintenant avec la taille **réellement affichée** du bac (mesurée après mise en page, pas la taille "théorique") — de ~34px sur une petite cuve à ~84px sur une grande, plafonné dans les deux sens. Testé : 43px en 25L → 78px en 375L sur une page large.
+
+**Bug trouvé en creusant #2** : la mise à l'échelle donnait des résultats incohérents au premier essai (les petites cuves donnaient des objets plus gros que les grandes !). Cause : une transition CSS animée sur la largeur du bac (`transition: max-width 0.25s ease`), combinée à une mesure de la largeur faite en JavaScript **immédiatement** après le changement de cuve — donc avant que l'animation ait eu le temps de se terminer. La mesure captait une valeur intermédiaire (parfois même quasi celle de l'ancienne cuve), pas la taille finale. Transition supprimée sur le bac : le changement de taille est maintenant instantané, la mesure est donc toujours fiable.
+
 ## ⚠️ Catégories : je n'ai pas pu consulter zen-aquatique.fr en direct
 L'accès au site est bloqué depuis cet environnement (proxy réseau). Les catégories utilisées reprennent celles déjà présentes dans le coffre (`Contexte/catalogue-produits.md` : Plantes, Crevettes, Décoration, Substrats, Outillage, Aquariums) + celles qu'il a fallu ajouter pour couvrir la liste envoyée (Éclairage, Chauffage, Filtration, Air & CO2). **À corriger si les vraies collections Shopify sont nommées ou regroupées différemment.**
 

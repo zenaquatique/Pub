@@ -280,7 +280,9 @@
     border-radius: 8px;
     overflow: hidden;
     background: #dff0e6;
-    transition: max-width 0.25s ease, aspect-ratio 0.25s ease;
+    /* Pas de transition ici : la taille des objets posés (--zaq-item-size) est
+       mesurée en JS juste après un changement de bac — une transition animée
+       ferait lire une valeur intermédiaire au lieu de la taille finale. */
   }
   .zaq-builder__eau {
     position: absolute;
@@ -307,12 +309,13 @@
   }
   .zaq-builder__item {
     position: absolute;
-    width: 46px;
-    height: 46px;
+    width: var(--zaq-item-size, 46px);
+    height: var(--zaq-item-size, 46px);
     transform: translate(-50%, -50%);
     cursor: grab;
     touch-action: none;
     user-select: none;
+    transition: width 0.2s ease, height 0.2s ease;
   }
   .zaq-builder__item:active { cursor: grabbing; }
   /* Wrapper séparé (plutôt que overflow:hidden sur .zaq-builder__item directement) :
@@ -363,8 +366,8 @@
   /* ---- Fantôme de glisser ---- */
   .zaq-builder__fantome {
     position: fixed;
-    width: 50px;
-    height: 50px;
+    width: var(--zaq-item-size, 46px);
+    height: var(--zaq-item-size, 46px);
     overflow: hidden;
     pointer-events: none;
     z-index: 1000;
@@ -703,11 +706,18 @@
   function appliquerBac() {
     elTank.style.setProperty('--zaq-tank-max', bacActuel.largeurAffichage + 'px');
     elTank.style.setProperty('--zaq-tank-ratio', bacActuel.longueur + ' / ' + bacActuel.hauteur);
-    // La largeur totale du widget doit grandir avec la cuve, sinon la colonne
-    // "scène" (1fr) ne dispose jamais de plus de place réelle et le bac ne
-    // peut pas s'agrandir, quelle que soit sa propre max-width.
-    // 240 (palette) + 280 (panier) + 40 (2 gaps de la grille) + 40 (padding du widget)
-    racine.style.maxWidth = (bacActuel.largeurAffichage + 600) + 'px';
+    // Le widget ne doit JAMAIS forcer la page/le thème à s'élargir : il reste
+    // toujours à 100% de la largeur que la page lui donne. Le bac grandit donc
+    // seulement dans la limite de la place réellement disponible (via sa propre
+    // max-width ci-dessus), jamais en poussant le conteneur de la page.
+    //
+    // La taille des éléments posés (plantes, déco...) est mise à l'échelle de la
+    // largeur RÉELLEMENT affichée du bac (mesurée après mise en page), pas de sa
+    // taille "théorique" : sur une page étroite où le bac est contraint, les
+    // éléments restent proportionnés à ce qui est vraiment visible.
+    var largeurReelle = elTank.getBoundingClientRect().width || bacActuel.largeurAffichage;
+    var tailleItem = Math.max(34, Math.min(84, Math.round(largeurReelle / 13)));
+    document.documentElement.style.setProperty('--zaq-item-size', tailleItem + 'px');
     if (solActuel) calculerEtAppliquerSol();
     rafraichirCapacite();
   }
@@ -1016,8 +1026,11 @@
 
   // ---------- Glisser-déposer (pointer events, souris + tactile) ----------
   function positionnerFantome(el, x, y) {
-    el.style.left = (x - 25) + 'px';
-    el.style.top = (y - 25) + 'px';
+    // La taille du fantôme suit --zaq-item-size (variable selon la taille du bac) :
+    // on centre donc sur sa taille réelle plutôt qu'une moitié fixe.
+    var demiTaille = el.offsetWidth / 2 || 25;
+    el.style.left = (x - demiTaille) + 'px';
+    el.style.top = (y - demiTaille) + 'px';
   }
 
   function demarrerGlisser(produit, evenement, uidExistant) {

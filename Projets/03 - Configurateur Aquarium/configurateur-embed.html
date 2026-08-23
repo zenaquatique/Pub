@@ -1,20 +1,3 @@
-<!--
-  Configurateur d'aquarium — ZenAquatique (PROTOTYPE v2)
-
-  1. Le client choisit son bac (les dimensions changent la taille de la scène).
-  2. Il choisit son sol (produit + hauteur 3/5cm) : le fond du bac change en entier,
-     le nombre de sacs nécessaires est calculé automatiquement et ajouté au panier.
-  3. Il glisse plantes / crevettes / déco / éclairage / chauffage / filtration /
-     accessoires / outillage depuis des colonnes rétractables par catégorie.
-  4. "Ajouter tout au panier" envoie toute la sélection d'un coup.
-
-  ⚠️ Prototype avec données de démonstration :
-  - formes SVG à la place des vraies photos détourées (voir "image" dans PRODUITS)
-  - prix marqués (≈) = placeholders à vérifier dans l'admin Shopify (voir projet.md)
-  - dimensions des bacs = valeurs standard indicatives, à confirmer auprès d'Aquael
-  - MODE_SHOPIFY = false = simulation, le vrai appel /cart/add.js est déjà écrit
-  Voir projet.md pour la liste complète des étapes avant mise en ligne réelle.
--->
 <div class="zaq-builder" id="zaq-builder">
   <div class="zaq-builder__etape">
     <label class="zaq-builder__etape-label" for="zaq-bac">1. Votre bac</label>
@@ -452,13 +435,11 @@
 
 <script>
 (function () {
-  // ────────────────────────────────────────────────────────────────
   // false = simulation (fonctionne partout, y compris hors Shopify).
-  // true  = envoie réellement les articles au panier Shopify via
-  //         /cart/add.js — nécessite d'avoir renseigné variantId
+  // true  = envoie reellement les articles au panier Shopify via
+  //         /cart/add.js - necessite d'avoir renseigne variantId
   //         (l'ID de variante Shopify) pour chaque produit ci-dessous.
   var MODE_SHOPIFY = false;
-  // ────────────────────────────────────────────────────────────────
 
   function svgFeuille(c) {
     return '<svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 4 C30 8 34 20 20 36 C6 20 10 8 20 4 Z" fill="' + c + '"/><line x1="20" y1="8" x2="20" y2="32" stroke="rgba(0,0,0,0.25)" stroke-width="1.5"/></svg>';
@@ -508,7 +489,7 @@
     return ICONE_PAR_PRODUIT[produit.id] || '';
   }
 
-  // ─── Catalogue (hors packs et carte-cadeau, cf. demande d'Owen) ───────────
+  // Catalogue (hors packs et carte-cadeau, cf. demande d'Owen)
   // Catégories reprises des notes internes du coffre (le site n'a pas pu être
   // consulté en direct depuis cet environnement) : à corriger si les vraies
   // collections Shopify sont nommées/regroupées différemment.
@@ -631,7 +612,7 @@
     }
   ];
 
-  // ─── Sol : catégorie à part, remplace tout le fond du bac (pas de glisser) ──
+  // Sol : categorie a part, remplace tout le fond du bac (pas de glisser)
   // type "nutritif" impose un sable de recouvrement (cf. usage courant en
   // aquascaping : le sol nutritif se ternit/se disperse s'il reste à nu).
   var PRODUITS_SOL = [
@@ -641,7 +622,7 @@
   ];
   var SABLES_RECOUVREMENT = PRODUITS_SOL.filter(function (s) { return s.type === 'sable'; });
 
-  // ─── Bacs : dimensions standard indicatives (à confirmer auprès d'Aquael) ──
+  // Bacs : dimensions standard indicatives (a confirmer aupres d'Aquael)
   var BACS = [
     { id: '25L', nom: 'Cuve Nue 25L Aquael', prix: 25.99, prixApprox: false, variantId: null, longueur: 40, largeur: 25, hauteur: 25, largeurAffichage: 560, capaciteIndicative: 8 },
     { id: '45L', nom: 'Cuve Nue 45L Aquael', prix: 39.99, prixApprox: false, variantId: null, longueur: 50, largeur: 30, hauteur: 30, largeurAffichage: 640, capaciteIndicative: 12 },

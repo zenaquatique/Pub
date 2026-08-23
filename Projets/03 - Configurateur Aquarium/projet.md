@@ -21,6 +21,17 @@ Owen a testé le bloc collé sur une vraie copie de thème, en éditeur Shopify 
 
 **Bug trouvé en creusant #2** : la mise à l'échelle donnait des résultats incohérents au premier essai (les petites cuves donnaient des objets plus gros que les grandes !). Cause : une transition CSS animée sur la largeur du bac (`transition: max-width 0.25s ease`), combinée à une mesure de la largeur faite en JavaScript **immédiatement** après le changement de cuve — donc avant que l'animation ait eu le temps de se terminer. La mesure captait une valeur intermédiaire (parfois même quasi celle de l'ancienne cuve), pas la taille finale. Transition supprimée sur le bac : le changement de taille est maintenant instantané, la mesure est donc toujours fiable.
 
+## v4 — le bloc collé sur Shopify n'affichait plus rien du tout
+Après le collage d'une nouvelle version du code, plus rien ne s'affichait sur la page Shopify (avant, la v3 fonctionnait). Diagnostic par étapes :
+1. Vérification que le JS n'a pas de faute de syntaxe (`node --check`) — OK, le fichier est valide.
+2. Recherche de séquences `{{ }}` ou `{% %}` dans le fichier (ces caractères ont un sens spécial pour le moteur Liquid de Shopify et peuvent faire échouer le rendu de tout le bloc s'ils apparaissent, même par accident, dans un commentaire ou une chaîne JS) — aucune trouvée.
+3. Envoi à Owen d'un mini bloc de test isolé (juste un `<div>` + un `<script>` de quelques lignes) pour vérifier que le bloc Custom Liquid lui-même fonctionne bien à cet endroit de son thème — **confirmé fonctionnel**, donc le problème vient bien du contenu du fichier complet, pas de l'emplacement.
+4. En comparant le fichier au mini bloc qui marchait : un seul caractère spécial trouvé dans tout le fichier — un emoji (⚠️, avertissement + variateur, un caractère Unicode sur 4 octets) dans le commentaire d'en-tête. Et 152 occurrences d'un caractère de type "tiret de dessin de boîte" (─, différent d'un tiret normal) utilisé comme décoration dans 5 commentaires JS. Ces caractères, contrairement aux accents français classiques (é, à...) qui passent partout, sont plus susceptibles de se faire tronquer ou corrompre silencieusement selon la chaîne d'enregistrement utilisée (éditeur → presse-papier → champ Shopify).
+5. **Correctif** : suppression du commentaire d'en-tête (emoji compris, il ne servait qu'à la doc interne) et des tirets décoratifs dans les commentaires JS, remplacés par du texte simple. Le fichier ne contient plus aucun caractère en dehors des accents français, `€`, `×`, `≈`, `—` et `→` — tous utilisés couramment et sans risque connu.
+6. Fichier envoyé à Owen **en pièce jointe** (plutôt que collé dans le chat) pour qu'il copie depuis un fichier texte brut plutôt que depuis une bulle de conversation formatée, évitant tout risque de reformatage (guillemets, tirets) au moment du copier-coller.
+
+**À confirmer par Owen** : si ça ne suffit pas, prochaine étape = isoler HTML+CSS (sans le `<script>`) pour savoir si le blocage vient du script ou du balisage lui-même.
+
 ## ⚠️ Catégories : je n'ai pas pu consulter zen-aquatique.fr en direct
 L'accès au site est bloqué depuis cet environnement (proxy réseau). Les catégories utilisées reprennent celles déjà présentes dans le coffre (`Contexte/catalogue-produits.md` : Plantes, Crevettes, Décoration, Substrats, Outillage, Aquariums) + celles qu'il a fallu ajouter pour couvrir la liste envoyée (Éclairage, Chauffage, Filtration, Air & CO2). **À corriger si les vraies collections Shopify sont nommées ou regroupées différemment.**
 

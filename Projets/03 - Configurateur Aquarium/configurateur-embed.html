@@ -2,6 +2,10 @@
   <div class="zaq-builder__etape">
     <label class="zaq-builder__etape-label" for="zaq-bac">1. Votre bac</label>
     <select class="zaq-builder__select" id="zaq-bac"></select>
+    <label class="zaq-builder__checkbox">
+      <input type="checkbox" id="zaq-bac-acheter">
+      J'ai besoin d'acheter cette cuve <span class="zaq-builder__checkbox-note">(décochez si vous en avez déjà une)</span>
+    </label>
   </div>
 
   <div class="zaq-builder__etape">
@@ -15,6 +19,10 @@
         <button type="button" class="zaq-builder__hauteur" data-hauteur="5">5 cm</button>
       </div>
     </div>
+    <label class="zaq-builder__checkbox">
+      <input type="checkbox" id="zaq-sol-acheter" checked>
+      J'ai besoin d'acheter ce sol <span class="zaq-builder__checkbox-note">(décochez si vous en avez déjà)</span>
+    </label>
     <div class="zaq-builder__sol-ligne" id="zaq-recouvrement-ligne" hidden>
       <label class="zaq-builder__recouvrement-label" for="zaq-sol-recouvrement">Sable de recouvrement (obligatoire par-dessus un sol nutritif)</label>
       <select class="zaq-builder__select" id="zaq-sol-recouvrement"></select>
@@ -117,6 +125,26 @@
   .zaq-builder__hauteur[aria-pressed="true"] {
     background: #2f6b48;
     color: #fff;
+  }
+  .zaq-builder__checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #14201a;
+    cursor: pointer;
+  }
+  .zaq-builder__checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: #2f6b48;
+    cursor: pointer;
+  }
+  .zaq-builder__checkbox-note {
+    font-weight: 500;
+    color: #5b6b60;
   }
   .zaq-builder__sol-info {
     margin: 10px 0 0;
@@ -655,6 +683,8 @@
   if (!racine) return;
 
   var elBac = racine.querySelector('#zaq-bac');
+  var elBacAcheter = racine.querySelector('#zaq-bac-acheter');
+  var elSolAcheter = racine.querySelector('#zaq-sol-acheter');
   var elSolProduit = racine.querySelector('#zaq-sol-produit');
   var elSolRecouvrement = racine.querySelector('#zaq-sol-recouvrement');
   var elRecouvrementLigne = racine.querySelector('#zaq-recouvrement-ligne');
@@ -754,6 +784,10 @@
     // de la hauteur réelle du bac (voir calculerTailleItemPx), donc changer
     // de cuve doit redessiner le bac, pas seulement recalculer le sol.
     rafraichir();
+  });
+  elBacAcheter.addEventListener('change', function () {
+    rendrePanier();
+    sauvegarder();
   });
 
   // ---------- Étape 2 : sélection du sol ----------
@@ -871,6 +905,10 @@
     rendrePanier();
     sauvegarder();
   });
+  elSolAcheter.addEventListener('change', function () {
+    rendrePanier();
+    sauvegarder();
+  });
   boutonsHauteurSol.forEach(function (bouton) {
     bouton.addEventListener('click', function () {
       boutonsHauteurSol.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
@@ -977,7 +1015,12 @@
     var html = '';
     var total = 0;
 
-    if (solActuel && solActuel.sacs) {
+    if (elBacAcheter.checked) {
+      total += bacActuel.prix;
+      html += '<li><span>1× ' + bacActuel.nom + '</span><span>' + texteLignePrix(bacActuel) + '</span></li>';
+    }
+
+    if (solActuel && solActuel.sacs && elSolAcheter.checked) {
       var produitSol = PRODUITS_PAR_ID_SOL(solActuel.produitId);
       var ligneTotalSol = produitSol.prix * solActuel.sacs;
       total += ligneTotalSol;
@@ -1023,6 +1066,8 @@
     try {
       var donnees = {
         bacId: bacActuel.id,
+        bacAcheter: elBacAcheter.checked,
+        solAcheter: elSolAcheter.checked,
         sol: solActuel,
         items: placedItems.map(function (i) {
           return { produitId: i.produitId, xPct: i.xPct, yPct: i.yPct };
@@ -1039,6 +1084,12 @@
       if (donnees.bacId) {
         var bacTrouve = BACS.filter(function (b) { return b.id === donnees.bacId; })[0];
         if (bacTrouve) bacActuel = bacTrouve;
+      }
+      if (typeof donnees.bacAcheter === 'boolean') {
+        elBacAcheter.checked = donnees.bacAcheter;
+      }
+      if (typeof donnees.solAcheter === 'boolean') {
+        elSolAcheter.checked = donnees.solAcheter;
       }
       if (donnees.sol && PRODUITS_PAR_ID_SOL(donnees.sol.produitId)) {
         solActuel = donnees.sol;
@@ -1145,7 +1196,10 @@
     var lignes = Object.keys(groupes).map(function (id) {
       return { produit: PRODUITS_PAR_ID[id], quantite: groupes[id] };
     });
-    if (solActuel && solActuel.sacs) {
+    if (elBacAcheter.checked) {
+      lignes.push({ produit: bacActuel, quantite: 1 });
+    }
+    if (solActuel && solActuel.sacs && elSolAcheter.checked) {
       lignes.push({ produit: PRODUITS_PAR_ID_SOL(solActuel.produitId), quantite: solActuel.sacs });
       if (solActuel.capProduitId && solActuel.sacsCap) {
         lignes.push({ produit: PRODUITS_PAR_ID_SOL(solActuel.capProduitId), quantite: solActuel.sacsCap });

@@ -701,8 +701,13 @@
     // largeur RÉELLEMENT affichée du bac (mesurée après mise en page), pas de sa
     // taille "théorique" : sur une page étroite où le bac est contraint, les
     // éléments restent proportionnés à ce qui est vraiment visible.
+    // Plancher relevé à 56px (au lieu de 34) : les petites cuves ont une
+    // max-width plus étroite (560px pour le 25L contre 1020px pour le 375L),
+    // donc la taille des objets — calculée à partir de cette largeur réelle —
+    // se réduisait deux fois de suite (cuve plus petite ET objets plus
+    // petits dedans), rendant les plantes minuscules dans les petits bacs.
     var largeurReelle = elTank.getBoundingClientRect().width || bacActuel.largeurAffichage;
-    var tailleItem = Math.max(34, Math.min(84, Math.round(largeurReelle / 13)));
+    var tailleItem = Math.max(56, Math.min(84, Math.round(largeurReelle / 13)));
     document.documentElement.style.setProperty('--zaq-item-size', tailleItem + 'px');
     if (solActuel) {
       calculerEtAppliquerSol();

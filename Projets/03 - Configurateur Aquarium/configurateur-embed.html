@@ -281,7 +281,7 @@
     height: 12%;
     z-index: 2;
     background: linear-gradient(180deg, #cba573 0%, #a9834f 100%);
-    border-top: 2px solid rgba(0, 0, 0, 0.25);
+    border-top: 4px solid #ff0000;
     transition: height 0.2s ease, background 0.2s ease;
   }
   .zaq-builder__fond-cap {
@@ -292,7 +292,7 @@
     height: 0;
     z-index: 3;
     background: #c9a876;
-    border-top: 2px solid rgba(0, 0, 0, 0.25);
+    border-top: 4px solid #ff0000;
     transition: height 0.2s ease, background 0.2s ease, bottom 0.2s ease;
   }
   .zaq-builder__item {
@@ -741,11 +741,18 @@
       var hauteurTotaleCm = hauteurSolCm + hauteurCapCm;
       var hauteurSolPct = Math.max(4, Math.min(35, (hauteurSolCm / bacActuel.hauteur) * 100));
       var hauteurCapPct = Math.max(4, Math.min(35, (hauteurCapCm / bacActuel.hauteur) * 100));
+      // Hauteurs posées en pixels (pas en %) : certains navigateurs/webviews ne
+      // résolvent pas fiablement une hauteur en % sur un enfant absolu d'un
+      // conteneur dont la hauteur vient d'aspect-ratio plutôt que d'une valeur
+      // fixe - le px lève toute ambiguïté, quel que soit le moteur de rendu.
+      var refHautPx = elTank.clientHeight || elTank.getBoundingClientRect().height || 300;
+      var hauteurSolPx = Math.round(refHautPx * hauteurSolPct / 100);
+      var hauteurCapPx = Math.round(refHautPx * hauteurCapPct / 100);
 
-      elFond.style.setProperty('height', hauteurSolPct + '%', 'important');
+      elFond.style.setProperty('height', hauteurSolPx + 'px', 'important');
       elFond.style.setProperty('background', produitSol.couleur, 'important');
-      elFondCap.style.setProperty('bottom', hauteurSolPct + '%', 'important');
-      elFondCap.style.setProperty('height', hauteurCapPct + '%', 'important');
+      elFondCap.style.setProperty('bottom', hauteurSolPx + 'px', 'important');
+      elFondCap.style.setProperty('height', hauteurCapPx + 'px', 'important');
       elFondCap.style.setProperty('background', produitCap.couleur, 'important');
 
       var calcSol = calculerSacs(produitSol, hauteurSolCm);
@@ -771,7 +778,9 @@
       solActuel.volumeLCap = 0;
 
       var hauteurPct = Math.max(6, Math.min(40, (solActuel.hauteurCm / bacActuel.hauteur) * 100));
-      elFond.style.setProperty('height', hauteurPct + '%', 'important');
+      var refHautPxSable = elTank.clientHeight || elTank.getBoundingClientRect().height || 300;
+      var hauteurPx = Math.round(refHautPxSable * hauteurPct / 100);
+      elFond.style.setProperty('height', hauteurPx + 'px', 'important');
       elFond.style.setProperty('background', produitSol.couleur, 'important');
       elFondCap.style.setProperty('height', '0', 'important');
 

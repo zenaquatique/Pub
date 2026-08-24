@@ -267,22 +267,24 @@
        mesurée en JS juste après un changement de bac — une transition animée
        ferait lire une valeur intermédiaire au lieu de la taille finale. */
   }
+  /* L'eau + le sol + le recouvrement sont peints en un seul dégradé CSS
+     directement sur .zaq-builder__tank (voir appliquerVisuelBac en JS) :
+     ces trois divs enfants ne servent plus qu'à garder la structure HTML
+     pour compatibilité, ils restent transparents. */
   .zaq-builder__eau {
     position: absolute;
     inset: 0;
     z-index: 1;
-    background: linear-gradient(180deg, rgba(154, 214, 195, 0.55) 0%, rgba(94, 168, 152, 0.55) 100%);
+    background: transparent;
   }
   .zaq-builder__fond {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 12%;
+    height: 0;
     z-index: 2;
-    background: linear-gradient(180deg, #cba573 0%, #a9834f 100%);
-    border-top: 4px solid #ff0000;
-    transition: height 0.2s ease, background 0.2s ease;
+    background: transparent;
   }
   .zaq-builder__fond-cap {
     position: absolute;
@@ -291,9 +293,7 @@
     bottom: 0;
     height: 0;
     z-index: 3;
-    background: #c9a876;
-    border-top: 4px solid #ff0000;
-    transition: height 0.2s ease, background 0.2s ease, bottom 0.2s ease;
+    background: transparent;
   }
   .zaq-builder__item {
     position: absolute;
@@ -704,7 +704,11 @@
     var largeurReelle = elTank.getBoundingClientRect().width || bacActuel.largeurAffichage;
     var tailleItem = Math.max(34, Math.min(84, Math.round(largeurReelle / 13)));
     document.documentElement.style.setProperty('--zaq-item-size', tailleItem + 'px');
-    if (solActuel) calculerEtAppliquerSol();
+    if (solActuel) {
+      calculerEtAppliquerSol();
+    } else {
+      appliquerVisuelBac(0, null, 0, null);
+    }
     rafraichirCapacite();
   }
   elBac.addEventListener('change', function () {
@@ -728,6 +732,26 @@
     var sacs = Math.ceil(volumeL / contenanceL);
     return { volumeL: volumeL, sacs: sacs };
   }
+  // Eau + recouvrement + sol peints en UN SEUL dégradé CSS directement sur le
+  // bac (.zaq-builder__tank), plutôt que sur des divs enfants séparés : le
+  // bac est l'élément dont on est sûr qu'il s'affiche (son propre fond est
+  // toujours visible), donc c'est lui qui porte tout le visuel désormais.
+  var EAU_DEBUT = 'rgba(154, 214, 195, 0.55)';
+  var EAU_FIN = 'rgba(94, 168, 152, 0.55)';
+  function appliquerVisuelBac(hauteurSolPct, couleurSol, hauteurCapPct, couleurCap) {
+    var pTop = Math.max(0, 100 - hauteurSolPct - hauteurCapPct);
+    var gradient = 'linear-gradient(180deg, ' + EAU_DEBUT + ' 0%, ' + EAU_FIN + ' ' + pTop + '%';
+    if (hauteurCapPct > 0) {
+      var pMid = 100 - hauteurSolPct;
+      gradient += ', ' + couleurCap + ' ' + pTop + '%, ' + couleurCap + ' ' + pMid + '%';
+      gradient += ', ' + couleurSol + ' ' + pMid + '%, ' + couleurSol + ' 100%)';
+    } else if (hauteurSolPct > 0) {
+      gradient += ', ' + couleurSol + ' ' + pTop + '%, ' + couleurSol + ' 100%)';
+    } else {
+      gradient += ', ' + EAU_FIN + ' 100%)';
+    }
+    elTank.style.setProperty('background-image', gradient, 'important');
+  }
   function calculerEtAppliquerSol() {
     var produitSol = PRODUITS_PAR_ID_SOL(solActuel.produitId);
     if (!produitSol) return;
@@ -741,19 +765,8 @@
       var hauteurTotaleCm = hauteurSolCm + hauteurCapCm;
       var hauteurSolPct = Math.max(4, Math.min(35, (hauteurSolCm / bacActuel.hauteur) * 100));
       var hauteurCapPct = Math.max(4, Math.min(35, (hauteurCapCm / bacActuel.hauteur) * 100));
-      // Hauteurs posées en pixels (pas en %) : certains navigateurs/webviews ne
-      // résolvent pas fiablement une hauteur en % sur un enfant absolu d'un
-      // conteneur dont la hauteur vient d'aspect-ratio plutôt que d'une valeur
-      // fixe - le px lève toute ambiguïté, quel que soit le moteur de rendu.
-      var refHautPx = elTank.clientHeight || elTank.getBoundingClientRect().height || 300;
-      var hauteurSolPx = Math.round(refHautPx * hauteurSolPct / 100);
-      var hauteurCapPx = Math.round(refHautPx * hauteurCapPct / 100);
 
-      elFond.style.setProperty('height', hauteurSolPx + 'px', 'important');
-      elFond.style.setProperty('background', produitSol.couleur, 'important');
-      elFondCap.style.setProperty('bottom', hauteurSolPx + 'px', 'important');
-      elFondCap.style.setProperty('height', hauteurCapPx + 'px', 'important');
-      elFondCap.style.setProperty('background', produitCap.couleur, 'important');
+      appliquerVisuelBac(hauteurSolPct, produitSol.couleur, hauteurCapPct, produitCap.couleur);
 
       var calcSol = calculerSacs(produitSol, hauteurSolCm);
       var calcCap = calculerSacs(produitCap, hauteurCapCm);
@@ -778,11 +791,7 @@
       solActuel.volumeLCap = 0;
 
       var hauteurPct = Math.max(6, Math.min(40, (solActuel.hauteurCm / bacActuel.hauteur) * 100));
-      var refHautPxSable = elTank.clientHeight || elTank.getBoundingClientRect().height || 300;
-      var hauteurPx = Math.round(refHautPxSable * hauteurPct / 100);
-      elFond.style.setProperty('height', hauteurPx + 'px', 'important');
-      elFond.style.setProperty('background', produitSol.couleur, 'important');
-      elFondCap.style.setProperty('height', '0', 'important');
+      appliquerVisuelBac(hauteurPct, produitSol.couleur, 0, null);
 
       var calc = calculerSacs(produitSol, solActuel.hauteurCm);
       solActuel.sacs = calc.sacs;
@@ -798,9 +807,7 @@
   elSolProduit.addEventListener('change', function () {
     if (!elSolProduit.value) {
       solActuel = null;
-      elFond.style.height = '';
-      elFond.style.background = '';
-      elFondCap.style.height = '0';
+      appliquerVisuelBac(0, null, 0, null);
       elSolInfo.textContent = '';
       elRecouvrementLigne.hidden = true;
       boutonsHauteurSol.forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });

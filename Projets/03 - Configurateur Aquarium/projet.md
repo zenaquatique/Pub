@@ -41,6 +41,13 @@ Trois retours après le premier essai fonctionnel sur la vraie boutique :
 
 **À confirmer par Owen** : que le sol est maintenant bien visible avec la bordure de contraste, et que les photos s'affichent en entier et à la bonne taille.
 
+## v6 — le sol restait invisible malgré tout, changement d'architecture
+Malgré plusieurs correctifs successifs (z-index, bordure de contraste, `!important`, hauteurs en pixels au lieu de %), le sol restait totalement invisible sur le vrai thème Shopify d'Owen — y compris une bordure rouge vif de test qui n'apparaissait toujours pas du tout. Comme même une simple bordure CSS statique (pas dépendante du JS) ne s'affichait pas sur les divs `#zaq-fond` / `#zaq-fond-cap`, le problème ne pouvait plus raisonnablement venir d'un souci de couleur ou de spécificité CSS.
+
+**Changement d'architecture** : au lieu de peindre le sol sur deux divs enfants séparés du bac, tout (eau + recouvrement + sol) est maintenant peint en **un seul dégradé CSS avec paliers nets**, posé directement sur `.zaq-builder__tank` lui-même (`appliquerVisuelBac()` en JS, via `background-image` en `!important`) — c'est l'élément dont on est sûr à 100% qu'il s'affiche, puisque son propre fond (`#dff0e6`) est visible sur toutes les captures d'Owen depuis le début. Les anciens divs `#zaq-fond`/`#zaq-fond-cap`/`.zaq-builder__eau` restent dans le HTML pour ne pas casser la structure, mais sont rendus transparents et ne portent plus aucun visuel.
+
+**À confirmer par Owen** : est-ce que le sol s'affiche enfin avec cette version.
+
 ## ⚠️ Catégories : je n'ai pas pu consulter zen-aquatique.fr en direct
 L'accès au site est bloqué depuis cet environnement (proxy réseau). Les catégories utilisées reprennent celles déjà présentes dans le coffre (`Contexte/catalogue-produits.md` : Plantes, Crevettes, Décoration, Substrats, Outillage, Aquariums) + celles qu'il a fallu ajouter pour couvrir la liste envoyée (Éclairage, Chauffage, Filtration, Air & CO2). **À corriger si les vraies collections Shopify sont nommées ou regroupées différemment.**
 

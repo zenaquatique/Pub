@@ -631,11 +631,11 @@
   ];
   var SABLES_RECOUVREMENT = PRODUITS_SOL.filter(function (s) { return s.type === 'sable'; });
 
-  // Bacs : dimensions standard indicatives (a confirmer aupres d'Aquael)
+  // Bacs : dimensions reelles fournies par Owen (zen-aquatique.fr)
   var BACS = [
-    { id: '25L', nom: 'Cuve Nue 25L Aquael', prix: 25.99, prixApprox: false, variantId: null, longueur: 40, largeur: 25, hauteur: 25, largeurAffichage: 560, capaciteIndicative: 8 },
-    { id: '45L', nom: 'Cuve Nue 45L Aquael', prix: 39.99, prixApprox: false, variantId: null, longueur: 50, largeur: 30, hauteur: 30, largeurAffichage: 640, capaciteIndicative: 12 },
-    { id: '54L', nom: 'Cuve Nue 54L Aquael', prix: 49.99, prixApprox: false, variantId: null, longueur: 60, largeur: 30, hauteur: 30, largeurAffichage: 700, capaciteIndicative: 15 },
+    { id: '25L', nom: 'Cuve Nue 25L Aquael', prix: 25.99, prixApprox: false, variantId: null, longueur: 25, largeur: 25, hauteur: 41, largeurAffichage: 560, capaciteIndicative: 8 },
+    { id: '45L', nom: 'Cuve Nue 45L Aquael', prix: 39.99, prixApprox: false, variantId: null, longueur: 30, largeur: 30, hauteur: 50, largeurAffichage: 640, capaciteIndicative: 12 },
+    { id: '54L', nom: 'Cuve Nue 54L Aquael', prix: 49.99, prixApprox: false, variantId: null, longueur: 30, largeur: 30, hauteur: 60, largeurAffichage: 700, capaciteIndicative: 15 },
     { id: '112L', nom: 'Cuve Nue 112L Aquael', prix: 79.99, prixApprox: true, variantId: null, longueur: 80, largeur: 35, hauteur: 40, largeurAffichage: 820, capaciteIndicative: 22 },
     { id: '200L', nom: 'Cuve Nue 200L Aquael', prix: 119.99, prixApprox: true, variantId: null, longueur: 100, largeur: 40, hauteur: 50, largeurAffichage: 900, capaciteIndicative: 30 },
     { id: '240L', nom: 'Cuve Nue 240L Aquael', prix: 149.99, prixApprox: true, variantId: null, longueur: 120, largeur: 40, hauteur: 50, largeurAffichage: 960, capaciteIndicative: 35 },
@@ -694,7 +694,17 @@
     elBac.value = bacActuel.id;
   }
   function appliquerBac() {
-    elTank.style.setProperty('--zaq-tank-max', bacActuel.largeurAffichage + 'px');
+    // Certaines cuves (25L notamment) sont plus hautes que larges (25×41cm) :
+    // avec la seule max-width, leur hauteur affichée exploserait (aspect-ratio
+    // appliqué à une largeur fixe). On plafonne donc aussi la hauteur visuelle
+    // à HAUTEUR_MAX_PX en réduisant la largeur affichée quand le bac est en
+    // "portrait", pour qu'il reste raisonnable à l'écran sans être écrasé
+    // (le ratio réel est toujours respecté, juste la taille d'affichage change).
+    var HAUTEUR_MAX_PX = 420;
+    var ratioBac = bacActuel.longueur / bacActuel.hauteur;
+    var largeurPourHauteurMax = HAUTEUR_MAX_PX * ratioBac;
+    var largeurAffichageFinale = Math.min(bacActuel.largeurAffichage, largeurPourHauteurMax);
+    elTank.style.setProperty('--zaq-tank-max', largeurAffichageFinale + 'px');
     elTank.style.setProperty('--zaq-tank-ratio', bacActuel.longueur + ' / ' + bacActuel.hauteur);
     // Le widget ne doit JAMAIS forcer la page/le thème à s'élargir : il reste
     // toujours à 100% de la largeur que la page lui donne. Le bac grandit donc

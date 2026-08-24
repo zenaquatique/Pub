@@ -479,8 +479,12 @@
   // vraie photo produit — dès qu'elle est renseignée, elle remplace le pictogramme
   // SVG de la catégorie. Laisser vide tant qu'on n'a pas l'URL : le pictogramme
   // continue de s'afficher, rien d'autre ne casse.
-  function pr(id, nom, prix, prixApprox, image) {
-    return { id: id, nom: nom, prix: prix, prixApprox: !!prixApprox, variantId: null, image: image || null };
+  // tailleCm (6e argument, optionnel) : hauteur adulte réelle de la plante en
+  // cm, utilisée pour la mettre à l'échelle du bac (voir calculerTailleItemPx).
+  // Sans valeur, l'objet garde l'ancien calcul générique (proportionnel à la
+  // largeur affichée du bac) - déco/matériel ne sont pas concernés ici.
+  function pr(id, nom, prix, prixApprox, image, tailleCm) {
+    return { id: id, nom: nom, prix: prix, prixApprox: !!prixApprox, variantId: null, image: image || null, tailleCm: tailleCm || null };
   }
   function echapperHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -502,34 +506,34 @@
     {
       id: 'plantes', nom: 'Plantes', icone: svgFeuille('#3f8f5f'),
       produits: [
-        pr('crypto-lucens', 'Cryptocoryne Lucens', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/cryptocoryne_lucens.png?v=1787563329'),
-        pr('crypto-beckettii', 'Cryptocoryne Beckettii', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/cryptocoryne_beckettii.png?v=1787563329'),
-        pr('rotala-hra', "Rotala H'ra", 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Rotala_H_ra.png?v=1787563335'),
-        pr('rotala-laos', 'Rotala Laos', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Rotala_Laos.png?v=1787563335'),
-        pr('rotala-rotundifolia', 'Rotala Rotundifolia', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/rotala_rotundifolia.png?v=1787563335'),
-        pr('hygrophila-polysperma', 'Hygrophila Polysperma', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Hygrophila_polysperma.png?v=1787494470'),
-        pr('hygrophila-disformis', 'Hygrophila Disformis', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/hygrophila_diformis.png?v=1787563330'),
-        pr('hygrophila-corymbosa', 'Hygrophila Corymbosa', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Hygrophila_corymbosa.png?v=1787563330'),
-        pr('limnophilia-sessiliflora', 'Limnophilia Sessiliflora', 0.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/limnophilia_sessiliflora.png?v=1787563334'),
-        pr('limnobium-laevigatum', 'Limnobium Laevigatum', 1.50),
-        pr('valisneria-spiralis', 'Valisneria Spiralis', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Valsinesria_spiralis.png?v=1787563335'),
-        pr('valisneria-gigantea', 'Valisnéria gigantea', 2.99, true),
-        pr('sagittaria-subulata', 'Sagittaria Subulata', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Sagittaria_subulata.png?v=1787563335'),
-        pr('lysimachia-nummularia-aurea', 'Lysimachia Nummularia Aurea', 1.99),
-        pr('ludwigia-repens', 'Ludwigia Repens', 1.50),
-        pr('egeria-densa', 'Egeria Densa', 0.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/egeria_densa.png?v=1787563330'),
-        pr('anubias-barteri-nana', 'Anubias Barteri Nana', 4.99),
-        pr('pogostemon-helferi', 'Pogostemon Helferi', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Pogostemon_helferi.png?v=1787563336'),
-        pr('alternanthera-reinekii-red-ruby', 'Alternanthera Reinekii Red Ruby', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Alternanthera_Reinickii_red_ruby.png?v=1787558449'),
-        pr('bucephalandra-red-scorpio', 'Bucephalandra Red Scorpio', 3.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/bucephalandra_red_scorpio.png?v=1787563330'),
-        pr('nymphaea-lotus-red', 'Nymphaea lotus Red', 4.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Nymphea_lotus_red.png?v=1787563336'),
-        pr('mayaca-fluviatilis', 'Mayaca Fluviatilis', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/mayaca_fluvialtilis.png?v=1787563613'),
-        pr('microsorium-pteroptus', 'Microsorium Ptéroptus', 2.99),
-        pr('echinodorus-bleheri', 'Echinodorus bleheri', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/echinodorus_bleheri.png?v=1787563329'),
-        pr('taxiphyllum-taiwan-moss', 'Taxiphyllum Taïwan Moss', 2.99),
-        pr('taxiphyllum-spiky-moss', 'Taxiphullum Spiky Moss', 2.99, true),
-        pr('taxiphyllum-bogor-moss', "Mousse de java (Bogor Moss)", 2.99),
-        pr('micranthemum-monte-carlo', 'Micranthemum Monte Carlo', 2.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Monte_carlo.png?v=1787563336')
+        pr('crypto-lucens', 'Cryptocoryne Lucens', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/cryptocoryne_lucens.png?v=1787563329', 12),
+        pr('crypto-beckettii', 'Cryptocoryne Beckettii', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/cryptocoryne_beckettii.png?v=1787563329', 15),
+        pr('rotala-hra', "Rotala H'ra", 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Rotala_H_ra.png?v=1787563335', 20),
+        pr('rotala-laos', 'Rotala Laos', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Rotala_Laos.png?v=1787563335', 20),
+        pr('rotala-rotundifolia', 'Rotala Rotundifolia', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/rotala_rotundifolia.png?v=1787563335', 25),
+        pr('hygrophila-polysperma', 'Hygrophila Polysperma', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Hygrophila_polysperma.png?v=1787494470', 25),
+        pr('hygrophila-disformis', 'Hygrophila Disformis', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/hygrophila_diformis.png?v=1787563330', 25),
+        pr('hygrophila-corymbosa', 'Hygrophila Corymbosa', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Hygrophila_corymbosa.png?v=1787563330', 35),
+        pr('limnophilia-sessiliflora', 'Limnophilia Sessiliflora', 0.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/limnophilia_sessiliflora.png?v=1787563334', 25),
+        pr('limnobium-laevigatum', 'Limnobium Laevigatum', 1.50, false, null, 4),
+        pr('valisneria-spiralis', 'Valisneria Spiralis', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Valsinesria_spiralis.png?v=1787563335', 35),
+        pr('valisneria-gigantea', 'Valisnéria gigantea', 2.99, true, null, 60),
+        pr('sagittaria-subulata', 'Sagittaria Subulata', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Sagittaria_subulata.png?v=1787563335', 12),
+        pr('lysimachia-nummularia-aurea', 'Lysimachia Nummularia Aurea', 1.99, false, null, 10),
+        pr('ludwigia-repens', 'Ludwigia Repens', 1.50, false, null, 25),
+        pr('egeria-densa', 'Egeria Densa', 0.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/egeria_densa.png?v=1787563330', 35),
+        pr('anubias-barteri-nana', 'Anubias Barteri Nana', 4.99, false, null, 8),
+        pr('pogostemon-helferi', 'Pogostemon Helferi', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Pogostemon_helferi.png?v=1787563336', 6),
+        pr('alternanthera-reinekii-red-ruby', 'Alternanthera Reinekii Red Ruby', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Alternanthera_Reinickii_red_ruby.png?v=1787558449', 20),
+        pr('bucephalandra-red-scorpio', 'Bucephalandra Red Scorpio', 3.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/bucephalandra_red_scorpio.png?v=1787563330', 7),
+        pr('nymphaea-lotus-red', 'Nymphaea lotus Red', 4.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Nymphea_lotus_red.png?v=1787563336', 25),
+        pr('mayaca-fluviatilis', 'Mayaca Fluviatilis', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/mayaca_fluvialtilis.png?v=1787563613', 20),
+        pr('microsorium-pteroptus', 'Microsorium Ptéroptus', 2.99, false, null, 20),
+        pr('echinodorus-bleheri', 'Echinodorus bleheri', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/echinodorus_bleheri.png?v=1787563329', 35),
+        pr('taxiphyllum-taiwan-moss', 'Taxiphyllum Taïwan Moss', 2.99, false, null, 3),
+        pr('taxiphyllum-spiky-moss', 'Taxiphullum Spiky Moss', 2.99, true, null, 3),
+        pr('taxiphyllum-bogor-moss', "Mousse de java (Bogor Moss)", 2.99, false, null, 3),
+        pr('micranthemum-monte-carlo', 'Micranthemum Monte Carlo', 2.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Monte_carlo.png?v=1787563336', 3)
       ]
     },
     {
@@ -716,10 +720,30 @@
     }
     rafraichirCapacite();
   }
+  // Taille à l'écran d'un objet posé dans le bac. Pour les plantes (tailleCm
+  // renseigné) : proportionnelle à la vraie hauteur adulte de la plante par
+  // rapport à la vraie hauteur du bac (en cm), donc une plante haute paraît
+  // grande, une mousse rase paraît petite, et ça change correctement entre
+  // un 25L (25cm de haut) et un 375L (50cm de haut). Plafonnée à 70% de la
+  // hauteur du bac à l'écran pour ne jamais dépasser visuellement le bac,
+  // plancher à 28px pour rester cliquable. Sans tailleCm (déco/matériel) :
+  // ancien calcul générique proportionnel à la largeur affichée du bac.
+  function calculerTailleItemPx(produit) {
+    var hautTankPx = elTank.clientHeight || elTank.getBoundingClientRect().height || 300;
+    if (produit && produit.tailleCm) {
+      var px = (produit.tailleCm / bacActuel.hauteur) * hautTankPx;
+      return Math.max(28, Math.min(Math.round(hautTankPx * 0.7), Math.round(px)));
+    }
+    var largeurReelle = elTank.getBoundingClientRect().width || bacActuel.largeurAffichage;
+    return Math.max(56, Math.min(84, Math.round(largeurReelle / 13)));
+  }
   elBac.addEventListener('change', function () {
     bacActuel = BACS.filter(function (b) { return b.id === elBac.value; })[0];
     appliquerBac();
-    sauvegarder();
+    // Les objets déjà posés doivent être redimensionnés : leur taille dépend
+    // de la hauteur réelle du bac (voir calculerTailleItemPx), donc changer
+    // de cuve doit redessiner le bac, pas seulement recalculer le sol.
+    rafraichir();
   });
 
   // ---------- Étape 2 : sélection du sol ----------
@@ -904,6 +928,9 @@
       var el = document.createElement('div');
       el.className = 'zaq-builder__item';
       el.setAttribute('data-uid', item.uid);
+      var taillePx = calculerTailleItemPx(produit);
+      el.style.width = taillePx + 'px';
+      el.style.height = taillePx + 'px';
       el.style.left = item.xPct + '%';
       el.style.top = item.yPct + '%';
       el.style.zIndex = item.zIndex;
@@ -1052,6 +1079,9 @@
     var fantome = document.createElement('div');
     fantome.className = 'zaq-builder__fantome';
     fantome.innerHTML = rendreVisuel(produit);
+    var tailleFantome = calculerTailleItemPx(produit);
+    fantome.style.width = tailleFantome + 'px';
+    fantome.style.height = tailleFantome + 'px';
     document.body.appendChild(fantome);
     positionnerFantome(fantome, evenement.clientX, evenement.clientY);
 

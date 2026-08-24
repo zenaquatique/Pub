@@ -472,6 +472,8 @@
   // true  = envoie reellement les articles au panier Shopify via
   //         /cart/add.js - necessite d'avoir renseigne variantId
   //         (l'ID de variante Shopify) pour chaque produit ci-dessous.
+  // Cette version Liquid remplit deja variantId automatiquement (voir CATEGORIES
+  // plus bas) : passer a true une fois teste sur une copie de theme.
   var MODE_SHOPIFY = false;
 
   function svgFeuille(c) {
@@ -512,8 +514,8 @@
   // Sans valeur, l'objet garde l'ancien calcul générique (proportionnel à la
   // largeur affichée du bac) - déco/matériel ne sont pas concernés ici.
   // variantId (7e argument, optionnel) : ID de variante Shopify réel, nécessaire
-  // pour MODE_SHOPIFY = true (ajout panier réel). Rempli automatiquement par la
-  // version Liquid ci-dessous, sinon null (mode simulation uniquement).
+  // pour MODE_SHOPIFY = true (ajout panier réel). Rempli automatiquement ci-dessous
+  // par les boucles Liquid, à partir de product.selected_or_first_available_variant.id.
   function pr(id, nom, prix, prixApprox, image, tailleCm, variantId) {
     return { id: id, nom: nom, prix: prix, prixApprox: !!prixApprox, variantId: variantId || null, image: image || null, tailleCm: tailleCm || null };
   }
@@ -529,125 +531,144 @@
     return ICONE_PAR_PRODUIT[produit.id] || '';
   }
 
-  // Catalogue (hors packs et carte-cadeau, cf. demande d'Owen)
-  // Catégories reprises des notes internes du coffre (le site n'a pas pu être
-  // consulté en direct depuis cet environnement) : à corriger si les vraies
-  // collections Shopify sont nommées/regroupées différemment.
+  // Catalogue généré automatiquement à partir de vraies collections Shopify (Liquid) :
+  // photo, prix réel et variantId sont récupérés directement depuis chaque produit,
+  // plus besoin de les tenir à jour à la main comme dans le prototype statique.
+  //
+  // ⚠️ À ADAPTER avant mise en ligne :
+  // - Le handle de collection entre crochets (ex. collections['plantes']) doit
+  //   correspondre au vrai handle Shopify de la collection (Produits → Collections,
+  //   visible dans l'URL). Les 8 noms ci-dessous sont des hypothèses, à corriger.
+  // - metafields.custom.taille_cm (plantes) et metafields.custom.prix_approximatif
+  //   sont optionnels : créer ces metafields produit dans l'admin Shopify si on
+  //   veut garder cette info par produit, sinon laisser tel quel (0 / false partout).
   var CATEGORIES = [
     {
       id: 'plantes', nom: 'Plantes', icone: svgFeuille('#3f8f5f'),
       produits: [
-        pr('crypto-lucens', 'Cryptocoryne Lucens', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/cryptocoryne_lucens.png?v=1787563329', 5),
-        pr('crypto-beckettii', 'Cryptocoryne Beckettii', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/cryptocoryne_beckettii.png?v=1787563329', 5),
-        pr('rotala-hra', "Rotala H'ra", 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Rotala_H_ra.png?v=1787563335', 12),
-        pr('rotala-laos', 'Rotala Laos', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Rotala_Laos.png?v=1787563335', 12),
-        pr('rotala-rotundifolia', 'Rotala Rotundifolia', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/rotala_rotundifolia.png?v=1787563335', 7),
-        pr('hygrophila-polysperma', 'Hygrophila Polysperma', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Hygrophila_polysperma.png?v=1787494470', 18),
-        pr('hygrophila-disformis', 'Hygrophila Disformis', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/hygrophila_diformis.png?v=1787563330', 7),
-        pr('hygrophila-corymbosa', 'Hygrophila Corymbosa', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Hygrophila_corymbosa.png?v=1787563330', 12),
-        pr('limnophilia-sessiliflora', 'Limnophilia Sessiliflora', 0.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/limnophilia_sessiliflora.png?v=1787563334', 12),
-        pr('limnobium-laevigatum', 'Limnobium Laevigatum', 1.50, false, null, 3),
-        pr('valisneria-spiralis', 'Valisneria Spiralis', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Valsinesria_spiralis.png?v=1787563335', 17),
-        pr('valisneria-gigantea', 'Valisnéria gigantea', 2.99, true, null, 60),
-        pr('sagittaria-subulata', 'Sagittaria Subulata', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Sagittaria_subulata.png?v=1787563335', 3),
-        pr('lysimachia-nummularia-aurea', 'Lysimachia Nummularia Aurea', 1.99, false, null, 7),
-        pr('ludwigia-repens', 'Ludwigia Repens', 1.50, false, null, 25),
-        pr('egeria-densa', 'Egeria Densa', 0.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/egeria_densa.png?v=1787563330', 12),
-        pr('anubias-barteri-nana', 'Anubias Barteri Nana', 4.99, false, null, 5),
-        pr('pogostemon-helferi', 'Pogostemon Helferi', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Pogostemon_helferi.png?v=1787563336', 3),
-        pr('alternanthera-reinekii-red-ruby', 'Alternanthera Reinekii Red Ruby', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Alternanthera_Reinickii_red_ruby.png?v=1787558449', 7),
-        pr('bucephalandra-red-scorpio', 'Bucephalandra Red Scorpio', 3.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/bucephalandra_red_scorpio.png?v=1787563330', 3),
-        pr('nymphaea-lotus-red', 'Nymphaea lotus Red', 4.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Nymphea_lotus_red.png?v=1787563336', 5),
-        pr('mayaca-fluviatilis', 'Mayaca Fluviatilis', 1.50, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/mayaca_fluvialtilis.png?v=1787563613', 12),
-        pr('microsorium-pteroptus', 'Microsorium Ptéroptus', 2.99, false, null, 7),
-        pr('echinodorus-bleheri', 'Echinodorus bleheri', 1.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/echinodorus_bleheri.png?v=1787563329', 12),
-        pr('taxiphyllum-taiwan-moss', 'Taxiphyllum Taïwan Moss', 2.99, false, null, 5),
-        pr('taxiphyllum-spiky-moss', 'Taxiphullum Spiky Moss', 2.99, true, null, 3),
-        pr('taxiphyllum-bogor-moss', "Mousse de java (Bogor Moss)", 2.99, false, null, 5),
-        pr('micranthemum-monte-carlo', 'Micranthemum Monte Carlo', 2.99, false, 'https://cdn.shopify.com/s/files/1/0918/2058/9439/files/Monte_carlo.png?v=1787563336', 5)
+        {% for product in collections['plantes'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          {{ product.metafields.custom.taille_cm | default: 0 }},
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'crevettes', nom: 'Crevettes & accessoires', icone: svgCrevette('#e0793c'),
       produits: [
-        pr('neocaridina-red-cherry', 'Neocaridina Red Cherry', 1.99, true),
-        pr('neocaridina-orange-cherry', 'Neocaridina Orange Cherry', 1.99),
-        pr('neocaridina-yellow-neon', 'Neocaridina Yellow Néon', 2.50),
-        pr('neocaridina-rili-red', 'Neocaridina Rili Red', 2.50, true),
-        pr('neocaridina-blue-velvette', 'Neocaridina Blue Velvette', 2.99, true),
-        pr('dome-mousse-crevettes', 'Dôme à Mousse Pour Crevettes', 4.99, true),
-        pr('mangeoire-crevettes', 'Mangeoire pour crevettes', 3.99, true),
-        pr('epuisette-crevettes', 'Épuisette à Crevettes Rigide', 3.99, true)
+        {% for product in collections['crevettes'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'deco', nom: 'Décoration', icone: svgRoche('#8a7a63'),
       produits: [
-        pr('dragon-stone', 'Dragon Stone', 5.99),
-        pr('black-rock', 'Black Rock', 5.99),
-        pr('racine-spider-xs', 'Racine Spider XS', 6.99),
-        pr('racine-spider-s', 'Racine Spider S', 10.99),
-        pr('bois-honeycomb-s', 'Bois HoneyComb S', 14.99)
+        {% for product in collections['decoration'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'eclairage', nom: 'Éclairage', icone: svgLampe('#c9a13a'),
       produits: [
-        pr('superfish-ecoled-54-64', 'Super fish Eco-Led 54-64cm', 24.99, true),
-        pr('superfish-ecoled-64-74', 'Super fish Eco-Led 64-74cm', 29.99, true),
-        pr('superfish-ecoled-94-104', 'Super fish Eco-Led 94-104cm', 39.99, true),
-        pr('rampe-newa-36-46', 'Rampe Led Newa [36,6-46,5cm]', 34.99, true),
-        pr('rampe-eheim-55-63', 'Rampe Led Classic Plants EHEIM [55-63.5cm]', 44.99, true),
-        pr('rampe-eheim-64-72', 'Rampe Led Classic Plants EHEIM [64-72.5cm]', 49.99, true),
-        pr('rampe-eheim-74-82', 'Rampe Led Classic Plants EHEIM [74-82.5cm]', 54.99, true),
-        pr('rampe-eheim-94-102', 'Rampe Led Classic Plants EHEIM [94-102.5cm]', 64.99, true),
-        pr('rampe-eheim-114-122', 'Rampe Led Classic Plants EHEIM [114-122.5cm]', 74.99, true),
-        pr('rampe-eheim-124-132', 'Rampe Led Classic Plants EHEIM [124-132.5cm]', 79.99, true),
-        pr('rampe-rgb-eheim-137-152', 'Rampe LED Power RGB EHEIM [137.3-152.9cm]', 129.99, true)
+        {% for product in collections['eclairage'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'chauffage', nom: 'Chauffage', icone: svgThermometre('#c0503f'),
       produits: [
-        pr('chauffage-eheim-25w', 'Chauffage EHEIM 25W', 18.99),
-        pr('chauffage-eheim-50w', 'Chauffage EHEIM 50W', 21.99, true),
-        pr('chauffage-eheim-75w', 'Chauffage EHEIM 75W', 24.99, true),
-        pr('chauffage-eheim-100w', 'Chauffage EHEIM 100W', 27.99, true),
-        pr('chauffage-eheim-125w', 'Chauffage EHEIM 125W', 30.99, true),
-        pr('chauffage-eheim-150w', 'Chauffage EHEIM 150W', 33.99, true),
-        pr('chauffage-eheim-200w', 'Chauffage EHEIM 200W', 38.99, true),
-        pr('chauffage-eheim-250w', 'Chauffage EHEIM 250W', 43.99, true),
-        pr('chauffage-eheim-300w', 'Chauffage EHEIM 300W', 48.99, true)
+        {% for product in collections['chauffage'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'filtration', nom: 'Filtration', icone: svgFiltre('#4a6670'),
       produits: [
-        pr('filtre-eheim-45l', 'Filtre EHEIM 45L [50-180L/h]', 29.99, true),
-        pr('filtre-eheim-60l', 'Filtre EHEIM 60L [150-300L/h]', 34.99, true),
-        pr('filtre-eheim-160l', 'Filtre EHEIM 160L [220-500L/h]', 44.99, true),
-        pr('filtre-eheim-200l', 'Filtre EHEIM 200L [220-570L/h]', 49.99, true),
-        pr('filtre-classic-250', 'Filtre Ext. Classic 250L [440L/h]', 79.99, true),
-        pr('filtre-classic-350', 'Filtre Ext. Classic 350L [620L/h]', 99.99, true),
-        pr('filtre-classic-600', 'Filtre Ext. Classic 600L [1000L/h]', 139.99, true)
+        {% for product in collections['filtration'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'air', nom: 'Air & CO2', icone: svgBulle('#5c9ab0'),
       produits: [
-        pr('pompe-air-superfish', 'Pompe à air SUPERFISH Air-Flow 2', 14.99, true),
-        pr('diffuseur-air-superfish', 'Diffuseur à air SUPERFISH', 1.99),
-        pr('tuyaux-air-5m', 'Tuyaux à Air 5M', 4.99, true),
-        pr('diviseur-y-air', 'Diviseur en Y pour tuyaux à air', 2.99, true)
+        {% for product in collections['air-co2'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     },
     {
       id: 'outillage', nom: 'Outillage & entretien', icone: svgOutil('#5c7a86'),
       produits: [
-        pr('spatule-aquarium', 'Spatule Aquarium', 8.99),
-        pr('ciseaux-aquascaping', 'Ciseaux Aquascaping', 9.99),
-        pr('pince-aquascaping', 'Pince Aquascaping', 7.99),
-        pr('engrais-liquide-300ml', 'Engrais Liquide+ 300ml', 9.99)
+        {% for product in collections['outillage'].products %}
+        pr(
+          {{ product.handle | json }},
+          {{ product.title | json }},
+          {{ product.price | divided_by: 100.0 }},
+          {{ product.metafields.custom.prix_approximatif | default: false | json }},
+          {{ product.featured_image | image_url: width: 400 | default: '' | json }},
+          0,
+          {{ product.selected_or_first_available_variant.id | json }}
+        ){% unless forloop.last %},{% endunless %}
+        {% endfor %}
       ]
     }
   ];
@@ -655,6 +676,11 @@
   // Sol : categorie a part, remplace tout le fond du bac (pas de glisser)
   // type "nutritif" impose un sable de recouvrement (cf. usage courant en
   // aquascaping : le sol nutritif se ternit/se disperse s'il reste à nu).
+  //
+  // Laissé en dur (pas de boucle Liquid) : ce ne sont que 3 produits fixes,
+  // avec des champs spécifiques (contenanceL/contenanceKg, densité, couleur,
+  // type) qui n'existent pas comme metafields standard. Remplacer les prix
+  // par {{ }} si on veut les récupérer depuis Shopify plutôt qu'à la main.
   var PRODUITS_SOL = [
     { id: 'dennerle-substrate', nom: 'Dennerle Substrate 2.5L', prix: 9.99, prixApprox: false, variantId: null, contenanceL: 2.5, couleur: '#8a6a4a', type: 'nutritif' },
     { id: 'sable-fin-riviere', nom: 'Sable Fin Rivière 2-3mm SUPERFISH', prix: 6.99, prixApprox: false, variantId: null, contenanceKg: 4, densiteKgParL: 1.55, couleur: '#c9a876', type: 'sable' },

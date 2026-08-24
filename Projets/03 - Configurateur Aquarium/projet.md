@@ -46,7 +46,7 @@ Malgré plusieurs correctifs successifs (z-index, bordure de contraste, `!import
 
 **Changement d'architecture** : au lieu de peindre le sol sur deux divs enfants séparés du bac, tout (eau + recouvrement + sol) est maintenant peint en **un seul dégradé CSS avec paliers nets**, posé directement sur `.zaq-builder__tank` lui-même (`appliquerVisuelBac()` en JS, via `background-image` en `!important`) — c'est l'élément dont on est sûr à 100% qu'il s'affiche, puisque son propre fond (`#dff0e6`) est visible sur toutes les captures d'Owen depuis le début. Les anciens divs `#zaq-fond`/`#zaq-fond-cap`/`.zaq-builder__eau` restent dans le HTML pour ne pas casser la structure, mais sont rendus transparents et ne portent plus aucun visuel.
 
-**À confirmer par Owen** : est-ce que le sol s'affiche enfin avec cette version.
+**Confirmé par Owen** : le sol s'affiche enfin. Widget entièrement fonctionnel sur la vraie boutique (bac, sol nutritif + recouvrement, glisser-déposer, panier, photo réelle) — cette architecture (dégradé unique sur le bac) est la version à garder.
 
 ## ⚠️ Catégories : je n'ai pas pu consulter zen-aquatique.fr en direct
 L'accès au site est bloqué depuis cet environnement (proxy réseau). Les catégories utilisées reprennent celles déjà présentes dans le coffre (`Contexte/catalogue-produits.md` : Plantes, Crevettes, Décoration, Substrats, Outillage, Aquariums) + celles qu'il a fallu ajouter pour couvrir la liste envoyée (Éclairage, Chauffage, Filtration, Air & CO2). **À corriger si les vraies collections Shopify sont nommées ou regroupées différemment.**
@@ -155,6 +155,7 @@ pr('crypto-lucens', 'Cryptocoryne Lucens', 1.99, false, 'https://cdn.shopify.com
 - [x] Sol dédié (produit + hauteur) qui remplace tout le fond et calcule les sacs
 - [x] Catalogue complet envoyé par Owen intégré (hors packs/cartes-cadeaux)
 - [x] Tests automatisés (Playwright) de toutes les nouvelles interactions
+- [x] Widget validé fonctionnel sur la vraie boutique Shopify (bac, sol, glisser-déposer, panier, 1 photo réelle)
 - [ ] Owen : confirmer/corriger les catégories par rapport au vrai site
 - [ ] Owen : fournir les vrais prix pour tout ce qui est marqué `≈`
 - [ ] Rassembler visuels détourés + variantId pour le catalogue final

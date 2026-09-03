@@ -1,4 +1,4 @@
-const CACHE_NAME = "aquarappel-cache-v4";
+const CACHE_NAME = "aquarappel-cache-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -53,5 +53,36 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+// Reçoit les notifications push envoyées par la fonction serveur "send-reminders",
+// même quand l'appli n'est pas ouverte.
+self.addEventListener("push", (event) => {
+  let payload = { title: "AquaRappel", body: "Tu as des tâches à faire." };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // Corps non-JSON : on garde le message par défaut.
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-192.png",
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientsList) => {
+      for (const client of clientsList) {
+        if ("focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow("./");
+    })
   );
 });

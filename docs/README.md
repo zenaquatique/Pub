@@ -12,6 +12,10 @@ sur ce qu'il te reste à faire.
 - **Voix française** en sortie (lecture à voix haute) partout ; en entrée (tu
   parles au micro) sur Chrome/Edge/Opera (PC et Android) — sur iPhone/Safari,
   utilise le champ texte, la reconnaissance vocale y est peu fiable.
+- **Dates d'échéance** par tâche, avec un récapitulatif quotidien de ce qui est
+  prévu le jour même.
+- **Vraies notifications push**, reçues même appli fermée, dans une plage
+  horaire que tu choisis (ex. 10h-22h — rien pendant tes heures de pause).
 
 ## Architecture (pourquoi il y a un dossier `supabase/`)
 
@@ -103,7 +107,55 @@ supabase secrets set GEMINI_API_KEY=<ta-clé-gemini>
 supabase functions deploy chat
 ```
 
-### 7. Héberger le site (GitHub Pages, gratuit)
+### 7. Dates d'échéance + notifications push planifiées
+
+Cette étape ajoute : une date d'échéance par tâche, et de vraies notifications
+push qui arrivent **même appli fermée** — un récapitulatif de ce qui est prévu
+le jour même une fois par jour au début de ta plage horaire, puis un rappel des
+tâches non cochées à l'intervalle choisi, uniquement pendant cette plage.
+
+**a. Exécuter la migration SQL**
+
+Dans **SQL Editor → New query**, ouvre
+[`supabase/migration_002_reminders_calendar.sql`](../supabase/migration_002_reminders_calendar.sql),
+copie tout son contenu. Avant de le coller, remplace dedans :
+- `REPLACE_WITH_SUPABASE_URL` par ton `SUPABASE_URL` (celui de `docs/js/config.js`)
+- `REPLACE_WITH_ANON_KEY` par ton `SUPABASE_ANON_KEY` (celui de `docs/js/config.js`)
+
+Colle le script modifié dans l'éditeur et **Run**. Ça crée les tables
+`push_subscriptions` et `reminder_settings`, ajoute une colonne `due_date` aux
+tâches, et planifie l'appel de la fonction `send-reminders` toutes les 15 min
+(via les extensions `pg_cron`/`pg_net`, activées automatiquement par le script).
+
+**b. Déployer l'Edge Function `send-reminders`**
+
+Même méthode qu'à l'étape 6 :
+1. **Edge Functions → Create a new function**, nomme-la exactement `send-reminders`.
+2. Colle le contenu de
+   [`supabase/functions/send-reminders/index.ts`](../supabase/functions/send-reminders/index.ts).
+3. **Deploy**.
+4. Ajoute ces secrets à la fonction (Secrets, comme pour `GEMINI_API_KEY`
+   précédemment) :
+   - `VAPID_PUBLIC_KEY` (déjà présente, en clair, dans `docs/js/config.js` —
+     copie-la de là, c'est la même valeur, elle est publique par conception)
+   - `VAPID_PRIVATE_KEY` — un **secret**, à générer toi-même (jamais stocké
+     dans ce dépôt) : le plus simple est de me demander de te la redonner dans
+     la conversation, ou de la régénérer via `npx web-push generate-vapid-keys`
+     sur ta machine si tu préfères la créer toi-même.
+   - `VAPID_SUBJECT` = `mailto:contact@zen-aquatique.fr`
+
+   (`SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement
+   par Supabase à toutes les Edge Functions, rien à faire pour ceux-là.)
+
+**c. Activer les notifications push dans l'appli**
+
+Une fois le site republié (voir étape suivante), ouvre-le sur chaque appareil
+où tu veux recevoir les rappels, et dans **Réglages de l'assistant → Notifications
+push (même appli fermée) → Activer**. Choisis aussi ta **plage horaire** (10h-22h
+par défaut) et la **fréquence** — ces réglages sont maintenant partagés entre tes
+appareils.
+
+### 8. Héberger le site (GitHub Pages, gratuit)
 
 1. Commit/push `docs/js/config.js` avec tes vraies valeurs.
 2. Sur GitHub : **Settings → Pages → Source : Deploy from a branch → Branch :
@@ -144,10 +196,9 @@ si certaines tâches contiennent des informations sensibles.
 
 ## Limites connues
 
-- **Rappels en arrière-plan** : les rappels vocaux/notifications se déclenchent
-  tant que l'onglet/l'appli est ouvert. De vraies notifications *push* (reçues
-  appli fermée) demanderaient un service de push dédié (ex. Firebase Cloud
-  Messaging) — non inclus ici.
+- **Fuseau horaire** : la plage horaire et le récapitulatif quotidien sont
+  calculés côté serveur en heure de Paris (fixe) — pas de réglage de fuseau
+  pour l'instant, pensé pour un usage à un seul utilisateur en France.
 - **Palier gratuit Gemini** : en cas d'usage très intensif, les limites de débit
   du palier gratuit peuvent être atteintes ; l'assistant affichera alors un
   message d'erreur temporaire.

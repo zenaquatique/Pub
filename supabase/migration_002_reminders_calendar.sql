@@ -73,13 +73,16 @@ select cron.schedule(
     url := 'https://frrmyqqqblheoocgvopp.supabase.co/functions/v1/clever-handler',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZycm15cXFxYmxoZW9vY2d2b3BwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MTc1NjksImV4cCI6MjEwMzk5MzU2OX0.CeWYUI67DaRXHZqCTz5QE4TgadMqrswNp9GhtBTYg5w'
+      'x-cron-secret', 'REPLACE_WITH_CRON_SECRET'
     ),
     body := '{}'::jsonb
   );
   $$
 );
 
--- L'URL et la clé anon ci-dessus sont déjà celles du projet Supabase d'Owen
--- (identiques à docs/js/config.js). La clé anon est publique par conception :
--- rien de secret n'est écrit dans ce script.
+-- Remplace REPLACE_WITH_CRON_SECRET ci-dessus par la même valeur que le secret
+-- CRON_SECRET configuré sur la fonction send-reminders (Edge Functions >
+-- send-reminders > Secrets) avant d'exécuter ce script. Ce secret n'est écrit
+-- nulle part ailleurs dans ce dépôt.
+-- L'URL ci-dessus est déjà celle du projet Supabase d'Owen (identique à
+-- docs/js/config.js) et ne contient rien de secret.

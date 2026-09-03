@@ -10,9 +10,16 @@
 // donc reçues même si l'appli est fermée.
 //
 // Secrets requis (Dashboard Supabase > Edge Functions > send-reminders > Secrets) :
-//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (ex: mailto:toi@example.com)
+//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (ex: mailto:toi@example.com), CRON_SECRET
 // SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont fournis automatiquement par
 // Supabase à toutes les Edge Functions, pas besoin de les configurer.
+//
+// Cette fonction n'est censée être appelée que par le job pg_cron du projet
+// (voir migration_002_reminders_calendar.sql). Comme la vérification du JWT
+// de la plateforme Supabase (basée sur le header Authorization) s'est avérée
+// peu pratique à transmettre fiablement depuis une requête SQL copiée-collée,
+// on désactive "Verify JWT" pour cette fonction (Settings de la fonction) et
+// on vérifie à la place un secret court dans le header "x-cron-secret".
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -22,6 +29,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:contact@example.com";
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
 const PARIS_TZ = "Europe/Paris";
 
@@ -61,6 +69,10 @@ function parisNow() {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204 });
+
+  if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
+    return new Response(JSON.stringify({ error: "Non autorisé." }), { status: 401 });
+  }
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     return new Response(JSON.stringify({ error: "VAPID keys non configurées." }), { status: 500 });

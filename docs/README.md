@@ -147,6 +147,16 @@ Même méthode qu'à l'étape 6 :
      la conversation, ou de la régénérer via `npx web-push generate-vapid-keys`
      sur ta machine si tu préfères la créer toi-même.
    - `VAPID_SUBJECT` = `mailto:contact@zen-aquatique.fr`
+   - `CRON_SECRET` — un secret court que toi seul(e) connaît, qui empêche
+     n'importe qui d'appeler cette fonction. Demande-le-moi dans la
+     conversation (généré une fois pour ce projet), ou choisis-en un toi-même.
+     Reporte la **même valeur** dans `migration_002_reminders_calendar.sql`
+     (remplace `REPLACE_WITH_CRON_SECRET`) avant d'exécuter ce script.
+5. Dans l'onglet **Settings** de la fonction, désactive **"Verify JWT with
+   legacy secret"**. Cette fonction n'est appelée que par ton propre job
+   planifié (pg_cron) et vérifie elle-même le secret `CRON_SECRET` ci-dessus —
+   pas besoin de la double vérification JWT de la plateforme, qui s'est avérée
+   peu pratique à transmettre fiablement depuis une requête SQL copiée-collée.
 
    (`SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement
    par Supabase à toutes les Edge Functions, rien à faire pour ceux-là.)

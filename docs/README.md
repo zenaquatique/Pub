@@ -116,13 +116,9 @@ tâches non cochées à l'intervalle choisi, uniquement pendant cette plage.
 
 **a. Exécuter la migration SQL**
 
-Dans **SQL Editor → New query**, ouvre
-[`supabase/migration_002_reminders_calendar.sql`](../supabase/migration_002_reminders_calendar.sql),
-copie tout son contenu. Avant de le coller, remplace dedans :
-- `REPLACE_WITH_SUPABASE_URL` par ton `SUPABASE_URL` (celui de `docs/js/config.js`)
-- `REPLACE_WITH_ANON_KEY` par ton `SUPABASE_ANON_KEY` (celui de `docs/js/config.js`)
-
-Colle le script modifié dans l'éditeur et **Run**. Ça crée les tables
+Dans **SQL Editor → New query**, copie tout le contenu de
+[`supabase/migration_002_reminders_calendar.sql`](../supabase/migration_002_reminders_calendar.sql)
+(déjà rempli avec l'URL et la clé anon de ton projet) et **Run**. Ça crée les tables
 `push_subscriptions` et `reminder_settings`, ajoute une colonne `due_date` aux
 tâches, et planifie l'appel de la fonction `send-reminders` toutes les 15 min
 (via les extensions `pg_cron`/`pg_net`, activées automatiquement par le script).

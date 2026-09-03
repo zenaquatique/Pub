@@ -1,4 +1,4 @@
-const CACHE_NAME = "aquarappel-cache-v3";
+const CACHE_NAME = "aquarappel-cache-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -39,18 +39,19 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Réseau en priorité, pour toujours servir la dernière version déployée
+  // quand l'appareil est en ligne. Le cache ne sert qu'en secours (hors-ligne
+  // ou réseau en échec) — jamais comme réponse "par défaut" qui retarderait
+  // la prise en compte d'une mise à jour.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response && response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

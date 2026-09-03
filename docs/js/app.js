@@ -129,25 +129,32 @@
     }
     const { error } = await supabase.from("tasks").insert({ text: clean, user_id: userId });
     if (error) showToast("Erreur lors de l'ajout : " + error.message);
+    else await loadTasks();
   }
   A.addTask = addTask;
 
   async function toggleTask(id, done) {
     const { error } = await supabase.from("tasks").update({ done }).eq("id", id);
     if (error) showToast("Erreur : " + error.message);
+    else await loadTasks();
   }
 
   async function deleteTask(id) {
     const { error } = await supabase.from("tasks").delete().eq("id", id);
     if (error) showToast("Erreur : " + error.message);
+    else await loadTasks();
   }
 
   async function clearDone() {
     const doneIds = tasks.filter((t) => t.done).map((t) => t.id);
     if (doneIds.length === 0) return;
     const { error } = await supabase.from("tasks").delete().in("id", doneIds);
-    if (error) showToast("Erreur : " + error.message);
-    else showToast("Tâches cochées effacées.");
+    if (error) {
+      showToast("Erreur : " + error.message);
+    } else {
+      await loadTasks();
+      showToast("Tâches cochées effacées.");
+    }
   }
 
   // ---------- Assistant reminder phrasing (local, free — no API call) ----------

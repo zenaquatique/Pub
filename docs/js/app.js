@@ -112,10 +112,22 @@
     render();
   }
 
+  async function getFreshUserId() {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data?.user) return null;
+    currentUserId = data.user.id;
+    return currentUserId;
+  }
+
   async function addTask(text) {
     const clean = text.trim();
     if (!clean) return;
-    const { error } = await supabase.from("tasks").insert({ text: clean, user_id: currentUserId });
+    const userId = await getFreshUserId();
+    if (!userId) {
+      showToast("Session expirée, reconnecte-toi puis réessaie.");
+      return;
+    }
+    const { error } = await supabase.from("tasks").insert({ text: clean, user_id: userId });
     if (error) showToast("Erreur lors de l'ajout : " + error.message);
   }
   A.addTask = addTask;
@@ -309,9 +321,11 @@
       const data = JSON.parse(await file.text());
       const incoming = Array.isArray(data) ? data : data.tasks;
       if (!Array.isArray(incoming)) throw new Error("format invalide");
+      const userId = await getFreshUserId();
+      if (!userId) throw new Error("session expirée, reconnecte-toi");
       const cleaned = incoming
         .filter((t) => t && typeof t.text === "string")
-        .map((t) => ({ text: t.text, done: !!t.done, user_id: currentUserId }));
+        .map((t) => ({ text: t.text, done: !!t.done, user_id: userId }));
       if (cleaned.length === 0) throw new Error("aucune tâche trouvée");
       const { error } = await supabase.from("tasks").insert(cleaned);
       if (error) throw error;

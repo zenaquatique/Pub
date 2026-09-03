@@ -4,7 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-This is a new, empty repository (`zenaquatique/Pub`). Only an empty `README.md` exists so far. No build system, language, or tooling has been configured yet.
+This repository is Owen's Obsidian vault (business notes for ZenAquatique) plus one code project:
+
+- `docs/` — **AquaRappel**, a PWA (plain HTML/CSS/JS, no build step) that reminds
+  Owen in French about unchecked to-do items and speaks them aloud (Web Speech
+  API), plus a real conversational assistant (Google Gemini, via a Supabase Edge
+  Function) that can add/check/uncheck/delete tasks from natural-language
+  French messages or voice input. Tasks sync across devices via Supabase
+  (Postgres + Auth + Realtime). See `docs/README.md` for full setup (Supabase
+  project, Gemini API key, Edge Function deploy) — those need Owen's own free
+  accounts, so `docs/js/config.js` ships with placeholder values until he fills
+  them in. Static frontend hosted for free via GitHub Pages (Settings → Pages →
+  Deploy from branch → `main` / `docs`).
+- `supabase/` — `schema.sql` (tasks table + RLS policies) and
+  `functions/chat/index.ts` (the Gemini bridge Edge Function). Deployed via the
+  Supabase dashboard or CLI, not via this repo's CI (there isn't one).
+- Everything else (`Contexte/`, `Projets/`, `Calendrier Publication/`, `Mémoire Agent/`, `Scripts/`, `Analyse Marché/`, `Références/`) is Markdown notes, not code.
 
 Update this file as the project grows to document build commands, test runners, and architecture decisions.
 

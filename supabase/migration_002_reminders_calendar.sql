@@ -70,17 +70,16 @@ select cron.schedule(
   '*/15 * * * *',
   $$
   select net.http_post(
-    url := 'REPLACE_WITH_SUPABASE_URL/functions/v1/send-reminders',
+    url := 'https://frrmyqqqblheoocgvopp.supabase.co/functions/v1/send-reminders',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer REPLACE_WITH_ANON_KEY'
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZycm15cXFxYmxoZW9vY2d2b3BwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MTc1NjksImV4cCI6MjEwMzk5MzU2OX0.CeWYUI67DaRXHZqCTz5QE4TgadMqrswNp9GhtBTYg5w'
     ),
     body := '{}'::jsonb
   );
   $$
 );
 
--- Remplace REPLACE_WITH_SUPABASE_URL et REPLACE_WITH_ANON_KEY ci-dessus par les
--- valeurs de docs/js/config.js (SUPABASE_URL et SUPABASE_ANON_KEY) avant d'exécuter
--- ce script. La clé anon est publique par conception (voir config.js) : rien de
--- secret n'est écrit dans ce script.
+-- L'URL et la clé anon ci-dessus sont déjà celles du projet Supabase d'Owen
+-- (identiques à docs/js/config.js). La clé anon est publique par conception :
+-- rien de secret n'est écrit dans ce script.

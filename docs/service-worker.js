@@ -1,4 +1,4 @@
-const CACHE_NAME = "aquarappel-cache-v2";
+const CACHE_NAME = "aquarappel-cache-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -32,6 +32,12 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  // Ne jamais mettre en cache les appels vers Supabase (données live : tâches,
+  // authentification, assistant). Seuls les fichiers de l'appli elle-même
+  // (même origine) passent par le cache pour le fonctionnement hors-ligne.
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {

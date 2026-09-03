@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-This is a new, empty repository (`zenaquatique/Pub`). Only an empty `README.md` exists so far. No build system, language, or tooling has been configured yet.
+This repository is Owen's Obsidian vault (business notes for ZenAquatique) plus one code project:
+
+- `docs/` — **AquaRappel**, a static PWA (no build step, no backend). Plain HTML/CSS/JS reminder assistant that speaks French (Web Speech API) to nudge Owen about unchecked to-do items. See `docs/README.md` for how to run/host it. It lives in `docs/` so it can be served for free via GitHub Pages (Settings → Pages → Deploy from branch → `main` / `docs`).
+- Everything else (`Contexte/`, `Projets/`, `Calendrier Publication/`, `Mémoire Agent/`, `Scripts/`, `Analyse Marché/`, `Références/`) is Markdown notes, not code.
 
 Update this file as the project grows to document build commands, test runners, and architecture decisions.
 

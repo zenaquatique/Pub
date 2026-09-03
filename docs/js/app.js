@@ -6,11 +6,13 @@
   const supabase = A.supabase;
 
   const SETTINGS_KEY = "aquarappel.settings.v1";
-  const DEFAULT_SETTINGS = { voice: false, notif: false, intervalMinutes: 60 };
+  const DEFAULT_SETTINGS = { voice: false, notif: false };
+  const DEFAULT_SERVER_SETTINGS = { interval_minutes: 60, window_start_hour: 10, window_end_hour: 22 };
 
   const el = {
     addForm: document.getElementById("addForm"),
     taskInput: document.getElementById("taskInput"),
+    taskDueDateInput: document.getElementById("taskDueDateInput"),
     taskList: document.getElementById("taskList"),
     taskCount: document.getElementById("taskCount"),
     emptyState: document.getElementById("emptyState"),
@@ -18,6 +20,10 @@
     voiceToggle: document.getElementById("voiceToggle"),
     notifToggle: document.getElementById("notifToggle"),
     intervalSelect: document.getElementById("intervalSelect"),
+    windowStartSelect: document.getElementById("windowStartSelect"),
+    windowEndSelect: document.getElementById("windowEndSelect"),
+    pushEnableBtn: document.getElementById("pushEnableBtn"),
+    pushStatusLabel: document.getElementById("pushStatusLabel"),
     exportBtn: document.getElementById("exportBtn"),
     importInput: document.getElementById("importInput"),
     installBtn: document.getElementById("installBtn"),
@@ -39,9 +45,15 @@
   }
 
   const settings = loadSettings();
+  let serverSettings = { ...DEFAULT_SERVER_SETTINGS };
   let tasks = [];
   let currentUserId = null;
   let channel = null;
+
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
 
   // ---------- Toast ----------
 
@@ -62,6 +74,7 @@
   // ---------- Rendering ----------
 
   function render() {
+    const today = todayStr();
     el.taskList.innerHTML = "";
     tasks.forEach((task) => {
       const li = document.createElement("li");
@@ -73,9 +86,33 @@
       checkbox.setAttribute("aria-label", "Marquer comme fait : " + task.text);
       checkbox.addEventListener("change", () => toggleTask(task.id, checkbox.checked));
 
+      const main = document.createElement("div");
+      main.className = "task-main";
+
       const span = document.createElement("span");
       span.className = "task-text";
       span.textContent = task.text;
+
+      const dueRow = document.createElement("div");
+      dueRow.className = "task-due-row";
+
+      const dueLabel = document.createElement("span");
+      dueLabel.className = "task-due-label";
+      dueLabel.textContent = "📅";
+
+      const dueInput = document.createElement("input");
+      dueInput.type = "date";
+      dueInput.className = "task-due-input";
+      dueInput.value = task.due_date || "";
+      dueInput.setAttribute("aria-label", "Échéance de : " + task.text);
+      if (task.due_date && !task.done) {
+        if (task.due_date === today) dueInput.classList.add("today");
+        else if (task.due_date < today) dueInput.classList.add("overdue");
+      }
+      dueInput.addEventListener("change", () => setDueDate(task.id, dueInput.value));
+
+      dueRow.append(dueLabel, dueInput);
+      main.append(span, dueRow);
 
       const del = document.createElement("button");
       del.className = "task-delete";
@@ -84,7 +121,7 @@
       del.textContent = "✕";
       del.addEventListener("click", () => deleteTask(task.id));
 
-      li.append(checkbox, span, del);
+      li.append(checkbox, main, del);
       el.taskList.appendChild(li);
     });
 
@@ -119,7 +156,7 @@
     return currentUserId;
   }
 
-  async function addTask(text) {
+  async function addTask(text, dueDate) {
     const clean = text.trim();
     if (!clean) return;
     const userId = await getFreshUserId();
@@ -127,11 +164,19 @@
       showToast("Session expirée, reconnecte-toi puis réessaie.");
       return;
     }
-    const { error } = await supabase.from("tasks").insert({ text: clean, user_id: userId });
+    const { error } = await supabase
+      .from("tasks")
+      .insert({ text: clean, user_id: userId, due_date: dueDate || null });
     if (error) showToast("Erreur lors de l'ajout : " + error.message);
     else await loadTasks();
   }
   A.addTask = addTask;
+
+  async function setDueDate(id, value) {
+    const { error } = await supabase.from("tasks").update({ due_date: value || null }).eq("id", id);
+    if (error) showToast("Erreur : " + error.message);
+    else await loadTasks();
+  }
 
   async function toggleTask(id, done) {
     const { error } = await supabase.from("tasks").update({ done }).eq("id", id);
@@ -253,20 +298,40 @@
     lastReminderAt = Date.now();
   }
 
+  function withinReminderWindow() {
+    const hour = new Date().getHours();
+    return hour >= serverSettings.window_start_hour && hour < serverSettings.window_end_hour;
+  }
+
   function tick() {
     if (!currentUserId) return;
     if (!settings.notif && !settings.voice) return;
-    const intervalMs = settings.intervalMinutes * 60 * 1000;
+    if (!withinReminderWindow()) return;
+    const intervalMs = serverSettings.interval_minutes * 60 * 1000;
     if (Date.now() - lastReminderAt >= intervalMs) runReminder();
   }
   setInterval(tick, 30 * 1000);
 
   // ---------- Settings UI ----------
 
+  function populateHourSelect(select) {
+    select.innerHTML = "";
+    for (let h = 0; h <= 23; h++) {
+      const opt = document.createElement("option");
+      opt.value = String(h);
+      opt.textContent = `${String(h).padStart(2, "0")}h`;
+      select.appendChild(opt);
+    }
+  }
+  populateHourSelect(el.windowStartSelect);
+  populateHourSelect(el.windowEndSelect);
+
   function applySettingsToUI() {
     el.voiceToggle.checked = settings.voice;
     el.notifToggle.checked = settings.notif;
-    el.intervalSelect.value = String(settings.intervalMinutes);
+    el.intervalSelect.value = String(serverSettings.interval_minutes);
+    el.windowStartSelect.value = String(serverSettings.window_start_hour);
+    el.windowEndSelect.value = String(serverSettings.window_end_hour);
   }
 
   el.voiceToggle.addEventListener("change", () => {
@@ -290,17 +355,105 @@
     saveSettings(settings);
   });
 
+  async function saveServerSettings(patch) {
+    serverSettings = { ...serverSettings, ...patch };
+    if (!currentUserId) return;
+    const { error } = await supabase
+      .from("reminder_settings")
+      .upsert({ user_id: currentUserId, ...serverSettings }, { onConflict: "user_id" });
+    if (error) showToast("Erreur réglages : " + error.message);
+  }
+
   el.intervalSelect.addEventListener("change", () => {
-    settings.intervalMinutes = Number(el.intervalSelect.value);
-    saveSettings(settings);
+    saveServerSettings({ interval_minutes: Number(el.intervalSelect.value) });
+  });
+
+  el.windowStartSelect.addEventListener("change", () => {
+    saveServerSettings({ window_start_hour: Number(el.windowStartSelect.value) });
+  });
+
+  el.windowEndSelect.addEventListener("change", () => {
+    saveServerSettings({ window_end_hour: Number(el.windowEndSelect.value) });
+  });
+
+  // ---------- Push notifications (arrivent même appli fermée) ----------
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+  }
+
+  async function refreshPushButton() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      el.pushEnableBtn.disabled = true;
+      el.pushStatusLabel.textContent = "Non supporté par ce navigateur.";
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      el.pushEnableBtn.textContent = sub ? "Activé ✓" : "Activer";
+    } catch {
+      // ignore
+    }
+  }
+
+  el.pushEnableBtn.addEventListener("click", async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      showToast("Notifications push non supportées sur ce navigateur.");
+      return;
+    }
+    const cfg = window.AQUARAPPEL_CONFIG;
+    if (!cfg.VAPID_PUBLIC_KEY) {
+      showToast("Clé VAPID manquante côté configuration.");
+      return;
+    }
+    const userId = await getFreshUserId();
+    if (!userId) {
+      showToast("Session expirée, reconnecte-toi puis réessaie.");
+      return;
+    }
+    const perm = await ensureNotificationPermission();
+    if (perm !== "granted") {
+      showToast("Autorisation refusée.");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(cfg.VAPID_PUBLIC_KEY),
+        });
+      }
+      const json = sub.toJSON();
+      const { error } = await supabase.from("push_subscriptions").upsert(
+        {
+          user_id: userId,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth_key: json.keys.auth,
+        },
+        { onConflict: "endpoint" }
+      );
+      if (error) throw error;
+      showToast("Notifications push activées sur cet appareil.");
+      await refreshPushButton();
+    } catch (err) {
+      showToast("Impossible d'activer les notifications push : " + err.message);
+    }
   });
 
   // ---------- Form & list events ----------
 
   el.addForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    addTask(el.taskInput.value);
+    addTask(el.taskInput.value, el.taskDueDateInput.value);
     el.taskInput.value = "";
+    el.taskDueDateInput.value = "";
     el.taskInput.focus();
   });
 
@@ -372,12 +525,40 @@
     });
   }
 
+  // ---------- Server-side reminder settings ----------
+
+  async function loadServerSettings() {
+    const { data, error } = await supabase
+      .from("reminder_settings")
+      .select("*")
+      .eq("user_id", currentUserId)
+      .maybeSingle();
+    if (error) {
+      showToast("Erreur réglages : " + error.message);
+      return;
+    }
+    if (data) {
+      serverSettings = {
+        interval_minutes: data.interval_minutes,
+        window_start_hour: data.window_start_hour,
+        window_end_hour: data.window_end_hour,
+      };
+    } else {
+      serverSettings = { ...DEFAULT_SERVER_SETTINGS };
+      await supabase
+        .from("reminder_settings")
+        .upsert({ user_id: currentUserId, ...serverSettings }, { onConflict: "user_id" });
+    }
+  }
+
   // ---------- Session lifecycle ----------
 
   window.addEventListener("aquarappel:session", async (e) => {
     currentUserId = e.detail.session.user.id;
     el.signOutBtn.hidden = false;
+    await loadServerSettings();
     applySettingsToUI();
+    await refreshPushButton();
     await loadTasks();
 
     if (channel) supabase.removeChannel(channel);

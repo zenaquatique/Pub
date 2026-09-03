@@ -159,9 +159,10 @@ html, body {
 
 h2 { font-size: 1rem; margin: 0 0 12px; }
 
-.add-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.add-form { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .add-form input[type="text"] {
   flex: 1;
+  min-width: 140px;
   padding: 11px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -170,6 +171,17 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
   font-size: 1rem;
 }
 .add-form input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.due-date-input {
+  flex: none;
+  width: 132px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
 
 .btn {
   border: none;
@@ -214,9 +226,15 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
   flex: none;
 }
 
-.task-item .task-text {
+.task-item .task-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-item .task-text {
   overflow-wrap: anywhere;
 }
 
@@ -224,6 +242,21 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
   text-decoration: line-through;
   color: var(--muted);
 }
+
+.task-due-row { display: flex; align-items: center; gap: 6px; }
+
+.task-due-input {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  max-width: 130px;
+}
+.task-due-input.today { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.task-due-input.overdue { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.task-due-label { font-size: 0.72rem; color: var(--muted); }
 
 .task-item .task-delete {
   flex: none;
@@ -275,6 +308,9 @@ select {
   padding: 6px 0;
 }
 .sync-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.window-selects { display: flex; align-items: center; gap: 6px; flex: none; }
+.window-selects select { padding: 8px; }
 
 .footnote { text-align: center; padding: 4px 8px; }
 

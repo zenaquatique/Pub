@@ -78,6 +78,7 @@
     <section class="card">
       <form id="addForm" class="add-form">
         <input id="taskInput" type="text" placeholder="Ajouter une tâche… (ex : préparer les colis)" autocomplete="off" required>
+        <input id="taskDueDateInput" type="date" class="due-date-input" title="Échéance (optionnel)">
         <button type="submit" class="btn btn-primary">Ajouter</button>
       </form>
 
@@ -103,16 +104,24 @@
 
       <label class="switch-row">
         <span>
-          <strong>Notifications</strong>
+          <strong>Notifications (appli ouverte)</strong>
           <span class="muted small">Reçois une notification quand des tâches restent à faire</span>
         </span>
         <input type="checkbox" id="notifToggle">
       </label>
 
+      <div class="switch-row">
+        <span>
+          <strong>Notifications push (même appli fermée)</strong>
+          <span class="muted small" id="pushStatusLabel">Reçois tes rappels même sans avoir l'appli ouverte</span>
+        </span>
+        <button id="pushEnableBtn" class="btn btn-small btn-outline">Activer</button>
+      </div>
+
       <label class="select-row">
         <span>
           <strong>Fréquence des rappels</strong>
-          <span class="muted small">Tant que l'appli est ouverte (ou installée) sur cet appareil</span>
+          <span class="muted small">Pendant ta plage horaire, sur tous tes appareils</span>
         </span>
         <select id="intervalSelect">
           <option value="15">Toutes les 15 min</option>
@@ -122,6 +131,18 @@
           <option value="240">Toutes les 4 heures</option>
         </select>
       </label>
+
+      <div class="select-row">
+        <span>
+          <strong>Plage horaire</strong>
+          <span class="muted small">Aucun rappel en dehors de ces heures (temps de pause)</span>
+        </span>
+        <div class="window-selects">
+          <select id="windowStartSelect"></select>
+          <span class="muted">à</span>
+          <select id="windowEndSelect"></select>
+        </div>
+      </div>
 
       <details class="sync-details">
         <summary>Sauvegarde locale</summary>

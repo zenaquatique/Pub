@@ -1,14 +1,14 @@
 (() => {
   "use strict";
 
-  const TASKS_KEY = "aquarappel.tasks.v1";
+  const A = window.AQUARAPPEL;
+  if (!A.isConfigured) return;
+  const supabase = A.supabase;
+
   const SETTINGS_KEY = "aquarappel.settings.v1";
   const DEFAULT_SETTINGS = { voice: false, notif: false, intervalMinutes: 60 };
 
   const el = {
-    assistantText: document.getElementById("assistantText"),
-    speakNowBtn: document.getElementById("speakNowBtn"),
-    remindNowBtn: document.getElementById("remindNowBtn"),
     addForm: document.getElementById("addForm"),
     taskInput: document.getElementById("taskInput"),
     taskList: document.getElementById("taskList"),
@@ -20,25 +20,11 @@
     intervalSelect: document.getElementById("intervalSelect"),
     exportBtn: document.getElementById("exportBtn"),
     importInput: document.getElementById("importInput"),
-    shareLinkBtn: document.getElementById("shareLinkBtn"),
     installBtn: document.getElementById("installBtn"),
+    signOutBtn: document.getElementById("signOutBtn"),
+    remindNowBtn: document.getElementById("remindNowBtn"),
     toast: document.getElementById("toast"),
   };
-
-  // ---------- Persistence ----------
-
-  function loadTasks() {
-    try {
-      const raw = localStorage.getItem(TASKS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveTasks(tasks) {
-    localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
-  }
 
   function loadSettings() {
     try {
@@ -48,13 +34,14 @@
       return { ...DEFAULT_SETTINGS };
     }
   }
-
   function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }
 
-  let tasks = loadTasks();
-  let settings = loadSettings();
+  const settings = loadSettings();
+  let tasks = [];
+  let currentUserId = null;
+  let channel = null;
 
   // ---------- Toast ----------
 
@@ -65,12 +52,14 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.toast.hidden = true; }, 3200);
   }
+  A.showToast = showToast;
+
+  // ---------- Task helpers exposed to chat.js ----------
+
+  A.getTasks = () => tasks;
+  A.getPendingTasks = () => tasks.filter((t) => !t.done);
 
   // ---------- Rendering ----------
-
-  function pendingTasks() {
-    return tasks.filter((t) => !t.done);
-  }
 
   function render() {
     el.taskList.innerHTML = "";
@@ -82,7 +71,7 @@
       checkbox.type = "checkbox";
       checkbox.checked = task.done;
       checkbox.setAttribute("aria-label", "Marquer comme fait : " + task.text);
-      checkbox.addEventListener("change", () => toggleTask(task.id));
+      checkbox.addEventListener("change", () => toggleTask(task.id, checkbox.checked));
 
       const span = document.createElement("span");
       span.className = "task-text";
@@ -100,60 +89,66 @@
     });
 
     const total = tasks.length;
-    const pending = pendingTasks().length;
+    const pending = A.getPendingTasks().length;
     el.taskCount.textContent =
       total === 0 ? "0 tâche" : `${pending} à faire · ${total - pending} faite(s) · ${total} au total`;
     el.emptyState.classList.toggle("visible", total === 0);
+
+    window.dispatchEvent(new CustomEvent("aquarappel:tasks-changed"));
   }
 
-  function persistAndRender() {
-    saveTasks(tasks);
+  // ---------- Supabase CRUD ----------
+
+  async function loadTasks() {
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      showToast("Impossible de charger tes tâches : " + error.message);
+      return;
+    }
+    tasks = data || [];
     render();
-    updateAssistantBubble();
   }
 
-  function addTask(text) {
+  async function addTask(text) {
     const clean = text.trim();
     if (!clean) return;
-    tasks.unshift({ id: crypto.randomUUID(), text: clean, done: false, createdAt: Date.now() });
-    persistAndRender();
+    const { error } = await supabase.from("tasks").insert({ text: clean, user_id: currentUserId });
+    if (error) showToast("Erreur lors de l'ajout : " + error.message);
+  }
+  A.addTask = addTask;
+
+  async function toggleTask(id, done) {
+    const { error } = await supabase.from("tasks").update({ done }).eq("id", id);
+    if (error) showToast("Erreur : " + error.message);
   }
 
-  function toggleTask(id) {
-    const task = tasks.find((t) => t.id === id);
-    if (task) {
-      task.done = !task.done;
-      persistAndRender();
-    }
+  async function deleteTask(id) {
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) showToast("Erreur : " + error.message);
   }
 
-  function deleteTask(id) {
-    tasks = tasks.filter((t) => t.id !== id);
-    persistAndRender();
+  async function clearDone() {
+    const doneIds = tasks.filter((t) => t.done).map((t) => t.id);
+    if (doneIds.length === 0) return;
+    const { error } = await supabase.from("tasks").delete().in("id", doneIds);
+    if (error) showToast("Erreur : " + error.message);
+    else showToast("Tâches cochées effacées.");
   }
 
-  function clearDone() {
-    const before = tasks.length;
-    tasks = tasks.filter((t) => !t.done);
-    if (tasks.length !== before) {
-      persistAndRender();
-      showToast("Tâches cochées effacées.");
-    }
-  }
-
-  // ---------- Assistant messages ----------
+  // ---------- Assistant reminder phrasing (local, free — no API call) ----------
 
   const GREETINGS_EMPTY = [
     "Ta liste est vide. Ajoute une tâche et je veillerai à te la rappeler.",
     "Rien à faire pour l'instant ! Ajoute une tâche quand tu veux.",
   ];
-
   const GREETINGS_ALL_DONE = [
     "Bravo, tout est coché ! Rien à te rappeler pour le moment.",
     "Tout est fait ! Tu peux souffler un peu.",
     "Liste terminée, bien joué !",
   ];
-
   const LEAD_INS = [
     "Petit rappel : il te reste",
     "N'oublie pas, il te reste encore",
@@ -167,25 +162,19 @@
   }
 
   function buildReminderMessage() {
-    const pending = pendingTasks();
+    const pending = A.getPendingTasks();
     if (tasks.length === 0) return pick(GREETINGS_EMPTY);
     if (pending.length === 0) return pick(GREETINGS_ALL_DONE);
 
     const leadIn = pick(LEAD_INS);
     const shown = pending.slice(0, 4).map((t) => t.text);
     let list = shown.join(", ");
-    if (pending.length > shown.length) {
-      list += `, et ${pending.length - shown.length} autre(s)`;
-    }
+    if (pending.length > shown.length) list += `, et ${pending.length - shown.length} autre(s)`;
     const suffix = pending.length === 1 ? "à faire." : "tâche(s) à faire.";
     return `${leadIn} : ${list} — ${pending.length} ${suffix}`;
   }
 
-  function updateAssistantBubble() {
-    el.assistantText.textContent = buildReminderMessage();
-  }
-
-  // ---------- Voice (Web Speech API) ----------
+  // ---------- Voice (Web Speech API — text to speech) ----------
 
   let frenchVoice = null;
   function pickFrenchVoice() {
@@ -197,27 +186,20 @@
       null
     );
   }
-
   if ("speechSynthesis" in window) {
-    speechSynthesis.addEventListener("voiceschanged", () => {
-      frenchVoice = pickFrenchVoice();
-    });
+    speechSynthesis.addEventListener("voiceschanged", () => { frenchVoice = pickFrenchVoice(); });
     frenchVoice = pickFrenchVoice();
   }
 
   function speak(text) {
-    if (!("speechSynthesis" in window)) {
-      showToast("La voix n'est pas disponible sur ce navigateur.");
-      return;
-    }
+    if (!("speechSynthesis" in window)) return;
     speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "fr-FR";
     if (frenchVoice) utter.voice = frenchVoice;
-    utter.rate = 1;
-    utter.pitch = 1;
     speechSynthesis.speak(utter);
   }
+  A.speak = speak;
 
   // ---------- Notifications ----------
 
@@ -234,7 +216,7 @@
       const n = new Notification("AquaRappel", { body: text, icon: "icons/icon-192.png" });
       n.onclick = () => window.focus();
     } catch {
-      // Some mobile browsers require a service worker to show notifications; ignore silently.
+      // Certains navigateurs mobiles exigent un service worker pour les notifications ; on ignore.
     }
   }
 
@@ -243,24 +225,21 @@
   let lastReminderAt = 0;
 
   function runReminder({ manual = false } = {}) {
-    updateAssistantBubble();
-    const pending = pendingTasks();
+    const pending = A.getPendingTasks();
     if (pending.length === 0 && !manual) return;
-
-    const message = el.assistantText.textContent;
+    const message = buildReminderMessage();
+    if (A.addChatMessage) A.addChatMessage("assistant", message);
     if (settings.notif && pending.length > 0) notify(message);
     if (settings.voice) speak(message);
     lastReminderAt = Date.now();
   }
 
   function tick() {
+    if (!currentUserId) return;
     if (!settings.notif && !settings.voice) return;
     const intervalMs = settings.intervalMinutes * 60 * 1000;
-    if (Date.now() - lastReminderAt >= intervalMs) {
-      runReminder();
-    }
+    if (Date.now() - lastReminderAt >= intervalMs) runReminder();
   }
-
   setInterval(tick, 30 * 1000);
 
   // ---------- Settings UI ----------
@@ -307,15 +286,9 @@
   });
 
   el.clearDoneBtn.addEventListener("click", clearDone);
-
-  el.speakNowBtn.addEventListener("click", () => {
-    updateAssistantBubble();
-    speak(el.assistantText.textContent);
-  });
-
   el.remindNowBtn.addEventListener("click", () => runReminder({ manual: true }));
 
-  // ---------- Export / Import / Share link ----------
+  // ---------- Export / Import (local backup) ----------
 
   el.exportBtn.addEventListener("click", () => {
     const blob = new Blob([JSON.stringify({ tasks, exportedAt: new Date().toISOString() }, null, 2)], {
@@ -336,55 +309,19 @@
       const data = JSON.parse(await file.text());
       const incoming = Array.isArray(data) ? data : data.tasks;
       if (!Array.isArray(incoming)) throw new Error("format invalide");
-      const replace = confirm(
-        `Importer ${incoming.length} tâche(s) ?\nOK = remplacer ma liste actuelle\nAnnuler = ajouter à la liste actuelle`
-      );
       const cleaned = incoming
         .filter((t) => t && typeof t.text === "string")
-        .map((t) => ({ id: t.id || crypto.randomUUID(), text: t.text, done: !!t.done, createdAt: t.createdAt || Date.now() }));
-      tasks = replace ? cleaned : [...cleaned, ...tasks];
-      persistAndRender();
-      showToast("Import terminé.");
-    } catch {
-      showToast("Fichier invalide.");
+        .map((t) => ({ text: t.text, done: !!t.done, user_id: currentUserId }));
+      if (cleaned.length === 0) throw new Error("aucune tâche trouvée");
+      const { error } = await supabase.from("tasks").insert(cleaned);
+      if (error) throw error;
+      showToast(`${cleaned.length} tâche(s) importée(s).`);
+    } catch (err) {
+      showToast("Import impossible : " + err.message);
     } finally {
       el.importInput.value = "";
     }
   });
-
-  el.shareLinkBtn.addEventListener("click", async () => {
-    const payload = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(tasks)))));
-    const url = `${location.origin}${location.pathname}#import=${payload}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast("Lien copié ! Ouvre-le sur ton autre appareil pour récupérer la liste.");
-    } catch {
-      prompt("Copie ce lien :", url);
-    }
-  });
-
-  function importFromLocationHash() {
-    const match = location.hash.match(/import=([^&]+)/);
-    if (!match) return;
-    try {
-      const json = decodeURIComponent(escape(atob(decodeURIComponent(match[1]))));
-      const incoming = JSON.parse(json);
-      if (!Array.isArray(incoming)) return;
-      const replace = confirm(
-        `Ce lien contient ${incoming.length} tâche(s).\nOK = remplacer ma liste actuelle\nAnnuler = ajouter à la liste actuelle`
-      );
-      const cleaned = incoming
-        .filter((t) => t && typeof t.text === "string")
-        .map((t) => ({ id: t.id || crypto.randomUUID(), text: t.text, done: !!t.done, createdAt: t.createdAt || Date.now() }));
-      tasks = replace ? cleaned : [...cleaned, ...tasks];
-      persistAndRender();
-      showToast("Liste importée depuis le lien.");
-    } catch {
-      showToast("Lien de partage invalide.");
-    } finally {
-      history.replaceState(null, "", location.pathname + location.search);
-    }
-  }
 
   // ---------- Install prompt (PWA) ----------
 
@@ -394,7 +331,6 @@
     deferredPrompt = e;
     el.installBtn.hidden = false;
   });
-
   el.installBtn.addEventListener("click", async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -402,7 +338,6 @@
     deferredPrompt = null;
     el.installBtn.hidden = true;
   });
-
   window.addEventListener("appinstalled", () => {
     el.installBtn.hidden = true;
     showToast("Appli installée !");
@@ -416,10 +351,35 @@
     });
   }
 
-  // ---------- Init ----------
+  // ---------- Session lifecycle ----------
 
-  importFromLocationHash();
-  applySettingsToUI();
-  render();
-  updateAssistantBubble();
+  window.addEventListener("aquarappel:session", async (e) => {
+    currentUserId = e.detail.session.user.id;
+    el.signOutBtn.hidden = false;
+    applySettingsToUI();
+    await loadTasks();
+
+    if (channel) supabase.removeChannel(channel);
+    channel = supabase
+      .channel("tasks-changes-" + currentUserId)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: `user_id=eq.${currentUserId}` },
+        () => loadTasks()
+      )
+      .subscribe();
+  });
+
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") {
+      currentUserId = null;
+      tasks = [];
+      render();
+      el.signOutBtn.hidden = true;
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+    }
+  });
 })();

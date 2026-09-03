@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AquaRappel — Assistant de tâches</title>
-<meta name="description" content="Un assistant qui te rappelle en français les tâches de ta liste que tu n'as pas encore cochées.">
+<meta name="description" content="Un assistant conversationnel qui te rappelle en français les tâches de ta liste que tu n'as pas encore cochées, synchronisé entre tous tes appareils.">
 <meta name="theme-color" content="#0e7490">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -21,90 +21,129 @@
     <span class="brand-leaf" aria-hidden="true">🌿</span>
     <span class="brand-name">AquaRappel</span>
   </div>
-  <button id="installBtn" class="btn btn-ghost" hidden>Installer l'appli</button>
+  <div class="topbar-actions">
+    <span id="userEmailLabel" class="user-email"></span>
+    <button id="installBtn" class="btn btn-ghost" hidden>Installer l'appli</button>
+    <button id="signOutBtn" class="btn btn-ghost" hidden>Déconnexion</button>
+  </div>
 </header>
 
 <main class="wrap">
 
-  <section class="assistant-card" aria-live="polite">
-    <div class="assistant-avatar" aria-hidden="true">🤖</div>
-    <div class="assistant-bubble">
-      <p id="assistantText">Salut ! Ajoute tes tâches ci-dessous, et je te rappellerai celles qu'il te reste à faire.</p>
-      <div class="assistant-actions">
-        <button id="speakNowBtn" class="btn btn-small">🔊 Dis-le moi</button>
-        <button id="remindNowBtn" class="btn btn-small btn-outline">🔔 Rappelle-moi maintenant</button>
-      </div>
-    </div>
+  <!-- Écran affiché si docs/js/config.js n'a pas encore été rempli -->
+  <section id="setupScreen" class="card" hidden>
+    <h2>Configuration requise</h2>
+    <p>Cette appli a besoin d'un projet Supabase (gratuit) pour synchroniser tes tâches entre appareils.</p>
+    <p class="muted small">
+      Ouvre <code>docs/js/config.js</code>, remplace <code>SUPABASE_URL</code> et
+      <code>SUPABASE_ANON_KEY</code> par les valeurs de ton projet Supabase, puis recharge cette page.
+      Toutes les étapes détaillées sont dans <code>docs/README.md</code>.
+    </p>
   </section>
 
-  <section class="card">
-    <form id="addForm" class="add-form">
-      <input id="taskInput" type="text" placeholder="Ajouter une tâche… (ex : préparer les colis)" autocomplete="off" required>
-      <button type="submit" class="btn btn-primary">Ajouter</button>
+  <!-- Écran de connexion / inscription -->
+  <section id="authScreen" class="card auth-card" hidden>
+    <h2 id="authTitle">Connexion</h2>
+    <form id="authForm" class="auth-form">
+      <label>
+        E-mail
+        <input id="authEmail" type="email" required autocomplete="email">
+      </label>
+      <label>
+        Mot de passe
+        <input id="authPassword" type="password" required autocomplete="current-password" minlength="6">
+      </label>
+      <p id="authError" class="auth-error" hidden></p>
+      <button id="authSubmitBtn" type="submit" class="btn btn-primary">Se connecter</button>
+      <button id="authToggleModeBtn" type="button" class="btn btn-link">Pas encore de compte ? En créer un</button>
     </form>
-
-    <div class="list-toolbar">
-      <span id="taskCount" class="muted">0 tâche</span>
-      <button id="clearDoneBtn" class="btn btn-link">Effacer les tâches cochées</button>
-    </div>
-
-    <ul id="taskList" class="task-list"></ul>
-    <p id="emptyState" class="muted empty-state">Ta liste est vide pour l'instant.</p>
   </section>
 
-  <section class="card settings-card">
-    <h2>Réglages de l'assistant</h2>
+  <!-- Application principale (visible une fois connecté) -->
+  <div id="appScreen" hidden>
 
-    <label class="switch-row">
-      <span>
-        <strong>Voix française</strong>
-        <span class="muted small">L'assistant te parle à voix haute (voix du navigateur)</span>
-      </span>
-      <input type="checkbox" id="voiceToggle">
-    </label>
+    <section class="card chat-card">
+      <div id="chatLog" class="chat-log" aria-live="polite"></div>
 
-    <label class="switch-row">
-      <span>
-        <strong>Notifications</strong>
-        <span class="muted small">Reçois une notification quand des tâches restent à faire</span>
-      </span>
-      <input type="checkbox" id="notifToggle">
-    </label>
-
-    <label class="select-row">
-      <span>
-        <strong>Fréquence des rappels</strong>
-        <span class="muted small">Tant que l'appli est ouverte (ou installée) sur cet appareil</span>
-      </span>
-      <select id="intervalSelect">
-        <option value="15">Toutes les 15 min</option>
-        <option value="30">Toutes les 30 min</option>
-        <option value="60" selected>Toutes les heures</option>
-        <option value="120">Toutes les 2 heures</option>
-        <option value="240">Toutes les 4 heures</option>
-      </select>
-    </label>
-
-    <details class="sync-details">
-      <summary>Synchroniser entre mes appareils (PC, téléphone…)</summary>
-      <p class="muted small">
-        Cette appli fonctionne sans compte ni serveur : tes tâches restent stockées uniquement sur cet appareil/navigateur.
-        Pour retrouver la même liste ailleurs, utilise l'export/import ou le lien de partage ci-dessous.
-      </p>
-      <div class="sync-actions">
-        <button id="exportBtn" class="btn btn-outline btn-small">⬇️ Exporter (.json)</button>
-        <label class="btn btn-outline btn-small file-btn">
-          ⬆️ Importer
-          <input type="file" id="importInput" accept="application/json" hidden>
-        </label>
-        <button id="shareLinkBtn" class="btn btn-outline btn-small">🔗 Copier un lien de ma liste</button>
+      <form id="chatForm" class="chat-form">
+        <button type="button" id="micBtn" class="btn btn-mic" title="Parler à l'assistant" hidden>🎤</button>
+        <input id="chatInput" type="text" placeholder="Écris ou parle à ton assistant… (ex : ajoute préparer les colis)" autocomplete="off">
+        <button type="submit" class="btn btn-primary">Envoyer</button>
+      </form>
+      <div class="chat-toolbar">
+        <button id="remindNowBtn" type="button" class="btn btn-small btn-outline">🔔 Rappelle-moi maintenant</button>
       </div>
-    </details>
-  </section>
+    </section>
+
+    <section class="card">
+      <form id="addForm" class="add-form">
+        <input id="taskInput" type="text" placeholder="Ajouter une tâche… (ex : préparer les colis)" autocomplete="off" required>
+        <button type="submit" class="btn btn-primary">Ajouter</button>
+      </form>
+
+      <div class="list-toolbar">
+        <span id="taskCount" class="muted">0 tâche</span>
+        <button id="clearDoneBtn" class="btn btn-link">Effacer les tâches cochées</button>
+      </div>
+
+      <ul id="taskList" class="task-list"></ul>
+      <p id="emptyState" class="muted empty-state">Ta liste est vide pour l'instant.</p>
+    </section>
+
+    <section class="card settings-card">
+      <h2>Réglages de l'assistant</h2>
+
+      <label class="switch-row">
+        <span>
+          <strong>Voix française</strong>
+          <span class="muted small">L'assistant te parle à voix haute (voix du navigateur)</span>
+        </span>
+        <input type="checkbox" id="voiceToggle">
+      </label>
+
+      <label class="switch-row">
+        <span>
+          <strong>Notifications</strong>
+          <span class="muted small">Reçois une notification quand des tâches restent à faire</span>
+        </span>
+        <input type="checkbox" id="notifToggle">
+      </label>
+
+      <label class="select-row">
+        <span>
+          <strong>Fréquence des rappels</strong>
+          <span class="muted small">Tant que l'appli est ouverte (ou installée) sur cet appareil</span>
+        </span>
+        <select id="intervalSelect">
+          <option value="15">Toutes les 15 min</option>
+          <option value="30">Toutes les 30 min</option>
+          <option value="60" selected>Toutes les heures</option>
+          <option value="120">Toutes les 2 heures</option>
+          <option value="240">Toutes les 4 heures</option>
+        </select>
+      </label>
+
+      <details class="sync-details">
+        <summary>Sauvegarde locale</summary>
+        <p class="muted small">
+          Tes tâches sont automatiquement synchronisées entre tes appareils via ton compte.
+          Tu peux quand même en garder une copie locale :
+        </p>
+        <div class="sync-actions">
+          <button id="exportBtn" class="btn btn-outline btn-small">⬇️ Exporter (.json)</button>
+          <label class="btn btn-outline btn-small file-btn">
+            ⬆️ Importer
+            <input type="file" id="importInput" accept="application/json" hidden>
+          </label>
+        </div>
+      </details>
+    </section>
+
+  </div>
 
   <footer class="footnote">
     <p class="muted small">
-      Fonctionne hors-ligne une fois ouverte, installable sur téléphone comme sur PC, 100% gratuit — tes données restent sur ton appareil.
+      Synchronisé entre tes appareils, installable sur téléphone comme sur PC, gratuit.
     </p>
   </footer>
 
@@ -112,6 +151,11 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="js/vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/supabaseClient.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/app.js"></script>
+<script src="js/chat.js"></script>
 </body>
 </html>

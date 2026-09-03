@@ -1,10 +1,15 @@
-const CACHE_NAME = "aquarappel-cache-v1";
+const CACHE_NAME = "aquarappel-cache-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./css/style.css",
+  "./js/vendor/supabase.js",
+  "./js/config.js",
+  "./js/supabaseClient.js",
+  "./js/auth.js",
   "./js/app.js",
+  "./js/chat.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-512-maskable.png",

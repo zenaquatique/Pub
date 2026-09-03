@@ -130,6 +130,14 @@ Même méthode qu'à l'étape 6 :
 2. Colle le contenu de
    [`supabase/functions/send-reminders/index.ts`](../supabase/functions/send-reminders/index.ts).
 3. **Deploy**.
+
+   ⚠️ Vérifie l'URL réelle de la fonction une fois déployée (onglet **Settings**
+   de la fonction, ou l'exemple `curl` affiché) : Supabase attribue parfois un
+   nom d'URL (le "slug") différent du nom que tu as tapé, qui ne peut plus être
+   changé ensuite. Si l'URL affichée ne se termine pas par `.../send-reminders`,
+   remplace `send-reminders` par le nom réel dans l'URL du job `cron.schedule`
+   de `migration_002_reminders_calendar.sql`, puis relance ce script (il est
+   conçu pour être exécuté plusieurs fois sans problème).
 4. Ajoute ces secrets à la fonction (Secrets, comme pour `GEMINI_API_KEY`
    précédemment) :
    - `VAPID_PUBLIC_KEY` (déjà présente, en clair, dans `docs/js/config.js` —

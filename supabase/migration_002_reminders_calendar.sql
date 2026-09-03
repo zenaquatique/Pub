@@ -70,7 +70,7 @@ select cron.schedule(
   '*/15 * * * *',
   $$
   select net.http_post(
-    url := 'https://frrmyqqqblheoocgvopp.supabase.co/functions/v1/send-reminders',
+    url := 'https://frrmyqqqblheoocgvopp.supabase.co/functions/v1/clever-handler',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZycm15cXFxYmxoZW9vY2d2b3BwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MTc1NjksImV4cCI6MjEwMzk5MzU2OX0.CeWYUI67DaRXHZqCTz5QE4TgadMqrswNp9GhtBTYg5w'

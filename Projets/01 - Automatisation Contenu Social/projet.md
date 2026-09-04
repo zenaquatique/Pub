@@ -118,3 +118,10 @@ ElevenLabs abandonnée (problèmes de prononciation des noms latins, liaisons fr
 - [ ] `manage.ts` — tableau de bord planning
 - [ ] TikTok automation
 - [ ] Meta Ads automation
+
+## Community Manager IA (04/09/2026)
+Pipeline en pause depuis juin 2026 (aucun calendrier juillet/août/septembre, aucune Routine
+récurrente active). Voir `plan-community-manager-ia.md` dans ce même dossier pour la feuille
+de route complète (relance V1, DM/commentaires + reporting V2, automatisation progressive V3)
+et la base de connaissances associée dans `Contexte/instructions-cm-ia.md` +
+`Contexte/faq-sav.md`.
